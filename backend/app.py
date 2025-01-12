@@ -53,15 +53,15 @@ def init_models():
         bert_tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased", cache_dir=HF_CACHE_DIR)
         bert_model = AutoModel.from_pretrained(
             "distilbert-base-uncased", 
+            cache_dir=HF_CACHE_DIR, 
             device_map="auto", 
-            offload_folder=OFFLOAD_DIR,
-            cache_dir=HF_CACHE_DIR
+            offload_folder=OFFLOAD_DIR
         )
         clip_model = CLIPModel.from_pretrained(
             "openai/clip-vit-base-patch16", 
+            cache_dir=HF_CACHE_DIR, 
             device_map="auto", 
-            offload_folder=OFFLOAD_DIR,
-            cache_dir=HF_CACHE_DIR
+            offload_folder=OFFLOAD_DIR
         )
         clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16", cache_dir=HF_CACHE_DIR)
         
@@ -178,6 +178,9 @@ def predict():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    port = int(os.getenv("PORT", 2604))
+    # Get port from environment variable (default to 10000 if not set)
+    port = int(os.getenv("PORT", 10000))
     logging.info(f"Starting Flask app on port {port}")
-    app.run(debug=True, port=port)
+    
+    # Ensure app binds to 0.0.0.0 for Render
+    app.run(host='0.0.0.0', port=port, debug=True)
