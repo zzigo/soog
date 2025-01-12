@@ -1,41 +1,25 @@
 export default defineNuxtConfig({
-  css: ['~/assets/styles/global.css'],
+  css: ['~/assets/styles/global.css'], // Global CSS
+
   runtimeConfig: {
     public: {
-      apiBase: process.env.API_BASE || 'http://127.0.0.1:2604/api',
+      apiBase: 'https://soog.onrender.com/api', // Public backend URL for production
     },
   },
 
   nitro: {
-    devProxy: {
-      '/api': {
-        target: 'http://127.0.0.1:2604', // Proxying to your Flask backend
-        changeOrigin: true,
-      },
-      '/workers/worker-javascript.js': {
-        target: 'http://127.0.0.1:3001', // Adjust this to where the worker is served from
-        changeOrigin: true,
-      },
-    },
+    preset: 'node-server', // Suitable for Render deployment as a dynamic app
   },
-
-  compatibilityDate: '2025-01-11', // Ensures compatibility with current API expectations
 
   vite: {
     server: {
       fs: {
-        allow: ['node_modules/ace-builds'], // Explicitly allow Ace.js
+        allow: ['node_modules'], // Ensure Vite can access necessary modules
       },
     },
   },
 
-    server: {
-      port: 3001, // Force Nuxt to use port 3001
-    },
-  
   devServer: {
-    port: 3001, // Fallback for Nitro
+    port: 3000, // Default development server port (optional)
   },
-
-  compatibilityDate: '2025-01-11',
 });
