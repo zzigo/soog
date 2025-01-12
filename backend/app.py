@@ -17,8 +17,11 @@ from PIL import Image
 from transformers import CLIPProcessor, CLIPModel, AutoTokenizer, AutoModel
 from torch import nn
 
-# Set Hugging Face cache directory
+# Set Hugging Face cache and offload directories
 HF_CACHE_DIR = os.path.join(os.getcwd(), ".cache", "huggingface")
+OFFLOAD_DIR = os.path.join(os.getcwd(), "offload")
+os.makedirs(HF_CACHE_DIR, exist_ok=True)
+os.makedirs(OFFLOAD_DIR, exist_ok=True)
 os.environ["HF_HOME"] = HF_CACHE_DIR
 
 # Configure logging
@@ -45,10 +48,20 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def init_models():
     """Initialize and load all required models."""
     try:
-        # Load smaller pretrained models for efficiency
-        bert_tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", cache_dir=HF_CACHE_DIR)
-        bert_model = AutoModel.from_pretrained("bert-base-uncased", cache_dir=HF_CACHE_DIR).to(device)
-        clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16", cache_dir=HF_CACHE_DIR).to(device)
+        # Load smaller pretrained models with offload to disk for efficiency
+        bert_tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased", cache_dir=HF_CACHE_DIR)
+        bert_model = AutoModel.from_pretrained(
+            "distilbert-base-uncased", 
+            device_map="auto", 
+            offload_folder=OFFLOAD_DIR,
+            cache_dir=HF_CACHE_DIR
+        )
+        clip_model = CLIPModel.from_pretrained(
+            "openai/clip-vit-base-patch16", 
+            device_map="auto", 
+            offload_folder=OFFLOAD_DIR,
+            cache_dir=HF_CACHE_DIR
+        )
         clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16", cache_dir=HF_CACHE_DIR)
         
         # Initialize multimodal model
@@ -68,14 +81,14 @@ def init_models():
                 return self.classifier(combined)
 
         # Create model instance
-        model = MultimodalAttentionModel().to(device)
+        multimodal_model = MultimodalAttentionModel().to(device)
         
         # Load trained weights (if available)
         checkpoint_path = "./modeltrainer/outputModel/multimodal_model_final.pth"
         if os.path.exists(checkpoint_path):
             checkpoint = torch.load(checkpoint_path, map_location=device)
-            model.load_state_dict(checkpoint['model_state_dict'])
-            model.eval()
+            multimodal_model.load_state_dict(checkpoint['model_state_dict'])
+            multimodal_model.eval()
             logging.info("Multimodal model loaded successfully")
         else:
             logging.warning(f"No checkpoint found at {checkpoint_path}. Using untrained model.")
@@ -85,7 +98,7 @@ def init_models():
             'bert_model': bert_model,
             'clip_model': clip_model,
             'clip_processor': clip_processor,
-            'multimodal_model': model
+            'multimodal_model': multimodal_model
         }
     except Exception as e:
         logging.error(f"Error initializing models: {e}")
