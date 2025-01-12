@@ -13,6 +13,7 @@ import logging
 import re
 import sys
 import torch
+import accelerate
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel, AutoTokenizer, AutoModel
 from torch import nn
