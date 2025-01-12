@@ -1,0 +1,176 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+/* Base Styles */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  font-family: 'IBM Plex Mono', monospace;
+  background: #000;
+  color: #ffffff;
+  overflow: hidden;
+}
+
+/* Layout */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  background: transparent;
+  overflow: hidden;
+  position: relative;
+  padding: 10px;
+}
+
+main {
+  flex: 1;
+  display: flex;
+  position: relative;
+  z-index: 1;
+  height: 100%;
+}
+
+/* Editor */
+.editor-wrapper {
+  width: 60%;
+  height: 100vh;
+  overflow: auto;
+  background: transparent;
+  z-index: 1;
+}
+
+.ace-editor {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: #ffffff;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 20px;
+}
+
+.ace_editor .ace_gutter {
+  display: none;
+}
+
+.ace_line {
+  font-family: 'IBM Plex Mono', monospace !important;
+}
+
+.ace_editor .ace_selection {
+  background: #1a4d1c !important;
+}
+
+/* GPT Responses */
+.gpt-text-response,
+.gpt-code-response,
+.gpt-plot-response {
+  background-color: transparent;
+  position: absolute;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 18px;
+}
+
+.gpt-text-response,
+.gpt-text-style .ace_line {
+  color: #f6b1a2 !important;
+}
+
+/* Plot Display */
+.plot-display {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40%;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 20px;
+}
+
+.plot-display img {
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+}
+
+/* Settings */
+.settings {
+  position: fixed;
+  top: 10px;
+  right: 20px;
+  z-index: 100;
+}
+
+.toggle-button {
+  background: #1a1a1a;
+  color: #ffffff;
+  border: 1px solid #333;
+  padding: 8px 16px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.toggle-button:hover {
+  background: #2a2a2a;
+}
+
+.loading,
+.error {
+  position: fixed;
+  bottom: 5px;
+  right: 20px;
+  padding: 10px 20px;
+  border-radius: 4px;
+  color: white;
+}
+
+.loading {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.error {
+  background: rgba(255, 0, 0, 0.7);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.fadeIn { 
+  animation: fadeIn 5s ease-in-out;
+  animation-fill-mode: both;
+}
+.fadeOut { 
+  animation: fadeOut 5s ease-in-out;
+  animation-fill-mode: both;
+}
+
+/* Footer */
+footer {
+  position: fixed;
+  bottom: 0px;
+  left: 20px;
+  z-index: 10;
+  width: 70%;
+  font-family: 'IBM Plex Mono', monospace;
+  background: black;
+}
+
+/* Selection */
+::selection {
+  background-color: #2d2d2d;
+  color: #ffffff;
+}
