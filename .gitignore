@@ -20,7 +20,7 @@ modeltrainer/images
 modeltrainer/ocr_outputs
 modeltrainer/pdfs
 modeltrainer/requeriments.txt
-
+Icon
 
 # Node dependencies
 node_modules
