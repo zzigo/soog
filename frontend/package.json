@@ -3,17 +3,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "nuxt build",
-    "dev": "nuxt dev",
-    "generate": "nuxt generate",
-    "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "build": "nuxt build",                // Builds the app for production
+    "dev": "nuxt dev",                    // Starts the app in development mode
+    "generate": "nuxt generate",          // Generates a static version of the app
+    "preview": "nuxt preview",            // Previews the app after building or generating
+    "postinstall": "nuxt prepare",        // Prepares the app after installation
+    "start": "node .output/server/index.mjs" // Starts the app in production mode
   },
   "dependencies": {
-    "ace-builds": "^1.37.4",
-    "nuxt": "^3.15.1",
-    "vue": "latest",
-    "vue-ace-editor": "^1.0.3",
-    "vue-router": "latest"
+    "ace-builds": "^1.37.4",              // Ace Editor library
+    "nuxt": "^3.15.1",                    // Nuxt.js framework
+    "vue": "latest",                      // Vue.js framework
+    "vue-ace-editor": "^1.0.3",           // Ace Editor component for Vue
+    "vue-router": "latest"                // Vue Router for navigation
   }
 }
