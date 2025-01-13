@@ -151,11 +151,11 @@ main {
 }
 
 .fadeIn { 
-  animation: fadeIn 5s ease-in-out;
+  animation: fadeIn 2s ease-in-out;
   animation-fill-mode: both;
 }
 .fadeOut { 
-  animation: fadeOut 5s ease-in-out;
+  animation: fadeOut 3s ease-in-out;
   animation-fill-mode: both;
 }
 
