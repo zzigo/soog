@@ -25,7 +25,9 @@
           <h4>Commands:</h4>
           <ul>
             <li><kbd>Alt</kbd> + <kbd>Enter</kbd>: Evaluate selected text or all text if nothing is selected</li>
+            <li><kbd>Ctrl</kbd> + <kbd>H</kbd>: Clear editor content</li>
             <li>Click the eye icon to show/hide generated code</li>
+            <li>Click the trash icon to clear editor content</li>
             <li>On mobile devices, use the "Evaluate" button at the bottom of the screen</li>
           </ul>
 
