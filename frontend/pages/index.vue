@@ -14,6 +14,11 @@
           <path fill="currentColor" d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" />
         </svg>
       </button>
+      <button @click="handleRandomPrompt" class="icon-button" title="Random Prompt">
+        <svg class="icon" viewBox="0 0 24 24">
+          <path fill="currentColor" d="M14.83,13.41L13.42,14.82L16.55,17.95L14.5,20H20V14.5L17.96,16.54L14.83,13.41M14.5,4L16.54,6.04L4,18.59L5.41,20L17.96,7.46L20,9.5V4M10.59,9.17L5.41,4L4,5.41L9.17,10.58L10.59,9.17Z" />
+        </svg>
+      </button>
       <button @click="showHelp = true" class="icon-button" title="Help">
         <svg class="icon" viewBox="0 0 24 24">
           <path fill="currentColor" d="M11,18H13V16H11V18M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,6A4,4 0 0,0 8,10H10A2,2 0 0,1 12,8A2,2 0 0,1 14,10C14,12 11,11.75 11,15H13C13,12.75 16,12.5 16,10A4,4 0 0,0 12,6Z" />
@@ -83,6 +88,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { useRuntimeConfig } from '#app';
 import AceEditor from '~/components/AceEditor.vue';
 import HelpModal from '~/components/HelpModal.vue';
+import { useRandomPrompt } from '~/components/RandomPrompt.vue';
 
 // State variables
 const editorRef = ref(null);
@@ -125,6 +131,15 @@ const handleClear = () => {
 
 const toggleShowCode = () => {
   showCode.value = !showCode.value;
+};
+
+const handleRandomPrompt = async () => {
+  if (editorRef.value) {
+    const { getRandomPrompt } = useRandomPrompt();
+    const prompt = await getRandomPrompt();
+    editorRef.value.clearEditor();
+    editorRef.value.addToEditor("# Welcome to SOOG [The Speculative Organology Organogram Generator v0.1]\n# Write your invented instrument, select text and press Alt+Enter to evaluate\n\n" + prompt + "\n");
+  }
 };
 
 const handleMobileEvaluate = () => {
