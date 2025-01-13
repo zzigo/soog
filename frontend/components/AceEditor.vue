@@ -3,13 +3,12 @@
 </template>
 
 <script setup>
-import { onMounted, ref, defineExpose, defineEmits } from 'vue';
+import { onMounted, ref, defineExpose, defineEmits, onUnmounted, nextTick } from 'vue';
 import ace from 'ace-builds/src-noconflict/ace';
 import 'ace-builds/src-noconflict/mode-python';
 import 'ace-builds/src-noconflict/theme-monokai';
 
 const emit = defineEmits(['evaluate']);
-
 const editor = ref(null);
 let aceEditorInstance;
 
@@ -30,18 +29,13 @@ const addToEditor = (content, type = 'text') => {
   const session = aceEditorInstance.getSession();
   const doc = session.getDocument();
   const currentLength = doc.getLength();
-  // Add extra line before the content
-  const newContent = `\n\n${content}\n\n\n\n\n`;
+  const newContent = `\n\n${content}\n\n`; // Add extra spacing
 
   doc.insert({ row: currentLength, column: 0 }, newContent);
 
-  // Scroll to the newly added content
-  aceEditorInstance.scrollToLine(currentLength + newContent.split('\n').length - 1, true, true, () => {});
-  aceEditorInstance.gotoLine(currentLength + newContent.split('\n').length, 0, true);
-
   // Highlight GPT responses using markers
-  const Range = ace.require('ace/range').Range;
-  const startRow = currentLength + 1; // Skip the extra line we added
+  const Range = ace.require('ace/range').Range || ace.require('ace/edit_session').Range;
+  const startRow = currentLength + 1;
   const endRow = currentLength + newContent.split('\n').length - 1;
 
   aceEditorInstance.session.addMarker(
@@ -50,62 +44,76 @@ const addToEditor = (content, type = 'text') => {
     'fullLine'
   );
 
-  // Apply custom styling for text responses
-  if (type === 'text') {
-    const textRange = new Range(startRow, 0, endRow, 1);
-    session.addGutterDecoration(startRow, 'gpt-text-line');
-    aceEditorInstance.renderer.setStyle('gpt-text-style');
-    aceEditorInstance.renderer.updateText();
-  }
+  // Scroll to the bottom of the AceEditor and page
+  nextTick(() => {
+    aceEditorInstance.scrollToLine(endRow, true, true, () => {});
+    aceEditorInstance.gotoLine(endRow, 0, true);
+
+    // Ensure the page also scrolls to the bottom
+    const editorElement = editor.value;
+    if (editorElement) {
+      editorElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  });
 };
 
 // Clear editor content
 const clearEditor = () => {
   if (aceEditorInstance) {
-    aceEditorInstance.setValue("");
+    aceEditorInstance.session.setValue("");
     aceEditorInstance.clearSelection();
   }
 };
 
-// Expose methods for parent components to call
+// Expose methods for parent components
 defineExpose({
   addToEditor,
   aceEditor: () => aceEditorInstance,
-  clearEditor
+  clearEditor,
 });
 
 onMounted(() => {
-  aceEditorInstance = ace.edit(editor.value);
-  aceEditorInstance.setTheme('ace/theme/monokai');
-  aceEditorInstance.session.setMode('ace/mode/python');
-  aceEditorInstance.setOption('wrap', true);
-  aceEditorInstance.setOption('printMargin', false);
-  aceEditorInstance.setOption('tabSize', 2);
-  aceEditorInstance.setOption('showGutter', false);
-  
-  // Set initial font size and listen for changes
-  updateFontSize();
-  window.addEventListener('resize', updateFontSize);
-  
-  // Add welcome message
-  aceEditorInstance.setValue("# Welcome to SOOG [The Speculative Organology Organogram Generator v0.1]\n# Imagine an instrument, select and press Alt+Enter to evaluate\n\n");
-  aceEditorInstance.clearSelection();
+  try {
+    aceEditorInstance = ace.edit(editor.value);
+    aceEditorInstance.setTheme('ace/theme/monokai');
+    aceEditorInstance.session.setMode('ace/mode/python');
+    aceEditorInstance.setOption('wrap', true);
+    aceEditorInstance.setOption('printMargin', false);
+    aceEditorInstance.setOption('tabSize', 2);
+    aceEditorInstance.setOption('showGutter', false);
 
-  // Add custom keybindings
-  aceEditorInstance.commands.addCommands([
-    {
-      name: 'evaluateCode',
-      bindKey: { win: 'Alt-Enter', mac: 'Alt-Enter' },
-      exec: () => {
-        const selectedText = aceEditorInstance.getSelectedText();
-        const codeToEvaluate = selectedText || aceEditorInstance.getValue();
-        emit('evaluate', codeToEvaluate);
+    // Set initial font size and listen for changes
+    updateFontSize();
+    window.addEventListener('resize', updateFontSize);
+
+    // Add welcome message
+    aceEditorInstance.setValue("# Welcome to SOOG [The Speculative Organology Organogram Generator v0.1]\n# Imagine an instrument, select and press Alt+Enter to evaluate\n\n");
+    aceEditorInstance.clearSelection();
+
+    // Add custom keybindings
+    aceEditorInstance.commands.addCommands([
+      {
+        name: 'evaluateCode',
+        bindKey: { win: 'Alt-Enter', mac: 'Alt-Enter' },
+        exec: () => {
+          const selectedText = aceEditorInstance.getSelectedText();
+          const codeToEvaluate = selectedText || aceEditorInstance.getValue();
+          emit('evaluate', codeToEvaluate);
+        },
       },
-    },
-    {
-      name: 'clearEditor',
-      bindKey: { win: 'Ctrl-H', mac: 'Command-H' },
-      exec: clearEditor,
-    }
-  ]);
+      {
+        name: 'clearEditor',
+        bindKey: { win: 'Ctrl-H', mac: 'Command-H' },
+        exec: clearEditor,
+      },
+    ]);
+  } catch (error) {
+    console.error("AceEditor initialization failed:", error);
+  }
 });
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateFontSize);
+});
+</script>
+
