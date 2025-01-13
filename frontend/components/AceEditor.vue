@@ -93,7 +93,7 @@ onMounted(async () => {
     const prompt = await getRandomPrompt();
 
     // Add welcome message with random prompt
-    aceEditorInstance.setValue("# Welcome to SOOG [The Speculative Organology Organogram Generator v0.1]\n# Select text and press Alt+Enter to evaluate\n\n" + prompt + "\n");
+    aceEditorInstance.setValue("# Welcome to SOOG [The Speculative Organology Organogram Generator v0.1]\n# Write your invented instrument, select text and press Alt+Enter to evaluate\n\n" + prompt + "\n");
     aceEditorInstance.clearSelection();
 
     // Add custom keybindings
