@@ -53,6 +53,10 @@ const addToEditor = (content, type = 'text') => {
 
   doc.insert({ row: currentLength, column: 0 }, newContent);
 
+  // Scroll to the newly added content
+  aceEditorInstance.scrollToLine(currentLength + newContent.split('\n').length - 1, true, true, () => {});
+  aceEditorInstance.gotoLine(currentLength + newContent.split('\n').length, 0, true);
+
   // Highlight GPT responses using markers
   const Range = ace.require('ace/range').Range;
   const startRow = currentLength + 1; // Skip the extra line we added

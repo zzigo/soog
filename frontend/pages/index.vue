@@ -72,7 +72,8 @@ const toggleShowCode = () => {
 const handleMobileEvaluate = () => {
   if (editorRef.value) {
     const selectedText = editorRef.value.getSelectedText();
-    handleEvaluate(selectedText);
+    const textToEvaluate = selectedText || editorRef.value.getValue();
+    handleEvaluate(textToEvaluate);
   }
 };
 
@@ -172,7 +173,7 @@ const handleEvaluate = async (selectedText) => {
   align-items: center;
   padding: 1rem;
   gap: 1rem;
-  background: rgba(255, 255, 255, 0.9);
+  background: black !important;
   z-index: 1000;
 }
 
