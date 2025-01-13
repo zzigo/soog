@@ -1,7 +1,7 @@
 {
     "epoch": 1,
-    "loss": 2.3091986553728088,
-    "timestamp": "2025-01-13 12:58:50.961780",
-    "device": "cpu",
+    "loss": 2.310397841713645,
+    "timestamp": "2025-01-13 20:59:15.450999",
+    "device": "cuda",
     "model_path": "/content/drive/MyDrive/outputModel/multimodal_model_epoch_1.pth"
 }

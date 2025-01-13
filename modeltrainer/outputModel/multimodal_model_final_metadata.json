@@ -1,7 +1,7 @@
 {
     "epoch": 5,
-    "loss": 46.28975319862366,
-    "timestamp": "2025-01-12 21:48:29.619429",
-    "device": "cpu",
-    "model_path": "./outputModel/multimodal_model_final.pth"
+    "loss": 278.7035276889801,
+    "timestamp": "2025-01-13 21:33:17.486843",
+    "device": "cuda",
+    "model_path": "/content/drive/MyDrive/outputModel/multimodal_model_final.pth"
 }

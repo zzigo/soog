@@ -3,11 +3,11 @@
 </template>
 
 <script setup>
-import { onMounted, ref, defineExpose, defineEmits, onUnmounted, nextTick, h } from 'vue';
+import { onMounted, ref, defineExpose, defineEmits, onUnmounted, nextTick } from 'vue';
 import ace from 'ace-builds/src-noconflict/ace';
 import 'ace-builds/src-noconflict/mode-python';
 import 'ace-builds/src-noconflict/theme-monokai';
-import RandomPrompt from '~/components/RandomPrompt';
+import { useRandomPrompt } from '~/components/RandomPrompt.vue';
 
 
 const emit = defineEmits(['evaluate']);
@@ -88,13 +88,12 @@ onMounted(async () => {
     updateFontSize();
     window.addEventListener('resize', updateFontSize);
 
-    // Create and mount RandomPrompt component
-    const randomPromptComponent = h(RandomPrompt);
-    const vm = createApp(randomPromptComponent).mount(document.createElement('div'));
-    await nextTick();
+    // Get random prompt
+    const { getRandomPrompt } = useRandomPrompt();
+    const prompt = await getRandomPrompt();
 
     // Add welcome message with random prompt
-    aceEditorInstance.setValue("# Welcome to SOOG [The Speculative Organology Organogram Generator v0.1]\n# Select text and press Alt+Enter to evaluate\n\n" + vm.prompt + "\n");
+    aceEditorInstance.setValue("# Welcome to SOOG [The Speculative Organology Organogram Generator v0.1]\n# Select text and press Alt+Enter to evaluate\n\n" + prompt + "\n");
     aceEditorInstance.clearSelection();
 
     // Add custom keybindings
