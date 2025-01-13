@@ -7,29 +7,14 @@
 </template>
 
 <script setup>
-const emit = defineEmits(['randomize']);
+import { useRandomPrompt } from '../composables/useRandomPrompt';
 
-async function getRandomPrompt() {
-  try {
-    const response = await fetch('/prompts.json');
-    const prompts = await response.json();
-    return prompts[Math.floor(Math.random() * prompts.length)];
-  } catch (err) {
-    console.error('Error loading prompts:', err);
-    return "Imagine a novel musical instrument that combines traditional acoustics with objects from technic or nature...";
-  }
-}
+const emit = defineEmits(['randomize']);
+const { getRandomPrompt } = useRandomPrompt();
 
 async function handleClick() {
   const prompt = await getRandomPrompt();
   emit('randomize', prompt);
-}
-
-// Export the composable
-export function useRandomPrompt() {
-  return {
-    getRandomPrompt
-  };
 }
 </script>
 
