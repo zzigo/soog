@@ -4,6 +4,7 @@
 
 <script setup>
 import { onMounted, ref, defineExpose, defineEmits, onUnmounted, nextTick } from 'vue';
+import { useRuntimeConfig } from '#app';
 import ace from 'ace-builds/src-noconflict/ace';
 import 'ace-builds/src-noconflict/mode-python';
 import 'ace-builds/src-noconflict/theme-monokai';
@@ -12,7 +13,20 @@ import { useRandomPrompt } from '~/components/RandomPrompt.vue';
 
 const emit = defineEmits(['evaluate']);
 const editor = ref(null);
+const version = ref('0.0.0');
 let aceEditorInstance;
+
+const fetchVersion = async () => {
+  try {
+    const config = useRuntimeConfig();
+    const baseURL = config.public.apiBase || 'http://localhost:10000';
+    const response = await fetch(`${baseURL}/api/version`);
+    const data = await response.json();
+    version.value = data.version;
+  } catch (error) {
+    console.error('Error fetching version:', error);
+  }
+};
 
 // Update font size based on device
 const updateFontSize = () => {
@@ -92,8 +106,9 @@ onMounted(async () => {
     const { getRandomPrompt } = useRandomPrompt();
     const prompt = await getRandomPrompt();
 
-    // Add welcome message with random prompt
-    aceEditorInstance.setValue("# Welcome to SOOG [The Speculative Organology Organogram Generator v0.1]\n# Write your invented instrument, select text and press Alt+Enter to evaluate\n\n" + prompt + "\n");
+    // Fetch version and add welcome message with random prompt
+    await fetchVersion();
+    aceEditorInstance.setValue(`# Welcome to SOOG [The Speculative Organology Organogram Generator ${version.value}]\n# Write your invented instrument, select text and press Alt+Enter to evaluate\n\n${prompt}\n`);
     aceEditorInstance.clearSelection();
 
     // Add custom keybindings

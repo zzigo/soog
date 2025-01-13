@@ -9,17 +9,27 @@
 <script setup>
 const emit = defineEmits(['randomize']);
 
-async function handleClick() {
+async function getRandomPrompt() {
   try {
     const response = await fetch('/prompts.json');
     const prompts = await response.json();
-    const prompt = prompts[Math.floor(Math.random() * prompts.length)];
-    emit('randomize', prompt);
+    return prompts[Math.floor(Math.random() * prompts.length)];
   } catch (err) {
     console.error('Error loading prompts:', err);
-    const fallbackPrompt = "Imagine a novel musical instrument that combines traditional acoustics with objects from technic or nature...";
-    emit('randomize', fallbackPrompt);
+    return "Imagine a novel musical instrument that combines traditional acoustics with objects from technic or nature...";
   }
+}
+
+async function handleClick() {
+  const prompt = await getRandomPrompt();
+  emit('randomize', prompt);
+}
+
+// Export the composable
+export function useRandomPrompt() {
+  return {
+    getRandomPrompt
+  };
 }
 </script>
 

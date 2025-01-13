@@ -45,6 +45,15 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+def get_version():
+    """Read the current version from version.txt."""
+    try:
+        with open('version.txt', 'r') as file:
+            return file.read().strip()
+    except Exception as e:
+        logging.error(f"Error reading version file: {e}")
+        return "0.0.0"
+
 def get_prompt_content():
     """Read the system prompt content from 'prompt.txt'."""
     try:
@@ -206,6 +215,16 @@ def predict():
         logging.error(f"Error in /api/predict: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/version', methods=['GET'])
+def version():
+    """API endpoint to get the current version."""
+    try:
+        current_version = get_version()
+        return jsonify({'version': current_version})
+    except Exception as e:
+        logging.error(f"Error in /api/version: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 10000))
