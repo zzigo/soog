@@ -36,6 +36,27 @@
         <img 
           :src="`data:image/png;base64,${plotImage}`" 
           alt="Plot"
+          @click="showLightbox = true"
+          class="plot-image"
+        />
+      </div>
+    </Transition>
+    <Transition
+      enter-active-class="fadeIn"
+      leave-active-class="fadeOut"
+      :duration="300"
+    >
+      <div v-if="showLightbox" class="lightbox" @click="showLightbox = false">
+        <button class="close-button" @click.stop="showLightbox = false">
+          <svg class="icon" viewBox="0 0 24 24">
+            <path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" />
+          </svg>
+        </button>
+        <img 
+          :src="`data:image/png;base64,${plotImage}`" 
+          alt="Plot"
+          class="lightbox-image"
+          @click.stop
         />
       </div>
     </Transition>
@@ -58,7 +79,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useRuntimeConfig } from '#app';
 import AceEditor from '~/components/AceEditor.vue';
 import HelpModal from '~/components/HelpModal.vue';
@@ -73,14 +94,27 @@ const showCode = ref(true);
 const showHelp = ref(false);
 const transitionKey = ref(0);
 const isMobileOrTablet = ref(false);
+const showLightbox = ref(false);
 
 const checkDevice = () => {
   isMobileOrTablet.value = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };
 
+const handleEscapeKey = (e) => {
+  if (e.key === 'Escape' && showLightbox.value) {
+    showLightbox.value = false;
+  }
+};
+
 onMounted(() => {
   checkDevice();
   window.addEventListener('resize', checkDevice);
+  window.addEventListener('keydown', handleEscapeKey);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkDevice);
+  window.removeEventListener('keydown', handleEscapeKey);
 });
 
 const handleClear = () => {
@@ -130,7 +164,7 @@ const completeProgress = () => {
 
 // Runtime configuration
 const config = useRuntimeConfig();
-const apiBase = ref(config.public.apiBase || 'https://soog.onrender.com/api'); // Updated to use backend's public URL
+const apiBase = ref(config.public.apiBase || 'https://soog.onrender.com/api');
 
 // Handle evaluation of selected text
 const handleEvaluate = async (selectedText) => {
@@ -223,6 +257,54 @@ const handleEvaluate = async (selectedText) => {
 .icon {
   width: 24px;
   height: 24px;
+}
+
+.plot-image {
+  cursor: pointer;
+  transition: transform 0.3s;
+}
+
+.plot-image:hover {
+  transform: scale(1.02);
+}
+
+.lightbox {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.lightbox-image {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+}
+
+.close-button {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s;
+}
+
+.close-button:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .footer {
