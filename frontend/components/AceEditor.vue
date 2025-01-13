@@ -81,6 +81,7 @@ onMounted(() => {
   aceEditorInstance.setOption('wrap', true);
   aceEditorInstance.setOption('printMargin', false);
   aceEditorInstance.setOption('tabSize', 2);
+  aceEditorInstance.setOption('showGutter', false);
   
   // Set initial font size and listen for changes
   updateFontSize();

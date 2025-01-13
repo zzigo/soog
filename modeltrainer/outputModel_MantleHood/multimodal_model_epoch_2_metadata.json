@@ -1,0 +1,7 @@
+{
+    "epoch": 2,
+    "loss": 2.3141894817352293,
+    "timestamp": "2025-01-12 20:54:56.306127",
+    "device": "cpu",
+    "model_path": "./outputModel/multimodal_model_epoch_2.pth"
+}

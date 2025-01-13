@@ -101,6 +101,7 @@ modeltrainer/images/
 modeltrainer/ocr_outputs/
 modeltrainer/pdfs/
 modeltrainer/requeriments.txt
+modeltrainer/outputModel_MantlHood/
 
 # Frontend-specific
 frontend/public/workers/
