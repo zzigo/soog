@@ -71,7 +71,7 @@ const completeProgress = () => {
 
 // Runtime configuration
 const config = useRuntimeConfig();
-const apiBase = ref(config.public.apiBase || 'https://soog.onrender.com/api'); // Updated to use backend's public URL
+const apiBase = ref(config.public.apiBase || 'http://127.0.0.1:2604/api');
 
 // Handle evaluation of selected text
 const handleEvaluate = async (selectedText) => {
