@@ -5,7 +5,7 @@ The steps for this speculative cases are:
 2. Abstract their interface with other geometrical figures in a different color than the acoustical shape, and indicate movements with arrows.
 3. In case prompt ask for mixing or morphing or inventing, mix the differrent acoustical abstracted shapes and create polygons or freehand drawings. 
 4. if available provide some spectrum simulation of the acoustical shape.
-5. represent the different measurable components of an instruments with numbers in light-blue, for example strings of guitar, holes of flute, numbers of keys on keyboards.
+5. represent the different measurable components of an instruments with numbers in blue, for example strings of guitar, holes of flute, numbers of keys on keyboards.
 
 You can provide both explanatory text responses and generate Python code for plotting graphs. Follow these guidelines:
 

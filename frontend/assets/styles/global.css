@@ -50,6 +50,43 @@ main {
   font-size: 20px;
 }
 
+/* Scrollbar Styles for Ace Editor */
+.ace-editor ::-webkit-scrollbar,
+.ace_scrollbar-v::-webkit-scrollbar,
+.ace_scrollbar-h::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.ace-editor ::-webkit-scrollbar-track,
+.ace_scrollbar-v::-webkit-scrollbar-track,
+.ace_scrollbar-h::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+.ace-editor ::-webkit-scrollbar-thumb,
+.ace_scrollbar-v::-webkit-scrollbar-thumb,
+.ace_scrollbar-h::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 6px;
+}
+
+.ace-editor ::-webkit-scrollbar-thumb:hover,
+.ace_scrollbar-v::-webkit-scrollbar-thumb:hover,
+.ace_scrollbar-h::-webkit-scrollbar-thumb:hover {
+  background: #444444;
+}
+
+/* Additional Ace Editor scrollbar styles */
+.ace_scrollbar-v, .ace_scrollbar-h {
+  background: #000000 !important;
+}
+
+.ace_scroller {
+  scrollbar-color: #333333 #000000 !important;
+  scrollbar-width: thin !important;
+}
+
 .ace_editor .ace_gutter {
   display: none;
 }
