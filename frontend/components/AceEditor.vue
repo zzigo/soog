@@ -13,30 +13,12 @@ const emit = defineEmits(['evaluate']);
 const editor = ref(null);
 let aceEditorInstance;
 
-onMounted(() => {
-  aceEditorInstance = ace.edit(editor.value);
-  aceEditorInstance.setTheme('ace/theme/monokai');
-  aceEditorInstance.session.setMode('ace/mode/python');
-  aceEditorInstance.setOption('wrap', true);
-  aceEditorInstance.setOption('printMargin', false);
-  aceEditorInstance.setOption('fontSize', '20px');
-  aceEditorInstance.setOption('tabSize', 2);
-  
-  // Add welcome message
-  aceEditorInstance.setValue("# Welcome to SOOG [The Speculative Organology Organogram Generator v0.1]\n# Imagine an instrument, select and press Alt+Enter to evaluate\n\n");
-  aceEditorInstance.clearSelection();
-
-  // Add custom keybinding for Alt+Enter to evaluate selected code
-  aceEditorInstance.commands.addCommand({
-    name: 'evaluateCode',
-    bindKey: { win: 'Alt-Enter', mac: 'Alt-Enter' },
-    exec: () => {
-      const selectedText = aceEditorInstance.getSelectedText();
-      const codeToEvaluate = selectedText || aceEditorInstance.getValue();
-      emit('evaluate', codeToEvaluate);
-    },
-  });
-});
+// Update font size based on device
+const updateFontSize = () => {
+  if (!aceEditorInstance) return;
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  aceEditorInstance.setOption('fontSize', isMobile ? '16px' : '20px');
+};
 
 // Add content to Ace Editor dynamically
 const addToEditor = (content, type = 'text') => {
@@ -80,5 +62,35 @@ const addToEditor = (content, type = 'text') => {
 // Expose methods for parent components to call
 defineExpose({
   addToEditor,
+  getSelectedText: () => aceEditorInstance?.getSelectedText() || '',
+  getValue: () => aceEditorInstance?.getValue() || '',
+});
+
+onMounted(() => {
+  aceEditorInstance = ace.edit(editor.value);
+  aceEditorInstance.setTheme('ace/theme/monokai');
+  aceEditorInstance.session.setMode('ace/mode/python');
+  aceEditorInstance.setOption('wrap', true);
+  aceEditorInstance.setOption('printMargin', false);
+  aceEditorInstance.setOption('tabSize', 2);
+  
+  // Set initial font size and listen for changes
+  updateFontSize();
+  window.addEventListener('resize', updateFontSize);
+  
+  // Add welcome message
+  aceEditorInstance.setValue("# Welcome to SOOG [The Speculative Organology Organogram Generator v0.1]\n# Imagine an instrument, select and press Alt+Enter to evaluate\n\n");
+  aceEditorInstance.clearSelection();
+
+  // Add custom keybinding for Alt+Enter to evaluate selected code
+  aceEditorInstance.commands.addCommand({
+    name: 'evaluateCode',
+    bindKey: { win: 'Alt-Enter', mac: 'Alt-Enter' },
+    exec: () => {
+      const selectedText = aceEditorInstance.getSelectedText();
+      const codeToEvaluate = selectedText || aceEditorInstance.getValue();
+      emit('evaluate', codeToEvaluate);
+    },
+  });
 });
 </script>

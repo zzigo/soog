@@ -1,8 +1,18 @@
 <template>
   <div class="app-container">
     <div class="settings">
-      <button @click="toggleShowCode" class="toggle-button">
-        {{ showCode ? 'Hide Code' : 'Show Code' }}
+      <button @click="toggleShowCode" class="icon-button" :title="showCode ? 'Hide Code' : 'Show Code'">
+        <svg v-if="showCode" class="icon" viewBox="0 0 24 24">
+          <path fill="currentColor" d="M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9M12,4.5C17,4.5 21.27,7.61 23,12C21.27,16.39 17,19.5 12,19.5C7,19.5 2.73,16.39 1,12C2.73,7.61 7,4.5 12,4.5M3.18,12C4.83,15.36 8.24,17.5 12,17.5C15.76,17.5 19.17,15.36 20.82,12C19.17,8.64 15.76,6.5 12,6.5C8.24,6.5 4.83,8.64 3.18,12Z" />
+        </svg>
+        <svg v-else class="icon" viewBox="0 0 24 24">
+          <path fill="currentColor" d="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.74,7.13 11.35,7 12,7Z" />
+        </svg>
+      </button>
+      <button @click="showHelp = true" class="icon-button" title="Help">
+        <svg class="icon" viewBox="0 0 24 24">
+          <path fill="currentColor" d="M11,18H13V16H11V18M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,6A4,4 0 0,0 8,10H10A2,2 0 0,1 12,8A2,2 0 0,1 14,10C14,12 11,11.75 11,15H13C13,12.75 16,12.5 16,10A4,4 0 0,0 12,6Z" />
+        </svg>
       </button>
     </div>
     <div class="editor-wrapper">
@@ -38,6 +48,7 @@
       </button>
     </div>
     <div v-if="error" class="error">{{ error }}</div>
+    <HelpModal v-model="showHelp" />
   </div>
 </template>
 
@@ -45,6 +56,7 @@
 import { ref, onMounted } from 'vue';
 import { useRuntimeConfig } from '#app';
 import AceEditor from '~/components/AceEditor.vue';
+import HelpModal from '~/components/HelpModal.vue';
 
 // State variables
 const editorRef = ref(null);
@@ -53,6 +65,7 @@ const progress = ref(0);
 const error = ref(null);
 const plotImage = ref(null);
 const showCode = ref(true);
+const showHelp = ref(false);
 const transitionKey = ref(0);
 const isMobileOrTablet = ref(false);
 
@@ -73,7 +86,11 @@ const handleMobileEvaluate = () => {
   if (editorRef.value) {
     const selectedText = editorRef.value.getSelectedText();
     const textToEvaluate = selectedText || editorRef.value.getValue();
-    handleEvaluate(textToEvaluate);
+    if (textToEvaluate.trim()) {
+      handleEvaluate(textToEvaluate);
+    } else {
+      error.value = 'Please enter some text to evaluate.';
+    }
   }
 };
 
@@ -161,6 +178,37 @@ const handleEvaluate = async (selectedText) => {
   flex-direction: column;
   height: 100vh;
   position: relative;
+}
+
+.settings {
+  position: fixed;
+  top: 10px;
+  right: 20px;
+  z-index: 100;
+  display: flex;
+  gap: 8px;
+}
+
+.icon-button {
+  background: transparent;
+  border: none;
+  color: white;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s;
+}
+
+.icon-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.icon {
+  width: 24px;
+  height: 24px;
 }
 
 .footer {
