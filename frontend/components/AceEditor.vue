@@ -8,7 +8,7 @@ import { useRuntimeConfig } from '#app';
 import ace from 'ace-builds/src-noconflict/ace';
 import 'ace-builds/src-noconflict/mode-python';
 import 'ace-builds/src-noconflict/theme-monokai';
-import { useRandomPrompt } from '~/components/RandomPrompt.vue';
+import { useRandomPrompt } from '~/composables/useRandomPrompt';
 
 
 const emit = defineEmits(['evaluate']);
