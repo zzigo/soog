@@ -159,8 +159,8 @@ def generate():
                 {"role": "system", "content": prompt_content},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=500,
-            temperature=0.7
+            max_tokens=1000,
+            temperature=0.9
         )
         raw_response = response['choices'][0]['message']['content'].strip()
         code_blocks = re.findall(r"```(?:python)?\s*(.*?)```", raw_response, re.DOTALL)
