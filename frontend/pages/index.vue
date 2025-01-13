@@ -24,15 +24,25 @@
         />
       </div>
     </Transition>
-    <div v-if="loading" class="loading">
-      Processing... {{ Math.round(progress) }}%
+    <div class="footer">
+      <div v-if="loading" class="loading">
+        Processing... {{ Math.round(progress) }}%
+      </div>
+      <button 
+        v-if="isMobileOrTablet" 
+        @click="handleMobileEvaluate"
+        class="mobile-evaluate-btn"
+        title="Alt+Enter"
+      >
+        Evaluate
+      </button>
     </div>
     <div v-if="error" class="error">{{ error }}</div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRuntimeConfig } from '#app';
 import AceEditor from '~/components/AceEditor.vue';
 
@@ -44,9 +54,26 @@ const error = ref(null);
 const plotImage = ref(null);
 const showCode = ref(true);
 const transitionKey = ref(0);
+const isMobileOrTablet = ref(false);
+
+const checkDevice = () => {
+  isMobileOrTablet.value = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
+
+onMounted(() => {
+  checkDevice();
+  window.addEventListener('resize', checkDevice);
+});
 
 const toggleShowCode = () => {
   showCode.value = !showCode.value;
+};
+
+const handleMobileEvaluate = () => {
+  if (editorRef.value) {
+    const selectedText = editorRef.value.getSelectedText();
+    handleEvaluate(selectedText);
+  }
 };
 
 // Progress simulation
@@ -126,3 +153,63 @@ const handleEvaluate = async (selectedText) => {
   }
 };
 </script>
+
+<style scoped>
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: relative;
+}
+
+.footer {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 1rem;
+  gap: 1rem;
+  background: rgba(255, 255, 255, 0.9);
+  z-index: 1000;
+}
+
+.loading {
+  margin-right: auto;
+}
+
+.mobile-evaluate-btn {
+  background: #4CAF50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  transition: background-color 0.3s;
+}
+
+.mobile-evaluate-btn:hover {
+  background: #45a049;
+}
+
+.mobile-evaluate-btn:active {
+  background: #3d8b40;
+  transform: translateY(1px);
+}
+
+.error {
+  position: fixed;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ff5252;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  z-index: 1000;
+}
+</style>
