@@ -31,7 +31,7 @@ const addToEditor = (content, type = 'text') => {
   const doc = session.getDocument();
   const currentLength = doc.getLength();
   // Add extra line before the content
-  const newContent = `\n\n${content}\n`;
+  const newContent = `\n\n${content}\n\n\n\n\n`;
 
   doc.insert({ row: currentLength, column: 0 }, newContent);
 
