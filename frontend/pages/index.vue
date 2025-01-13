@@ -88,7 +88,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { useRuntimeConfig } from '#app';
 import AceEditor from '~/components/AceEditor.vue';
 import HelpModal from '~/components/HelpModal.vue';
-import { useRandomPrompt } from '~/components/RandomPrompt.vue';
+import { useRandomPrompt } from '~/composables/useRandomPrompt';
 
 // State variables
 const editorRef = ref(null);
