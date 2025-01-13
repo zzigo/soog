@@ -7,6 +7,8 @@ import { onMounted, ref, defineExpose, defineEmits, onUnmounted, nextTick } from
 import ace from 'ace-builds/src-noconflict/ace';
 import 'ace-builds/src-noconflict/mode-python';
 import 'ace-builds/src-noconflict/theme-monokai';
+import { useRandomPrompt } from '~/components/RandomPrompt';
+
 
 const emit = defineEmits(['evaluate']);
 const editor = ref(null);
@@ -72,7 +74,7 @@ defineExpose({
   clearEditor,
 });
 
-onMounted(() => {
+onMounted(async () => {
   try {
     aceEditorInstance = ace.edit(editor.value);
     aceEditorInstance.setTheme('ace/theme/monokai');
@@ -86,8 +88,12 @@ onMounted(() => {
     updateFontSize();
     window.addEventListener('resize', updateFontSize);
 
-    // Add welcome message
-    aceEditorInstance.setValue("# Welcome to SOOG [The Speculative Organology Organogram Generator v0.1]\n# Imagine an instrument, select and press Alt+Enter to evaluate\n\n");
+    // Get random prompt
+    const { prompt } = useRandomPrompt();
+    await nextTick();
+
+    // Add welcome message with random prompt
+    aceEditorInstance.setValue("# Welcome to SOOG [The Speculative Organology Organogram Generator v0.1]\n# Select text and press Alt+Enter to evaluate\n\n" + prompt.value + "\n");
     aceEditorInstance.clearSelection();
 
     // Add custom keybindings
@@ -116,4 +122,3 @@ onUnmounted(() => {
   window.removeEventListener('resize', updateFontSize);
 });
 </script>
-
