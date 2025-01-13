@@ -1,21 +1,27 @@
 export default defineNuxtConfig({
-  css: ['~/assets/styles/global.css'], // Include global CSS for styling
+  css: ['~/assets/styles/global.css'], // Global CSS
 
   runtimeConfig: {
     public: {
-      apiBase: 'https://soog.onrender.com/api', // Backend API base URL for production
+      apiBase: 'https://soog.onrender.com/api', // Public backend URL for production
     },
   },
 
   nitro: {
-    preset: 'node-server', // Use Nitro's node-server preset for a dynamic app
+    preset: 'node-server', // Suitable for Render deployment as a dynamic app
   },
 
   vite: {
     server: {
       fs: {
-        allow: ['node_modules'], // Ensure Vite can access required modules
+        allow: ['node_modules'], // Ensure Vite can access necessary modules
       },
     },
   },
+
+  devServer: {
+    port: 3000, // Default development server port (optional)
+  },
+
+  compatibilityDate: '2025-01-13', // Explicit compatibility date
 });

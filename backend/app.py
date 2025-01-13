@@ -13,7 +13,6 @@ import logging
 import re
 import sys
 import torch
-import accelerate
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel, AutoTokenizer, AutoModel
 from torch import nn
@@ -31,7 +30,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('app.log')
+        logging.FileHandler('api.log')
     ]
 )
 
@@ -45,11 +44,38 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 # Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Initialize models
+
+def get_prompt_content():
+    """Read the system prompt content from 'prompt.txt'."""
+    try:
+        with open('prompt.txt', 'r') as file:
+            return file.read().strip()
+    except Exception as e:
+        logging.error(f"Error reading prompt file: {e}")
+        return "ERROR: Unable to load prompt content."
+
+
+def execute_matplotlib_code(code):
+    """Execute matplotlib code and return the plot as a base64 image."""
+    try:
+        code = re.sub(r'plt\.show\(\s*\)', '', code)  # Remove plt.show() calls
+        plt.close('all')
+        exec(code, globals())
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png', bbox_inches='tight', dpi=100)
+        buffer.seek(0)
+        image_png = buffer.getvalue()
+        buffer.close()
+        return base64.b64encode(image_png).decode('utf-8')
+    except Exception as e:
+        logging.error(f"Error executing matplotlib code: {e}")
+        raise
+
+
 def init_models():
     """Initialize and load all required models."""
     try:
-        # Load smaller pretrained models with offload to disk for efficiency
+        # Load pretrained models
         bert_tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased", cache_dir=HF_CACHE_DIR)
         bert_model = AutoModel.from_pretrained(
             "distilbert-base-uncased", 
@@ -64,7 +90,7 @@ def init_models():
             offload_folder=OFFLOAD_DIR
         )
         clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16", cache_dir=HF_CACHE_DIR)
-        
+
         # Initialize multimodal model
         class MultimodalAttentionModel(nn.Module):
             def __init__(self, text_hidden_size=768, image_hidden_size=512, combined_hidden_size=256):
@@ -81,10 +107,8 @@ def init_models():
                 combined = attention_out.squeeze(1)
                 return self.classifier(combined)
 
-        # Create model instance
+        # Load multimodal model
         multimodal_model = MultimodalAttentionModel().to(device)
-        
-        # Load trained weights (if available)
         checkpoint_path = "./modeltrainer/outputModel/multimodal_model_final.pth"
         if os.path.exists(checkpoint_path):
             checkpoint = torch.load(checkpoint_path, map_location=device)
@@ -93,7 +117,7 @@ def init_models():
             logging.info("Multimodal model loaded successfully")
         else:
             logging.warning(f"No checkpoint found at {checkpoint_path}. Using untrained model.")
-            
+
         return {
             'bert_tokenizer': bert_tokenizer,
             'bert_model': bert_model,
@@ -105,7 +129,8 @@ def init_models():
         logging.error(f"Error initializing models: {e}")
         raise
 
-# Initialize all models
+
+# Initialize models
 try:
     models = init_models()
     logging.info("All models initialized successfully")
@@ -113,51 +138,58 @@ except Exception as e:
     logging.error(f"Failed to initialize models: {e}")
     models = None
 
-# Set OpenAI API key
-openai.api_key = os.getenv("OPENAI_API_KEY")
-if not openai.api_key:
-    raise ValueError("OPENAI_API_KEY environment variable is not set")
 
-# Endpoint for GPT interaction
 @app.route('/api/generate', methods=['POST'])
 def generate():
+    """API endpoint to process prompts with GPT."""
     data = request.json
     prompt = data.get('prompt', '').strip()
+
     if not prompt:
         return jsonify({'error': 'No prompt provided.'}), 400
 
     try:
-        # Process with OpenAI GPT
+        prompt_content = get_prompt_content()
+        if "ERROR" in prompt_content:
+            return jsonify({'error': prompt_content}), 500
+
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "system", "content": prompt_content},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=500,
             temperature=0.7
         )
-        return jsonify(response['choices'][0]['message']['content'])
+        raw_response = response['choices'][0]['message']['content'].strip()
+        code_blocks = re.findall(r"```(?:python)?\s*(.*?)```", raw_response, re.DOTALL)
+
+        if code_blocks:
+            for code in code_blocks:
+                if 'matplotlib' in code or 'plt.' in code:
+                    image_base64 = execute_matplotlib_code(code)
+                    return jsonify({"type": "plot", "content": code.strip(), "image": image_base64})
+            return jsonify({"type": "code", "content": code_blocks[0].strip()})
+        return jsonify({"type": "text", "content": raw_response})
     except Exception as e:
-        logging.error(f"Error in OpenAI API: {e}")
+        logging.error(f"Error in /api/generate: {e}")
         return jsonify({'error': str(e)}), 500
 
-# Endpoint for multimodal predictions
+
 @app.route('/api/predict', methods=['POST'])
 def predict():
+    """API endpoint for multimodal predictions."""
     data = request.json
     text = data.get('text', '').strip()
-    image_data = data.get('image', '')  # Base64 encoded image
+    image_data = data.get('image', '')
 
     if not text or not image_data:
         return jsonify({'error': 'Both text and image are required.'}), 400
 
     try:
-        # Decode and preprocess the image
         image_bytes = base64.b64decode(image_data.split(',')[1])
         image = Image.open(BytesIO(image_bytes)).convert('RGB')
-
-        # Process with multimodal model
         text_inputs = models['bert_tokenizer'](text, return_tensors="pt", padding=True, truncation=True).to(device)
         image_inputs = models['clip_processor'](images=image, return_tensors="pt").to(device)
 
@@ -169,18 +201,13 @@ def predict():
             predicted_class = torch.argmax(probabilities, dim=1).item()
             confidence = probabilities[0][predicted_class].item()
 
-        return jsonify({
-            'prediction': predicted_class,
-            'confidence': confidence
-        })
+        return jsonify({'prediction': predicted_class, 'confidence': confidence})
     except Exception as e:
-        logging.error(f"Error in prediction: {e}")
+        logging.error(f"Error in /api/predict: {e}")
         return jsonify({'error': str(e)}), 500
 
+
 if __name__ == '__main__':
-    # Get port from environment variable (default to 10000 if not set)
     port = int(os.getenv("PORT", 10000))
     logging.info(f"Starting Flask app on port {port}")
-    
-    # Ensure app binds to 0.0.0.0 for Render
     app.run(host='0.0.0.0', port=port, debug=True)
