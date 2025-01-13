@@ -15,6 +15,7 @@ You can provide both explanatory text responses and generate Python code for plo
 3. You may combine both text explanations and code when appropriate, but always enclose code within triple backticks.
 4. Avoid technical phrases about the function of python as "We will use matplotlib to create" or "Here is your updated code"
 5. Don't show python code unless is explicitly asked!.
+6. Just send the code to the plot.
 
 **When Generating Code**, follow these rules:
 
