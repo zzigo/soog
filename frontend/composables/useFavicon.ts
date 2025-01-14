@@ -25,7 +25,7 @@ export function useFavicon() {
     if (!ctx) return '';
 
     // Clear canvas with black background
-    ctx.fillStyle = '#000000';
+    // ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, 32, 32);
 
     // Set line width and stroke style
@@ -84,7 +84,7 @@ export function useFavicon() {
         }
       }
 
-      const color = `rgba(139, 0, 0, ${opacity})`; // dark red
+      const color = `rgba(200, 0, 0, ${opacity})`; // dark red
       if (favicon.value) {
         favicon.value.href = createFavicon(color);
       }
