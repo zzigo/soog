@@ -138,7 +138,7 @@ const handleRandomPrompt = async () => {
     const { getRandomPrompt } = useRandomPrompt();
     const prompt = await getRandomPrompt();
     editorRef.value.clearEditor();
-    editorRef.value.addToEditor("# Welcome to SOOG [The Speculative Organology Organogram Generator v0.1]\n# Write your invented instrument, select text and press Alt+Enter to evaluate\n\n" + prompt + "\n");
+    editorRef.value.addToEditor(prompt);
   }
 };
 
@@ -166,7 +166,7 @@ const startProgress = () => {
       progress.value += Math.random() * 15;
       if (progress.value > 90) progress.value = 90;
     }
-  }, 1100);
+  }, 1200);
 };
 
 const completeProgress = () => {
@@ -297,8 +297,8 @@ const handleEvaluate = async (selectedText) => {
 }
 
 .lightbox-image {
-  max-width: 90vw;
-  max-height: 90vh;
+  max-width: 80vw;
+  max-height: 80vh;
   object-fit: contain;
 }
 
