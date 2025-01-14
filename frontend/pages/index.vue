@@ -139,6 +139,8 @@ const handleRandomPrompt = async () => {
     const prompt = await getRandomPrompt();
     editorRef.value.clearEditor();
     editorRef.value.addToEditor(prompt);
+    // Add random prompt to command history
+    editorRef.value.addToHistory(prompt);
   }
 };
 

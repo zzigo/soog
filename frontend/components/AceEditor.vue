@@ -83,11 +83,20 @@ const clearEditor = () => {
   }
 };
 
+// Add to command history
+const addToHistory = (content) => {
+  if (content.trim() && commandHistory.value[commandHistory.value.length - 1] !== content) {
+    commandHistory.value.push(content);
+    historyIndex.value = commandHistory.value.length;
+  }
+};
+
 // Expose methods for parent components
 defineExpose({
   addToEditor,
   aceEditor: () => aceEditorInstance,
   clearEditor,
+  addToHistory,
 });
 
 onMounted(async () => {
@@ -112,6 +121,9 @@ onMounted(async () => {
     await fetchVersion();
     aceEditorInstance.setValue(`# Welcome to SOOG [The Speculative Organology Organogram Generator ${version.value}]\n# Write your invented instrument, select text and press Alt+Enter to evaluate\n\n${prompt}\n`);
     aceEditorInstance.clearSelection();
+    
+    // Add initial prompt to command history
+    addToHistory(prompt);
 
     // Add custom keybindings
     aceEditorInstance.commands.addCommands([
@@ -121,11 +133,7 @@ onMounted(async () => {
         exec: () => {
           const selectedText = aceEditorInstance.getSelectedText();
           const codeToEvaluate = selectedText || aceEditorInstance.getValue();
-          // Add to command history if it's not empty and not a duplicate
-          if (codeToEvaluate.trim() && commandHistory.value[commandHistory.value.length - 1] !== codeToEvaluate) {
-            commandHistory.value.push(codeToEvaluate);
-            historyIndex.value = commandHistory.value.length;
-          }
+          addToHistory(codeToEvaluate);
           emit('evaluate', codeToEvaluate);
         },
       },
