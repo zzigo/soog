@@ -34,7 +34,7 @@
     <Transition
       enter-active-class="fadeIn"
       leave-active-class="fadeOut"
-      :duration="5000"
+      :duration="3000"
       mode="out-in"
     > 
       <div v-if="plotImage" class="plot-display" :key="transitionKey">
@@ -89,8 +89,10 @@ import { useRuntimeConfig } from '#app';
 import AceEditor from '~/components/AceEditor.vue';
 import HelpModal from '~/components/HelpModal.vue';
 import { useRandomPrompt } from '~/composables/useRandomPrompt';
+import { useFavicon } from '~/composables/useFavicon';
 
 // State variables
+const { startProcessing, completeProcessing } = useFavicon();
 const editorRef = ref(null);
 const loading = ref(false);
 const progress = ref(0);
@@ -151,6 +153,7 @@ const handleMobileEvaluate = () => {
       const selectedText = editor.getSelectedText();
       const textToEvaluate = selectedText || editor.getValue();
       if (textToEvaluate.trim()) {
+        startProcessing();
         handleEvaluate(textToEvaluate);
       } else {
         error.value = 'Please enter some text to evaluate.';
@@ -193,6 +196,7 @@ const handleEvaluate = async (selectedText) => {
   loading.value = true;
   error.value = null;
   startProgress();
+  startProcessing();
 
   try {
     const response = await fetch(`${apiBase.value}/generate`, {
@@ -233,6 +237,7 @@ const handleEvaluate = async (selectedText) => {
   } finally {
     completeProgress();
     loading.value = false;
+    completeProcessing();
   }
 };
 </script>
