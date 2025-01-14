@@ -24,11 +24,34 @@ export function useFavicon() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return '';
 
-    // Draw circle
+    // Clear canvas with black background
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, 32, 32);
+
+    // Set line width and stroke style
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = color;
+
+    // Calculate circle size based on opacity for zoom effect
+    const opacityMatch = color.match(/[\d.]+\)$/);
+    const opacity = opacityMatch ? parseFloat(opacityMatch[0]) : 1;
+    const baseRadius = 7;
+    const radius = baseRadius + (1 - opacity) * 1.5; // Subtle zoom out when fading
+
+    // Center the circles more
+    const centerY = 16;
+    const spacing = 10;
+    const centerX = 16;
+
+    // Draw first O
     ctx.beginPath();
-    ctx.arc(16, 16, 14, 0, 2 * Math.PI);
-    ctx.fillStyle = color;
-    ctx.fill();
+    ctx.arc(centerX - spacing/2, centerY, radius, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    // Draw second O
+    ctx.beginPath();
+    ctx.arc(centerX + spacing/2, centerY, radius, 0, 2 * Math.PI);
+    ctx.stroke();
 
     return canvas.toDataURL();
   };
