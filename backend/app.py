@@ -88,16 +88,12 @@ def init_models():
         bert_tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased", cache_dir=HF_CACHE_DIR)
         bert_model = AutoModel.from_pretrained(
             "distilbert-base-uncased", 
-            cache_dir=HF_CACHE_DIR, 
-            device_map="auto", 
-            offload_folder=OFFLOAD_DIR
-        )
+            cache_dir=HF_CACHE_DIR
+        ).to(device)
         clip_model = CLIPModel.from_pretrained(
             "openai/clip-vit-base-patch16", 
-            cache_dir=HF_CACHE_DIR, 
-            device_map="auto", 
-            offload_folder=OFFLOAD_DIR
-        )
+            cache_dir=HF_CACHE_DIR
+        ).to(device)
         clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16", cache_dir=HF_CACHE_DIR)
 
         # Initialize multimodal model
