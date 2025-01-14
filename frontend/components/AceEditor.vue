@@ -10,11 +10,13 @@ import 'ace-builds/src-noconflict/mode-python';
 import 'ace-builds/src-noconflict/theme-monokai';
 import { useRandomPrompt } from '~/composables/useRandomPrompt';
 
-
 const emit = defineEmits(['evaluate']);
 const editor = ref(null);
 const version = ref('0.0.0');
 let aceEditorInstance;
+const commandHistory = ref([]);
+let historyIndex = ref(-1);
+let currentCommand = ref('');
 
 const fetchVersion = async () => {
   try {
@@ -119,6 +121,11 @@ onMounted(async () => {
         exec: () => {
           const selectedText = aceEditorInstance.getSelectedText();
           const codeToEvaluate = selectedText || aceEditorInstance.getValue();
+          // Add to command history if it's not empty and not a duplicate
+          if (codeToEvaluate.trim() && commandHistory.value[commandHistory.value.length - 1] !== codeToEvaluate) {
+            commandHistory.value.push(codeToEvaluate);
+            historyIndex.value = commandHistory.value.length;
+          }
           emit('evaluate', codeToEvaluate);
         },
       },
@@ -126,6 +133,36 @@ onMounted(async () => {
         name: 'clearEditor',
         bindKey: { win: 'Ctrl-H', mac: 'Command-H' },
         exec: clearEditor,
+      },
+      {
+        name: 'previousCommand',
+        bindKey: { win: 'Ctrl-Up', mac: 'Command-Up' },
+        exec: () => {
+          if (historyIndex.value > 0) {
+            // Save current input if we're starting to navigate history
+            if (historyIndex.value === commandHistory.value.length) {
+              currentCommand.value = aceEditorInstance.getValue();
+            }
+            historyIndex.value--;
+            aceEditorInstance.setValue(commandHistory.value[historyIndex.value]);
+            aceEditorInstance.clearSelection();
+          }
+        },
+      },
+      {
+        name: 'nextCommand',
+        bindKey: { win: 'Ctrl-Down', mac: 'Command-Down' },
+        exec: () => {
+          if (historyIndex.value < commandHistory.value.length) {
+            historyIndex.value++;
+            if (historyIndex.value === commandHistory.value.length) {
+              aceEditorInstance.setValue(currentCommand.value);
+            } else {
+              aceEditorInstance.setValue(commandHistory.value[historyIndex.value]);
+            }
+            aceEditorInstance.clearSelection();
+          }
+        },
       },
     ]);
   } catch (error) {
