@@ -72,7 +72,7 @@ You can provide both explanatory text responses and generate Python code for plo
    - genus is marked with semi circle.
    - add some symbols in orange if needed H=hammer, Y=lacing, P=precises, R=relative C=cord,string Ri=ring, M=male, F=female.
    - Colors and numbers for materials: gourd=beige,  earth=brown , skin=3 pink, plastic=grey, wood=orange,  bamboo=yellow, bone=lightgrey, glass=green , stone=white, water =blue
-   - Electronic are: microphones= little rombus,  speakers=little horizontal cone
+   - Electronic are: microphones= little Rhombus "(Polygon([[0.3, 1], [1, 0.3], [0.3, 0], [0, 0.3]])",  speakers=little horizontal cone "(Polygon([[0.3, 1], [1, 0], [0, 0]])" rotated focusing the sweet spot of sound.(maintain proportion!)
    - Performer position indicated with little white circle and dotted line .
    - Arrows: For connections/relationships (proportional heads)
    - Aerophone tubes: Parallel lines (straight) or conical lines (conical)
