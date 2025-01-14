@@ -14,3 +14,13 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python app.py
     rootDir: backend
+    plan: standard
+    envVars:
+      - key: PYTORCH_NO_CUDA
+        value: 1
+      - key: TRANSFORMERS_OFFLINE
+        value: 1
+    scaling:
+      minInstances: 1
+      maxInstances: 1
+      targetMemoryPercent: 80

@@ -135,13 +135,37 @@ def init_models():
         raise
 
 
-# Initialize models
-try:
-    models = init_models()
-    logging.info("All models initialized successfully")
-except Exception as e:
-    logging.error(f"Failed to initialize models: {e}")
-    models = None
+# Initialize models dictionary but don't load models yet
+models = {}
+
+def load_models_if_needed():
+    """Lazy load models only when needed"""
+    global models
+    if not models:
+        try:
+            models.update(init_models())
+            logging.info("Models loaded successfully")
+        except Exception as e:
+            logging.error(f"Failed to load models: {e}")
+            raise
+
+def cleanup_models():
+    """Clean up model resources"""
+    global models
+    if models:
+        for model_name, model in models.items():
+            if hasattr(model, 'to'):
+                try:
+                    model.to('cpu')
+                    del model
+                except Exception as e:
+                    logging.error(f"Error cleaning up model {model_name}: {e}")
+        models.clear()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        import gc
+        gc.collect()
+        logging.info("Models cleaned up")
 
 
 @app.route('/api/generate', methods=['POST'])
@@ -193,12 +217,21 @@ def predict():
         return jsonify({'error': 'Both text and image are required.'}), 400
 
     try:
+        # Load models only when needed
+        load_models_if_needed()
+
         image_bytes = base64.b64decode(image_data.split(',')[1])
         image = Image.open(BytesIO(image_bytes)).convert('RGB')
-        text_inputs = models['bert_tokenizer'](text, return_tensors="pt", padding=True, truncation=True).to(device)
-        image_inputs = models['clip_processor'](images=image, return_tensors="pt").to(device)
+        
+        # Process inputs in CPU to save memory
+        text_inputs = models['bert_tokenizer'](text, return_tensors="pt", padding=True, truncation=True)
+        image_inputs = models['clip_processor'](images=image, return_tensors="pt")
 
         with torch.no_grad():
+            # Move to device only when processing
+            text_inputs = {k: v.to(device) for k, v in text_inputs.items()}
+            image_inputs = {k: v.to(device) if torch.is_tensor(v) else v for k, v in image_inputs.items()}
+            
             text_features = models['bert_model'](**text_inputs).pooler_output
             image_features = models['clip_model'].get_image_features(**image_inputs)
             outputs = models['multimodal_model'](text_features, image_features)
@@ -206,9 +239,17 @@ def predict():
             predicted_class = torch.argmax(probabilities, dim=1).item()
             confidence = probabilities[0][predicted_class].item()
 
+            # Move everything back to CPU and clear CUDA cache
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+        # Clean up resources after prediction
+        cleanup_models()
+
         return jsonify({'prediction': predicted_class, 'confidence': confidence})
     except Exception as e:
         logging.error(f"Error in /api/predict: {e}")
+        cleanup_models()  # Ensure cleanup even on error
         return jsonify({'error': str(e)}), 500
 
 
