@@ -24,10 +24,29 @@ const fetchVersion = async () => {
     const baseURL = config.public.apiBase || 'http://localhost:10000';
     const response = await fetch(`${baseURL}/api/version`);
     const data = await response.json();
-    version.value = data.version;
+    if (data.version !== version.value) {
+      version.value = data.version;
+      // Update welcome message when version changes
+      if (aceEditorInstance) {
+        const currentContent = aceEditorInstance.getValue();
+        const newContent = currentContent.replace(
+          /# Welcome to SOOG \[The Speculative Organology Organogram Generator [0-9.]+\]/,
+          `# Welcome to SOOG [The Speculative Organology Organogram Generator ${data.version}]`
+        );
+        aceEditorInstance.setValue(newContent);
+        aceEditorInstance.clearSelection();
+      }
+    }
   } catch (error) {
     console.error('Error fetching version:', error);
   }
+};
+
+// Set up polling for version updates
+let versionPollInterval;
+const startVersionPolling = () => {
+  // Check version every 30 seconds
+  versionPollInterval = setInterval(fetchVersion, 30000);
 };
 
 // Update font size based on device
@@ -117,8 +136,9 @@ onMounted(async () => {
     const { getRandomPrompt } = useRandomPrompt();
     const prompt = await getRandomPrompt();
 
-    // Fetch version and add welcome message with random prompt
+    // Fetch version and start polling
     await fetchVersion();
+    startVersionPolling();
     aceEditorInstance.setValue(`# Welcome to SOOG [The Speculative Organology Organogram Generator ${version.value}]\n# Write your invented instrument, select text and press Alt+Enter to evaluate\n\n${prompt}\n`);
     aceEditorInstance.clearSelection();
     
@@ -180,5 +200,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateFontSize);
+  if (versionPollInterval) {
+    clearInterval(versionPollInterval);
+  }
 });
 </script>
