@@ -6,8 +6,8 @@ from functools import wraps
 from flask import request, Response
 import json
 
-# Use /var/log for production (Render) or local logs directory for development
-LOGS_DIR = '/var/log/soog' if os.getenv('RENDER') else os.path.join(os.path.dirname(__file__), 'logs')
+# Use a writable directory for logs
+LOGS_DIR = os.path.join(os.getcwd(), 'logs')
 os.makedirs(LOGS_DIR, exist_ok=True)
 
 # Configure JSON logger
