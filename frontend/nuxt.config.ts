@@ -1,20 +1,30 @@
+import { defineNuxtConfig } from "nuxt/config";
+
 export default defineNuxtConfig({
-  css: ['~/assets/styles/global.css'], // Global CSS
+  experimental: {
+    payloadExtraction: false,
+    viewTransition: true,
+    renderJsonPayloads: true,
+  },
+
+  ssr: true,
+
+  css: ["~/assets/styles/global.css"], // Global CSS
 
   runtimeConfig: {
     public: {
-      apiBase: 'https://soog.onrender.com/api', // Public backend URL for production
+      apiBase: "https://soog.onrender.com/api", // Public backend URL for production
     },
   },
 
   nitro: {
-    preset: 'node-server', // Suitable for Render deployment as a dynamic app
+    preset: "node-server", // Suitable for Render deployment as a dynamic app
   },
 
   vite: {
     server: {
       fs: {
-        allow: ['node_modules'], // Ensure Vite can access necessary modules
+        allow: ["node_modules"], // Ensure Vite can access necessary modules
       },
     },
   },
@@ -23,17 +33,44 @@ export default defineNuxtConfig({
     port: 3000, // Default development server port (optional)
   },
 
-  compatibilityDate: '2025-01-13', // Explicit compatibility date
+  compatibilityDate: "2025-01-13", // Explicit compatibility date
 
   app: {
     head: {
+      meta: [{ name: "theme-color", content: "#4CAF50" }],
       link: [
-        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' }, // Default favicon
-        { rel: 'icon', type: 'image/png', href: '/favicon-32x32.png', sizes: '32x32' }, // 32x32 favicon
-        { rel: 'icon', type: 'image/png', href: '/favicon-16x16.png', sizes: '16x16' }, // 16x16 favicon
-        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png', sizes: '180x180' }, // iOS devices
-        { rel: 'manifest', href: '/site.webmanifest' }, // PWA manifest
+        { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
+        {
+          rel: "icon",
+          type: "image/png",
+          sizes: "32x32",
+          href: "/favicon-32x32.png",
+        },
+        {
+          rel: "icon",
+          type: "image/png",
+          sizes: "16x16",
+          href: "/favicon-16x16.png",
+        },
+        {
+          rel: "apple-touch-icon",
+          sizes: "180x180",
+          href: "/apple-touch-icon.png",
+        },
+        { rel: "manifest", href: "/manifest.json" },
       ],
+    },
+  },
+
+  appConfig: {
+    name: "SOOG",
+    description: "Speculative Organology Organogram Generator",
+    theme: {
+      dark: true,
+      colors: {
+        primary: "#4CAF50",
+        background: "#1a1a1a",
+      },
     },
   },
 });

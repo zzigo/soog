@@ -15,6 +15,7 @@
     "nuxt": "^3.15.1",
     "vue": "latest",
     "vue-ace-editor": "^1.0.3",
-    "vue-router": "latest"
+    "vue-router": "latest",
+    "@vite-pwa/nuxt": "^0.5.0"
   }
 }
