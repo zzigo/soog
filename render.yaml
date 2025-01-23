@@ -20,6 +20,8 @@ services:
         value: 1
       - key: TRANSFORMERS_OFFLINE
         value: 1
+      - key: RENDER
+        value: 1
     scaling:
       minInstances: 1
       maxInstances: 1
