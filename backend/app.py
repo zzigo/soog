@@ -40,7 +40,10 @@ load_dotenv()
 
 # Initialize Flask app and enable CORS
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, resources={
+    r"/api/*": {"origins": "*"},
+    r"/log": {"origins": "*"}
+})
 
 # Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
