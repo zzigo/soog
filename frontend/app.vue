@@ -3,8 +3,8 @@
     <!-- <nav class="nav">
       <NuxtLink to="/" class="nav-link">Home</NuxtLink>
       <NuxtLink to="/logs" class="nav-link">Logs</NuxtLink>
-    </nav>
-    <NuxtPage /> -->
+    </nav>--->
+    <NuxtPage />
   </div>
 </template>
 
