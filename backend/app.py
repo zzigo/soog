@@ -31,7 +31,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('api.log')
+        logging.FileHandler(os.path.join(os.path.dirname(__file__), 'api.log'))
     ]
 )
 
@@ -49,7 +49,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def get_version():
     """Read the current version from version.txt."""
     try:
-        with open('version.txt', 'r') as file:
+        with open(os.path.join(os.path.dirname(__file__), 'version.txt'), 'r') as file:
             return file.read().strip()
     except Exception as e:
         logging.error(f"Error reading version file: {e}")
@@ -58,7 +58,7 @@ def get_version():
 def get_prompt_content():
     """Read the system prompt content from 'prompt.txt'."""
     try:
-        with open('prompt.txt', 'r') as file:
+        with open(os.path.join(os.path.dirname(__file__), 'prompt.txt'), 'r') as file:
             return file.read().strip()
     except Exception as e:
         logging.error(f"Error reading prompt file: {e}")
@@ -115,7 +115,7 @@ def init_models():
 
         # Load multimodal model
         multimodal_model = MultimodalAttentionModel().to(device)
-        checkpoint_path = "./modeltrainer/outputModel/multimodal_model_final.pth"
+        checkpoint_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "modeltrainer/outputModel/multimodal_model_final.pth")
         if os.path.exists(checkpoint_path):
             checkpoint = torch.load(checkpoint_path, map_location=device)
             multimodal_model.load_state_dict(checkpoint['model_state_dict'])

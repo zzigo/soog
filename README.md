@@ -4,8 +4,6 @@
 
 # SOOG - Speculative Organology Organogram Generator
 
-## Libraries and Tools
-
 ![Nuxt](https://img.shields.io/badge/Nuxt-35495E?style=for-the-badge&logo=nuxt.js&logoColor=4FC08D)
 ![Bun](https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=FFFFFF)
 ![Vue.js](https://img.shields.io/badge/Vue.js-35495E?style=for-the-badge&logo=vue.js&logoColor=4FC08D)
@@ -22,20 +20,14 @@
 ![SymPy](https://img.shields.io/badge/SymPy-3776AB?style=for-the-badge&logo=sympy&logoColor=FFFFFF)
 ![TQDM](https://img.shields.io/badge/TQDM-013243?style=for-the-badge&logo=python&logoColor=FFFFFF)
 ![Flask](https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=FFFFFF)
-![Requests](https://img.shields.io/badge/Requests-3776AB?style=for-the-badge&logo=python&logoColor=FFFFFF)
-![NetworkX](https://img.shields.io/badge/NetworkX-013243?style=for-the-badge&logo=python&logoColor=FFFFFF)
 ![Pillow](https://img.shields.io/badge/Pillow-013243?style=for-the-badge&logo=python&logoColor=FFFFFF)
 ![Click](https://img.shields.io/badge/Click-3776AB?style=for-the-badge&logo=python&logoColor=FFFFFF)
 ![Jinja2](https://img.shields.io/badge/Jinja2-B41717?style=for-the-badge&logo=jinja&logoColor=FFFFFF)
 ![Regex](https://img.shields.io/badge/Regex-3776AB?style=for-the-badge&logo=python&logoColor=FFFFFF)
 ![PyYAML](https://img.shields.io/badge/PyYAML-013243?style=for-the-badge&logo=python&logoColor=FFFFFF)
 ![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=FFFFFF)
-![Flask-CORS](https://img.shields.io/badge/Flask--CORS-000000?style=for-the-badge&logo=flask&logoColor=FFFFFF)
-![AioHTTP](https://img.shields.io/badge/AioHTTP-3776AB?style=for-the-badge&logo=python&logoColor=FFFFFF)
 ![Huggingface Hub](https://img.shields.io/badge/Huggingface%20Hub-F7931E?style=for-the-badge&logo=huggingface&logoColor=FFFFFF)
 ![Triton](https://img.shields.io/badge/Triton-76B900?style=for-the-badge&logo=nvidia&logoColor=FFFFFF)
-![Python-Dateutil](https://img.shields.io/badge/Python--Dateutil-3776AB?style=for-the-badge&logo=python&logoColor=FFFFFF)
-![Packaging](https://img.shields.io/badge/Packaging-013243?style=for-the-badge&logo=python&logoColor=FFFFFF)
 
 SOOG is an innovative web application that helps visualize and create musical instruments using the organogram technique, originally developed by ethnomusicologist Mantle Hood. The application extends this methodology to enable speculative instrument design through geometric and acoustic manipulation.
 
