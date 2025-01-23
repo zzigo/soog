@@ -1,6 +1,7 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
+from logger import log_activity, get_logs, format_logs_html
 import openai
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend for Matplotlib
@@ -168,7 +169,18 @@ def cleanup_models():
         logging.info("Models cleaned up")
 
 
+@app.route('/log', methods=['GET'])
+def view_logs():
+    """Endpoint to view application logs"""
+    try:
+        logs = get_logs(limit=100)  # Get last 100 logs
+        return Response(format_logs_html(logs), content_type='text/html')
+    except Exception as e:
+        logging.error(f"Error viewing logs: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/generate', methods=['POST'])
+@log_activity('generate')
 def generate():
     """API endpoint to process prompts with GPT."""
     data = request.json
@@ -207,6 +219,7 @@ def generate():
 
 
 @app.route('/api/predict', methods=['POST'])
+@log_activity('predict')
 def predict():
     """API endpoint for multimodal predictions."""
     data = request.json
@@ -254,6 +267,7 @@ def predict():
 
 
 @app.route('/api/version', methods=['GET'])
+@log_activity('version')
 def version():
     """API endpoint to get the current version."""
     try:

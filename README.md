@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="../frontend/public/android-chrome-512x512.png" alt="SOOG Logo" width="200"/>
+  <img src="frontend/public/android-chrome-512x512.png" alt="SOOG Logo" width="200"/>
 </div>
 
 # SOOG - Speculative Organology Organogram Generator
