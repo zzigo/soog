@@ -15,6 +15,16 @@
 ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=FFFFFF)
 ![Scikit-learn](https://img.shields.io/badge/Scikit--learn-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=FFFFFF)
 ![MathBERT](https://img.shields.io/badge/MathBERT-412991?style=for-the-badge&logo=bert&logoColor=FFFFFF)
+[![GitHub stars](https://img.shields.io/github/stars/huggingface/transformers.svg?style=social)](https://github.com/huggingface/transformers)
+[![GitHub stars](https://img.shields.io/github/stars/pytorch/pytorch.svg?style=social)](https://github.com/pytorch/pytorch)
+[![GitHub stars](https://img.shields.io/github/stars/numpy/numpy.svg?style=social)](https://github.com/numpy/numpy)
+[![GitHub stars](https://img.shields.io/github/stars/matplotlib/matplotlib.svg?style=social)](https://github.com/matplotlib/matplotlib)
+[![GitHub stars](https://img.shields.io/github/stars/pallets/flask.svg?style=social)](https://github.com/pallets/flask)
+[![GitHub stars](https://img.shields.io/github/stars/psf/requests.svg?style=social)](https://github.com/psf/requests)
+[![GitHub stars](https://img.shields.io/github/stars/openai/openai-python.svg?style=social)](https://github.com/openai/openai-python)
+[![GitHub stars](https://img.shields.io/github/stars/tqdm/tqdm.svg?style=social)](https://github.com/tqdm/tqdm)
+[![GitHub stars](https://img.shields.io/github/stars/NVIDIA/nccl.svg?style=social)](https://github.com/NVIDIA/nccl)
+[![GitHub stars](https://img.shields.io/github/stars/huggingface/huggingface_hub.svg?style=social)](https://github.com/huggingface/huggingface_hub)
 
 SOOG is an innovative web application that helps visualize and create musical instruments using the organogram technique, originally developed by ethnomusicologist Mantle Hood. The application extends this methodology to enable speculative instrument design through geometric and acoustic manipulation.
 
