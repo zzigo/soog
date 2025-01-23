@@ -18,7 +18,6 @@
 ![Scikit-learn](https://img.shields.io/badge/Scikit--learn-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=FFFFFF)
 ![MathBERT](https://img.shields.io/badge/MathBERT-412991?style=for-the-badge&logo=bert&logoColor=FFFFFF)
 ![Transformers](https://img.shields.io/badge/Transformers-F7931E?style=for-the-badge&logo=huggingface&logoColor=FFFFFF)
-[Transformers](https://img.shields.io/badge/Transformers-F7931E?style=for-the-badge&logo=huggingface&logoColor=FFFFFF)
 ![NumPy](https://img.shields.io/badge/NumPy-013243?style=for-the-badge&logo=numpy&logoColor=FFFFFF)
 ![SymPy](https://img.shields.io/badge/SymPy-3776AB?style=for-the-badge&logo=sympy&logoColor=FFFFFF)
 ![TQDM](https://img.shields.io/badge/TQDM-013243?style=for-the-badge&logo=python&logoColor=FFFFFF)
