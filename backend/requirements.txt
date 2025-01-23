@@ -2,11 +2,11 @@ flask==2.0.1
 flask-cors==3.0.10
 python-dotenv==0.19.0
 openai==0.27.0
-matplotlib==3.4.3
-numpy==1.18.5
-torch==1.7.1
+matplotlib==3.7.1
+numpy==1.24.3
+torch==2.0.1
 pillow==8.3.2
-transformers==3.5.1
+transformers==4.28.1
 redis==4.6.0
 python-redis==0.1.2
 pino==0.6.0
