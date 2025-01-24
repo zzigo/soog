@@ -1,9 +1,9 @@
 <template>
   <div>
-    <nav class="nav">
+    <!-- <nav class="nav">
       <NuxtLink to="/" class="nav-link">Home</NuxtLink>
       <NuxtLink to="/logs" class="nav-link">Logs</NuxtLink>
-    </nav>
+    </nav> -->
     <NuxtPage />
   </div>
 </template>
