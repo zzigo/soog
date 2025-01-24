@@ -29,6 +29,10 @@
 ![Huggingface Hub](https://img.shields.io/badge/Huggingface%20Hub-F7931E?style=for-the-badge&logo=huggingface&logoColor=FFFFFF)
 ![Triton](https://img.shields.io/badge/Triton-76B900?style=for-the-badge&logo=nvidia&logoColor=FFFFFF)
 
+<!-- <p align="center">
+  <a href="soog_v1.pdf"><b>paper Link</b>👁️</a>
+</p> -->
+
 SOOG is an innovative web application that helps visualize and create musical instruments using the organogram technique, originally developed by ethnomusicologist Mantle Hood. The application extends this methodology to enable speculative instrument design through geometric and acoustic manipulation.
 
 ## Core Features
