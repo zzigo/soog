@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
 from logger import log_activity, get_logs, format_logs_html
-from deepseek_chat import Client
+from openai import OpenAI
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend for Matplotlib
 import matplotlib.pyplot as plt
@@ -197,9 +197,9 @@ def generate():
         if "ERROR" in prompt_content:
             return jsonify({'error': prompt_content}), 500
 
-        client = Client(api_key=os.getenv("DEEPSEEK_API_KEY"))
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.chat.completions.create(
-            model="deepseek-chat-67b",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": prompt_content},
                 {"role": "user", "content": prompt}
