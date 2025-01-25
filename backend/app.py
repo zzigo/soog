@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
 from logger import log_activity, get_logs, format_logs_html
-from deepseek import Client
+from deepseek_chat import Client
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend for Matplotlib
 import matplotlib.pyplot as plt
@@ -207,7 +207,7 @@ def generate():
             max_tokens=1000,
             temperature=0.9
         )
-        raw_response = response['choices'][0]['message']['content'].strip()
+        raw_response = response.choices[0].message.content.strip()
         code_blocks = re.findall(r"```(?:python)?\s*(.*?)```", raw_response, re.DOTALL)
 
         if code_blocks:
