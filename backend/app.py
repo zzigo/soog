@@ -14,6 +14,7 @@ import logging
 import re
 import sys
 import torch
+import scipy
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel, AutoTokenizer, AutoModel
 from torch import nn
