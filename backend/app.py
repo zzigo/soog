@@ -164,7 +164,7 @@ def generate():
             "temperature": 0.9,
             "max_tokens": 1000
         }
-        response = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=body)
+        response = requests.post("https://api.deepseek.com/chat/completions", headers=headers, json=body)
         response.raise_for_status()
         data = response.json()
         raw_response = data['choices'][0]['message']['content'].strip()

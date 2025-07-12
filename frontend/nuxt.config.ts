@@ -13,7 +13,7 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      apiBase: "https://soog.onrender.com/api", // Public backend URL for production
+      apiBase: "https://soog.zztt.org/api", // Public backend URL for production
     },
   },
 

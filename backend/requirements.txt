@@ -6,7 +6,7 @@ openai
 requests>=2.25.1
 matplotlib==3.7.1
 numpy==1.24.3
-torch==2.0.1
+# torch==2.0.1
 pillow==9.4.0
 transformers==4.28.1
 redis==4.6.0
