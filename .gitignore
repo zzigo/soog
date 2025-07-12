@@ -43,6 +43,13 @@ venv/
 venv.bak/
 pyvenv.cfg
 pip-selfcheck.json
+backend/venv/
+
+# Ignore large binary wheels
+backend/*.whl
+backend/nvidia_*.whl
+backend/torch-*.whl
+*.whl
 
 # Packaging & Build
 build/
