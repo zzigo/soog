@@ -1,0 +1,61 @@
+{
+	admin off
+	# Global options
+	email admin@zztt.org
+	# Uncomment the line below if you want to use the Caddy API
+	# admin 0.0.0.0:2019
+}
+
+soog.zztt.org {
+    handle /* {
+        reverse_proxy localhost:3000
+    }
+    
+    handle /api/* {
+        reverse_proxy localhost:10000
+    }
+}
+
+arpochat.zztt.org {
+	reverse_proxy localhost:8004
+}
+
+db.zztt.org {
+	reverse_proxy localhost:8529
+}
+
+somap.zztt.org {
+	root * /opt/somap
+	header {
+		Access-Control-Allow-Origin "*"
+		Access-Control-Allow-Methods "GET, OPTIONS"
+		Access-Control-Allow-Headers "Content-Type"
+		Access-Control-Expose-Headers "Content-Type"
+		Content-Type "application/javascript"
+	}
+	file_server {
+		root /opt/somap/public
+	}
+	reverse_proxy localhost:3000
+}
+
+# T1 Application
+d.zztt.org {
+	# Backend API path
+	handle /t1/api/* {
+		uri strip_prefix /t1/api
+		reverse_proxy localhost:5023/api
+	}
+
+	# Frontend path
+	handle /t1/* {
+		root * /opt/t1/f/.output/public
+		try_files {path} {path}/ /t1/index.html
+		file_server
+	}
+}
+
+# config para CouchDB 
+o.zztt.org {
+    reverse_proxy localhost:5984
+  }

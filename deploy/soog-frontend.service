@@ -1,0 +1,15 @@
+[Unit]
+Description=Soog Nuxt Frontend
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/opt/soog/frontend
+#ExecStart=/opt/soog/frontend/node_modules/.bin/nuxt start
+Restart=always
+Environment=NODE_ENV=production
+# If you use bun:
+ExecStart=/root/.bun/bin/bun start
+
+[Install]
+WantedBy=multi-user.target
