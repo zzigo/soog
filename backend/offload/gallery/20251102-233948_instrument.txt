@@ -1,0 +1,70 @@
+# Prompt
+
+Imagine an instrument powered by the movement of glaciers...
+
+# Summary
+
+This glacial instrument organogram represents a speculative membranophone-chordophone hybrid. The resonant body is a large blue rectangle (membranophone) symbolizing the ice mass, with vertical brown rectangles (chordophones) representing sediment layers that act as sympathetic resonators. Orange arrows show glacial flow direction and pressure points, while white dotted lines indicate meltwater channels that modulate resonance. 
+
+The interface consists of yellow triangles (bamboo percussive elements) that strike the ice when calving occurs, and small grey rhombus shapes (electronic sensors) monitoring glacial movement. Numbers in blue indicate measurable components: 7 main sediment layers, 12 meltwater channels, and 3 primary calving zones. 
+
+Acoustically, the massive ice body provides low-frequency resonance amplified by the sediment layers, while meltwater creates variable damping effects. The instrument's sound emerges from natural glacial processes - calving events trigger percussive elements, while continuous movement generates evolving drones through pressure and meltwater modulation. Performative interaction involves monitoring and occasionally guiding these natural processes rather than direct playing.
+
+
+
+```python
+import trimesh
+import numpy as np
+
+# Glacier body (main resonant chamber)
+glacier_vertices = np.array([
+    [0, 0, 0], [200, 0, 0], [200, 80, 0], [0, 80, 0],  # bottom
+    [0, 0, 150], [200, 0, 150], [
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Rectangle, Polygon, Circle, FancyArrow
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(12, 8))
+fig.patch.set_alpha(0.0)
+
+# Main glacial body (membranophone - blue rectangle)
+glacier = Rectangle((2, 3), 8, 4, facecolor='blue', alpha=0.7, edgecolor='white', linewidth=2)
+ax.add_patch(glacier)
+
+# Sediment layers (chordophones - brown vertical rectangles)
+for i in range(7):
+    sediment = Rectangle((2.5 + i*1.1, 3.2), 0.3, 3.6, facecolor='brown', alpha=0.6, edgecolor='orange')
+    ax.add_patch(sediment)
+    ax.text(2.6 + i*1.1, 3.1, str(i+1), color='blue', fontsize=8)
+
+# Meltwater channels (white dotted lines)
+for i in range(12):
+    y_pos = 3.4 + i*0.3
+    ax.plot([2.1, 10.1], [y_pos, y_pos], 'w--', alpha=0.5, linewidth=1)
+    ax.text(10.2, y_pos, str(i+1), color='blue', fontsize=6)
+
+# Percussive elements (bamboo - yellow triangles)
+for i, x in enumerate([2.8, 5.0, 7.2]):
+    triangle = Polygon([[x, 7.2], [x-0.3, 7.8], [x+0.3, 7.8]], facecolor='yellow', alpha=0.8)
+    ax.add_patch(triangle)
+    ax.text(x, 8.0, str(i+1), color='blue', fontsize=8)
+
+# Electronic sensors (grey rhombus)
+for x, y in [(3.5, 6.5), (6.0, 5.0), (8.5, 4.0)]:
+    rhombus = Polygon([[x, y+0.3], [x+0.3, y], [x, y-0.3], [x-0.3, y]], facecolor='grey', alpha=0.7)
+    ax.add_patch(rhombus)
+
+# Flow arrows (orange)
+arrow1 = FancyArrow(1.5, 5.0, 0.8, 0, head_width=0.2, head_length=0.2, fc='orange', ec='orange')
+arrow2 = FancyArrow(10.5, 4.0, 0.8, 0, head_width=0.2, head_length=0.2, fc='orange', ec='orange')
+ax.add_patch(arrow1)
+ax.add_patch(arrow2)
+
+ax.set_xlim(0, 12)
+ax.set_ylim(2, 9)
+ax.set_aspect('equal')
+ax.axis('off')

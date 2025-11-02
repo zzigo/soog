@@ -1,0 +1,43 @@
+# Prompt
+
+Draw a simple matplotlib plot with a circle using plt and no plt.show()
+
+# Answer
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(8, 8))
+circle = plt.Circle((0.5, 0.5), 0.4, fill=False, color='white', linewidth=2.5)
+ax.add_patch(circle)
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+ax.set_aspect('equal')
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_color('black')
+ax.spines['bottom'].set_color('black')
+ax.grid(True, color='grey', alpha=0.3)
+plt.gcf().patch.set_alpha(0.0)
+```
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(8, 8))
+circle = plt.Circle((0.5, 0.5), 0.4, fill=False, color='white', linewidth=2.5)
+ax.add_patch(circle)
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+ax.set_aspect('equal')
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_color('black')
+ax.spines['bottom'].set_color('black')
+ax.grid(True, color='grey', alpha=0.3)
+plt.gcf().patch.set_alpha(0.0)

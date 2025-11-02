@@ -1,0 +1,91 @@
+# Prompt
+
+# Welcome to SOOG [The Speculative Organology Organogram Generator 0.0.60]
+# Write your invented instrument, select text and press Alt+Enter to evaluate
+
+ Imagine a device that converts the growth rings of ancient trees into music...
+
+# Summary
+
+The organogram for the "Dendrophonic Resonator" abstracts the ancient tree's cross-section as concentric circular aerophones (blue rings) representing annual growth rings, with each ring's width determining its resonant frequency. A central circular interface (orange) allows the performer to activate rings via radial touch gestures, indicated by inward-pointing arrows. The tree's material is symbolized by wood-orange coloring, while electronic microphones (small green rhombi) capture vibrations from selected rings. Numbers in blue denote measurable components: 150 growth rings, 8 contact microphones, and 12 radial touch zones. Acoustically, wider rings produce lower frequencies, creating a harmonic series based on ecological time. This speculative instrument morphs the idiophonic log drum with aerophonic resonance chambers, controlled through a radial interface that translates arboreal geometry into layered sonic textures.
+
+
+
+```python
+import trimesh
+import numpy as np
+
+# Create concentric cylindrical rings for growth rings
+meshes = []
+height = 50  # mm
+
+for i in range(8):
+    outer_radius = (i + 1) * 10
+    inner_radius = max(outer_radius - 2, 0.1)
+    
+    # Create cylinder for each growth ring
+    cylinder = trimesh.creation.cylinder(radius=outer_radius, height=height)
+    if inner_radius > 0.1:
+        inner_cyl = trimesh.creation.cylinder(radius=inner_radius, height=height + 1)
+        ring = cylinder.difference(inner_cyl)
+    else:
+        ring = cylinder
+    
+    meshes.append(ring)
+
+# Create central interface disk
+interface = trimesh.creation.cylinder(radius=5, height=10)
+
+# Create microphone stands (small cylinders)
+mic_stands = []
+mic_positions = [(25, 0, 25), (-25, 0, 25), (0, 25, 25
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(10, 10))
+ax.set_aspect('equal')
+plt.gcf().patch.set_alpha(0.0)
+
+# Tree growth rings (aerophones - blue circles)
+rings = 8
+for i in range(rings):
+    radius = (i + 1) * 0.8
+    circle = plt.Circle((0, 0), radius, fill=False, color='blue', linewidth=2.5, alpha=0.7)
+    ax.add_patch(circle)
+
+# Central interface (orange circle)
+interface = plt.Circle((0, 0), 0.5, fill=True, color='orange', alpha=0.8)
+ax.add_patch(interface)
+
+# Radial arrows for interaction
+for angle in np.linspace(0, 2*np.pi, 12, endpoint=False):
+    x = 0.7 * np.cos(angle)
+    y = 0.7 * np.sin(angle)
+    dx = 0.3 * np.cos(angle)
+    dy = 0.3 * np.sin(angle)
+    ax.arrow(x, y, dx, dy, head_width=0.1, head_length=0.1, 
+             fc='white', ec='white', linewidth=2)
+
+# Microphones (green rhombi)
+mic_positions = [(2.5, 0), (-2.5, 0), (0, 2.5), (0, -2.5),
+                 (1.8, 1.8), (-1.8, -1.8), (1.8, -1.8), (-1.8, 1.8)]
+for x, y in mic_positions:
+    rhombus = plt.Polygon([[x-0.2, y], [x, y+0.2], [x+0.2, y], [x, y-0.2]], 
+                         color='green', alpha=0.8)
+    ax.add_patch(rhombus)
+
+# Measurements in blue
+ax.text(0, -4.5, "150 growth rings", color='blue', ha='center', fontsize=10)
+ax.text(3, 3, "8 microphones", color='blue', ha='center', fontsize=10)
+ax.text(-3, 3, "12 touch zones", color='blue', ha='center', fontsize=10)
+
+ax.set_xlim(-5, 5)
+ax.set_ylim(-5, 5)
+ax.axis('off')
+
+for spine in ax.spines.values():
+    spine.set_visible(False)

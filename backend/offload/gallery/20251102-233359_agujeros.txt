@@ -1,0 +1,78 @@
+# Prompt
+
+haz una flauta con un bicel y 3 agujeros con escala pitagórica
+
+# Summary
+
+This organogram represents a Pythagorean transverse flute with a bicel (beveled embouchure) and three finger holes. The aerophone's resonant body is abstracted as a blue circle, with a smaller orange circle denoting the bicel interface. Three red circles indicate finger holes, sized proportionally to their acoustic function. Arrows show airflow from the performer (white circle) through the bicel, creating edge tones that resonate in the tube. The Pythagorean scale is achieved through precise hole placement: the first hole at 2/3 tube length (perfect fifth), second at 3/4 (perfect fourth), and third at 8/9 (whole tone). Blue numbers mark critical measurements - 300mm total length, 20mm diameter, and hole positions at 200mm, 225mm, and 267mm. The geometric arrangement visualizes the harmonic relationships fundamental to Pythagorean tuning, where simple ratios create pure intervals. The performer's oblique airflow (45° arrow) interacts with the bicel's sharp edge to generate the initial vibration, which is then modified by opening/closing the harmonic holes.
+
+
+
+```python
+import trimesh
+import numpy as np
+
+# Flute parameters (mm)
+length = 300
+diameter = 20
+wall_thickness = 2
+hole_diameters = [12, 10, 8]
+hole_positions = [200, 225, 267]  # From embouchure end
+
+# Create main tube cylinder
+theta = np.linspace(0, 2*np.pi, 32)
+z = np.linspace(0, length, 2)
+theta_grid, z_grid = np.meshgrid(theta, z)
+x = (diameter/2) * np.cos(theta_grid)
+y = (diameter/2) * np.sin(theta_grid)
+vertices_outer = np.column_stack([x.ravel(), y.ravel(), z_grid.ravel()])
+
+x_inner = ((diameter/2) - wall_thickness) * np.cos(theta_grid)
+y
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Circle, Polygon, FancyArrow
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(12, 8))
+ax.set_aspect('equal')
+
+# Main tube (aerophone - blue circle)
+tube = Circle((0.5, 0.5), 0.4, fill=False, color='blue', linewidth=3)
+ax.add_patch(tube)
+
+# Bicel embouchure (orange interface)
+bicel = Circle((0.15, 0.5), 0.08, fill=False, color='orange', linewidth=2)
+ax.add_patch(bicel)
+
+# Finger holes (red interfaces)
+holes = [
+    Circle((0.7, 0.65), 0.06, fill=False, color='red', linewidth=2),
+    Circle((0.75, 0.5), 0.05, fill=False, color='red', linewidth=2), 
+    Circle((0.83, 0.35), 0.04, fill=False, color='red', linewidth=2)
+]
+for hole in holes:
+    ax.add_patch(hole)
+
+# Airflow arrows
+airflow = FancyArrow(0.05, 0.5, 0.08, 0, width=0.02, color='cyan', alpha=0.7)
+ax.add_patch(airflow)
+
+# Performer position
+performer = Circle((0, 0.5), 0.03, fill=True, color='white', alpha=0.8)
+ax.add_patch(performer)
+ax.plot([0, 0.15], [0.5, 0.5], 'w--', alpha=0.5)
+
+# Measurements (blue numbers)
+ax.text(0.5, 0.95, '300mm', color='blue', ha='center', fontsize=10)
+ax.text(0.9, 0.5, '20mm', color='blue', ha='center', fontsize=10, rotation=90)
+ax.text(0.7, 0.75, '200mm', color='blue', ha='center', fontsize=8)
+ax.text(0.75, 0.55, '225mm', color='blue', ha='center', fontsize=8)
+ax.text(0.83, 0.3, '267mm', color='blue', ha='center', fontsize=8)
+
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+ax.axis('off')

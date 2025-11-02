@@ -1,0 +1,53 @@
+# Prompt
+
+"Create a simple acoustic organogram with matplotlib showing airflow, then build a 3D printable resonator tube with trimesh"
+
+# Summary
+
+This organogram visualizes a speculative aerophone instrument combining organological principles with 3D-printable design. The circular blue shape represents the primary resonant chamber (aerophone classification), while the conical orange interface depicts the airflow mechanism. White arrows trace the breath-to-sound transformation path, showing how performer input (white circle position) drives acoustic energy through the system. The color scheme follows Hood's conventions: blue for air/resonance spaces and orange for performer interfaces. Acoustically, the conical bore shape provides harmonic richness through its tapered geometry, while the cylindrical extension creates standing wave patterns. The organological relationship connects traditional flute embouchure principles with modular resonator design. Performative interaction involves breath control directing airflow through the precisely angled mouthpiece into the expanding resonant chamber, where sound waves develop and project outward.
+
+# Code
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.patches import Polygon, FancyArrowPatch
+import numpy as np
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(10, 8))
+plt.gcf().patch.set_alpha(0.0)
+
+# Main resonant chamber (aerophone - circle)
+resonator = patches.Circle((0.5, 0.5), 0.3, fill=True, color='blue', alpha=0.7, linewidth=2)
+ax.add_patch(resonator)
+
+# Air input interface (conical shape)
+mouthpiece = Polygon([[0.2, 0.5], [0.35, 0.65], [0.35, 0.35]], closed=True, 
+                    fill=True, color='orange', alpha=0.8, linewidth=2)
+ax.add_patch(mouthpiece)
+
+# Airflow arrows
+arrow1 = FancyArrowPatch((0.15, 0.5), (0.2, 0.5), arrowstyle='->', 
+                        color='white', linewidth=3, mutation_scale=20)
+arrow2 = FancyArrowPatch((0.35, 0.5), (0.45, 0.5), arrowstyle='->', 
+                        color='white', linewidth=3, mutation_scale=20)
+ax.add_patch(arrow1)
+ax.add_patch(arrow2)
+
+# Performer position
+performer = patches.Circle((0.1, 0.5), 0.05, fill=True, color='white', alpha=0.8)
+ax.add_patch(performer)
+ax.plot([0.1, 0.15], [0.5, 0.5], 'w--', linewidth=2, alpha=0.6)
+
+# Measurement indicators
+ax.text(0.5, 0.85, 'Resonant Chamber: Ø60mm', color='blue', ha='center', fontsize=10)
+ax.text(0.25, 0.3, 'Air Input', color='orange', ha='center', fontsize=10)
+
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+ax.set_aspect('equal')
+ax.axis('off')
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_visible(False)
+ax.spines['bottom'].set_visible(False)

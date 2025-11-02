@@ -12,13 +12,12 @@ html, body {
   overflow: hidden;
 }
 
-/* Layout */
-.app-container {
+/* Layout Containers */
+.app-container, .somap-container {
   display: flex;
-  min-height: 100vh;
-  width: 100%;
+  flex-direction: column;
+  height: 100vh;
   background: transparent;
-  overflow: hidden;
   position: relative;
   padding: 10px;
 }
@@ -28,63 +27,28 @@ main {
   display: flex;
   position: relative;
   z-index: 1;
-  height: 100%;
 }
 
-/* Editor */
+/* Editor Styles */
 .editor-wrapper {
   width: 60%;
   height: 100vh;
   overflow: auto;
   background: transparent;
-  z-index: 1;
 }
 
 .ace-editor {
   width: 100%;
   height: 100%;
-  border: none;
   background: transparent;
   color: #ffffff;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 20px;
+  border: none;
 }
 
-/* Scrollbar Styles for Ace Editor */
-.ace-editor ::-webkit-scrollbar,
-.ace_scrollbar-v::-webkit-scrollbar,
-.ace_scrollbar-h::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
-}
-
-.ace-editor ::-webkit-scrollbar-track,
-.ace_scrollbar-v::-webkit-scrollbar-track,
-.ace_scrollbar-h::-webkit-scrollbar-track {
-  background: #000000;
-}
-
-.ace-editor ::-webkit-scrollbar-thumb,
-.ace_scrollbar-v::-webkit-scrollbar-thumb,
-.ace_scrollbar-h::-webkit-scrollbar-thumb {
-  background: #333333;
-  border-radius: 6px;
-}
-
-.ace-editor ::-webkit-scrollbar-thumb:hover,
-.ace_scrollbar-v::-webkit-scrollbar-thumb:hover,
-.ace_scrollbar-h::-webkit-scrollbar-thumb:hover {
-  background: #444444;
-}
-
-/* Additional Ace Editor scrollbar styles */
 .ace_scrollbar-v, .ace_scrollbar-h {
-  background: #000000 !important;
-}
-
-.ace_scroller {
-  scrollbar-color: #333333 #000000 !important;
-  scrollbar-width: thin !important;
+  background: #000 !important;
 }
 
 .ace_editor .ace_gutter {
@@ -92,7 +56,6 @@ main {
 }
 
 .ace_line {
-  font-family: 'IBM Plex Mono', monospace !important;
   color: #ffffff !important;
 }
 
@@ -100,22 +63,79 @@ main {
   background: #1a4d1c !important;
 }
 
-/* GPT Responses */
-.gpt-text-response,
-.gpt-code-response,
-.gpt-plot-response {
+/* Buttons and Icons */
+button, .icon-button, .toggle-button {
+  background: #222;
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 0.25rem 0.75rem;
+}
+
+button:hover, .toggle-button:hover {
+  background: #333;
+}
+
+.icon-button {
+  background: transparent;
+  border: none;
+  padding: 8px;
+  border-radius: 50%;
+}
+
+.icon-button:hover, .close-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.icon-button.active {
+  opacity: 1;
+  filter: drop-shadow(0 0 4px #fff);
+}
+
+/* Inputs and Selects */
+input[type="text"], input[type="number"], select {
+  background: #222;
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 1rem;
+}
+
+/* Table Styles */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #1a1a1a;
+  margin-top: 1rem;
+}
+
+th, td {
+  border: 1px solid #444;
+  padding: 0.5rem;
+}
+
+table input {
+  background: #111;
+  color: #fff;
+  border: none;
+  width: 100%;
+}
+
+/* GPT Responses and Plot Displays */
+.gpt-text-response, .gpt-code-response, .gpt-plot-response {
   background-color: transparent;
   position: absolute;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 18px;
 }
 
-.gpt-text-response,
-.gpt-text-style .ace_line {
-  color: #f6b1a2 !important;
+.gpt-text-response {
+  color: #f6b1a2;
 }
 
-/* Plot Display */
 .plot-display {
   position: fixed;
   right: 0;
@@ -129,43 +149,35 @@ main {
   padding-right: 20px;
 }
 
-.plot-display img {
-  max-width: 100%;
-  max-height: 80vh;
-  object-fit: contain;
-}
-
-/* Settings */
-.settings {
-  position: fixed;
-  top: 10px;
-  right: 20px;
-  z-index: 100;
-}
-
-.toggle-button {
-  background: #1a1a1a;
-  color: #ffffff;
-  border: 1px solid #333;
-  padding: 8px 16px;
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 14px;
+.plot-image {
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: transform 0.3s;
 }
 
-.toggle-button:hover {
-  background: #2a2a2a;
+.plot-image:hover {
+  transform: scale(1.02);
 }
 
-.loading,
-.error {
+/* Footer, Loading, and Error Messages */
+footer, .footer {
   position: fixed;
-  bottom: 5px;
-  right: 20px;
-  padding: 10px 20px;
+  bottom: 0;
+  width: 100%;
+  background: black;
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  gap: 1rem;
+}
+
+.loading, .error {
+  position: fixed;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
   border-radius: 4px;
-  color: white;
+  z-index: 1000;
 }
 
 .loading {
@@ -173,7 +185,25 @@ main {
 }
 
 .error {
-  background: rgba(255, 0, 0, 0.7);
+  background: #ff5252;
+  color: white;
+}
+
+/* Lightbox */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.lightbox-image {
+  max-width: 95vw;
+  max-height: 95vh;
+  object-fit: contain;
 }
 
 /* Animations */
@@ -187,83 +217,26 @@ main {
   to { opacity: 0; }
 }
 
-.fadeIn { 
-  animation: fadeIn 2s ease-in-out;
-  animation-fill-mode: both;
-}
-.fadeOut { 
-  animation: fadeOut 3s ease-in-out;
-  animation-fill-mode: both;
+.fadeIn { animation: fadeIn 2s ease-in-out both; }
+.fadeOut { animation: fadeOut 3s ease-in-out both; }
+
+/* Scrollbar Customization */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
 }
 
-/* Lightbox */
-.lightbox {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.9);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
+::-webkit-scrollbar-track {
+  background: #000;
 }
 
-.lightbox-image {
-  width: auto;
-  height: auto;
-  max-width: 95vw;
-  max-height: 95vh;
-  object-fit: contain;
-  transition: all 0.3s ease-in-out;
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 6px;
 }
 
-@media (max-width: 768px) {
-  .lightbox-image {
-    max-width: 98vw;
-    max-height: 98vh;
-  }
-}
-
-.close-button {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: transparent;
-  border: none;
-  color: white;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.3s;
-}
-
-.close-button:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.plot-image {
-  cursor: pointer;
-  transition: transform 0.3s;
-}
-
-.plot-image:hover {
-  transform: scale(1.02);
-}
-
-/* Footer */
-footer {
-  position: fixed;
-  bottom: 0px;
-  left: 20px;
-  z-index: 10;
-  width: 70%;
-  font-family: 'IBM Plex Mono', monospace;
-  background: black;
+::-webkit-scrollbar-thumb:hover {
+  background: #444;
 }
 
 /* Selection */

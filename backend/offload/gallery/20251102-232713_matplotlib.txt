@@ -1,0 +1,56 @@
+# Prompt
+
+"Create a simple acoustic organogram with matplotlib showing airflow, then build a 3D printable resonator tube with trimesh"
+
+# Summary
+
+This organogram visualizes a speculative aerophone instrument combining organological principles with 3D printing capabilities. The circular blue shape represents the primary resonant chamber (aerophone classification), while the orange rectangle symbolizes the airflow interface. A directional arrow shows breath input, and measurement markers (blue numbers) indicate key dimensions. The performer position is marked with a white circle and dotted line, establishing ergonomic relationships. 
+
+Acoustically, the design employs Helmholtz resonator principles where chamber volume and neck dimensions determine fundamental frequency. The conical tube extension provides harmonic enrichment through quarter-wave resonance. Material choices (wood/orange, plastic/grey) reflect both traditional organology and modern fabrication constraints. The interface geometry enables both precise embouchure control (P symbol) and relative positioning flexibility, creating a hybrid performance technique that bridges acoustic tradition with digital manufacturing possibilities.
+
+# Code
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.patches import Polygon, FancyArrowPatch
+import numpy as np
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(12, 8))
+plt.gcf().patch.set_alpha(0.0)
+
+# Main resonant chamber (aerophone - circle)
+resonator = patches.Circle((0.4, 0.5), 0.25, fill=True, color='blue', alpha=0.7)
+ax.add_patch(resonator)
+
+# Interface (rectangle)
+interface = patches.Rectangle((0.7, 0.45), 0.3, 0.1, fill=True, color='orange', alpha=0.8)
+ax.add_patch(interface)
+
+# Conical tube extension
+tube_points = np.array([[1.0, 0.4], [1.4, 0.35], [1.4, 0.55], [1.0, 0.6]])
+tube = Polygon(tube_points, closed=True, fill=True, color='lightblue', alpha=0.6)
+ax.add_patch(tube)
+
+# Airflow arrow
+arrow = FancyArrowPatch((0.65, 0.5), (0.4, 0.5), arrowstyle='->', 
+                       mutation_scale=20, color='white', linewidth=2)
+ax.add_patch(arrow)
+
+# Performer position
+performer = patches.Circle((0.1, 0.5), 0.05, fill=True, color='white', alpha=0.8)
+ax.add_patch(performer)
+ax.plot([0.15, 0.35], [0.5, 0.5], 'w--', linewidth=1, alpha=0.7)
+
+# Measurement markers
+ax.text(0.4, 0.25, '50', color='blue', ha='center', va='center', fontsize=10)
+ax.text(0.85, 0.35, '30', color='blue', ha='center', va='center', fontsize=10)
+ax.text(1.2, 0.25, '40', color='blue', ha='center', va='center', fontsize=10)
+
+# Interface symbol
+ax.text(0.85, 0.5, 'P', color='white', ha='center', va='center', fontsize=12, weight='bold')
+
+ax.set_xlim(0, 1.6)
+ax.set_ylim(0.2, 0.8)
+ax.set_aspect('equal')
+ax.axis('off')

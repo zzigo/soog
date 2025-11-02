@@ -1,0 +1,117 @@
+# Prompt
+
+Design the Neutron Harp: strings tensioned by quantum degenerate matter...
+
+# Answer
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Rectangle, Circle, Polygon, FancyArrowPatch
+import matplotlib.patches as patches
+
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(12, 8))
+ax.set_aspect('equal')
+
+# Quantum degenerate matter resonator (vertical rectangle - chordophone)
+quantum_resonator = Rectangle((4, 2), 1, 6, linewidth=3, edgecolor='cyan', facecolor='darkblue', alpha=0.7)
+ax.add_patch(quantum_resonator)
+
+# Neutron strings (quantum tensioned)
+for i in range(8):
+    x_pos = 4.1 + i * 0.125
+    ax.plot([x_pos, x_pos], [2.1, 7.9], color='white', linewidth=1.5, alpha=0.8)
+
+# Quantum field interface (rhombus - electronophone)
+quantum_interface = Polygon([[4.5, 1], [5.5, 1.5], [4.5, 2], [3.5, 1.5]], 
+                           closed=True, linewidth=2, edgecolor='magenta', facecolor='purple', alpha=0.6)
+ax.add_patch(quantum_interface)
+
+# Quantum entanglement arrows
+for i in range(4):
+    arrow = FancyArrowPatch((4.5, 1.2 + i*0.2), (4.5, 2.1), 
+                           arrowstyle='->', color='yellow', linewidth=2, mutation_scale=15)
+    ax.add_patch(arrow)
+
+# Performer position
+performer = Circle((2, 4), 0.3, fill=True, color='white', alpha=0.8)
+ax.add_patch(performer)
+ax.plot([2.3, 3.5], [4, 4], 'w--', linewidth=1, alpha=0.6)
+
+# Quantum measurement indicators
+for i in range(8):
+    ax.text(4.5 + i*0.15, 1.8, f'{i+1}', color='blue', fontsize=10, ha='center')
+
+# Quantum spectrum simulation
+x_spectrum = np.linspace(1, 7, 100)
+y_spectrum = np.sin(8*x_spectrum) * np.exp(-0.3*(x_spectrum-4)**2) + 0.5*np.sin(15*x_spectrum)
+ax.plot(x_spectrum + 2, y_spectrum + 8, color='lime', linewidth=2.5, alpha=0.8)
+
+# Styling
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 10)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_color('black')
+ax.spines['bottom'].set_color('black')
+ax.grid(True, color='grey', alpha=0.3)
+plt.gcf().patch.set_alpha(0.0)
+```
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Rectangle, Circle, Polygon, FancyArrowPatch
+import matplotlib.patches as patches
+
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(12, 8))
+ax.set_aspect('equal')
+
+# Quantum degenerate matter resonator (vertical rectangle - chordophone)
+quantum_resonator = Rectangle((4, 2), 1, 6, linewidth=3, edgecolor='cyan', facecolor='darkblue', alpha=0.7)
+ax.add_patch(quantum_resonator)
+
+# Neutron strings (quantum tensioned)
+for i in range(8):
+    x_pos = 4.1 + i * 0.125
+    ax.plot([x_pos, x_pos], [2.1, 7.9], color='white', linewidth=1.5, alpha=0.8)
+
+# Quantum field interface (rhombus - electronophone)
+quantum_interface = Polygon([[4.5, 1], [5.5, 1.5], [4.5, 2], [3.5, 1.5]], 
+                           closed=True, linewidth=2, edgecolor='magenta', facecolor='purple', alpha=0.6)
+ax.add_patch(quantum_interface)
+
+# Quantum entanglement arrows
+for i in range(4):
+    arrow = FancyArrowPatch((4.5, 1.2 + i*0.2), (4.5, 2.1), 
+                           arrowstyle='->', color='yellow', linewidth=2, mutation_scale=15)
+    ax.add_patch(arrow)
+
+# Performer position
+performer = Circle((2, 4), 0.3, fill=True, color='white', alpha=0.8)
+ax.add_patch(performer)
+ax.plot([2.3, 3.5], [4, 4], 'w--', linewidth=1, alpha=0.6)
+
+# Quantum measurement indicators
+for i in range(8):
+    ax.text(4.5 + i*0.15, 1.8, f'{i+1}', color='blue', fontsize=10, ha='center')
+
+# Quantum spectrum simulation
+x_spectrum = np.linspace(1, 7, 100)
+y_spectrum = np.sin(8*x_spectrum) * np.exp(-0.3*(x_spectrum-4)**2) + 0.5*np.sin(15*x_spectrum)
+ax.plot(x_spectrum + 2, y_spectrum + 8, color='lime', linewidth=2.5, alpha=0.8)
+
+# Styling
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 10)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_color('black')
+ax.spines['bottom'].set_color('black')
+ax.grid(True, color='grey', alpha=0.3)
+plt.gcf().patch.set_alpha(0.0)
