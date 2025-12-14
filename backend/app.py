@@ -536,10 +536,15 @@ def predict():
 @log_activity('version')
 def version():
     try:
-        return jsonify({'version': get_version()})
+        v = get_version()
+        response = jsonify({'version': v})
+        response.headers['Content-Type'] = 'application/json'
+        return response
     except Exception as e:
         logging.error(f"Error in /api/version: {e}")
-        return jsonify({'error': str(e)}), 500
+        error_response = jsonify({'version': '0.0.0', 'error': str(e)})
+        error_response.headers['Content-Type'] = 'application/json'
+        return error_response, 500
 
 
 @app.route('/api/health', methods=['GET'])

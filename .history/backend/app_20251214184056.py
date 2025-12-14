@@ -21,6 +21,12 @@ from torch import nn
 from flask import send_from_directory
 import json
 import datetime
+import importlib
+
+try:
+    import trimesh  # for STL mode
+except Exception:
+    trimesh = None
 
 HF_CACHE_DIR = os.path.join(os.getcwd(), ".cache", "huggingface")
 OFFLOAD_DIR = os.path.join(os.getcwd(), "offload")
@@ -113,6 +119,63 @@ def execute_matplotlib_code(code: str) -> str:
         logging.error(f"Error executing matplotlib code: {e}")
         raise
 
+
+def execute_trimesh_code(code: str) -> bytes:
+    """Execute Python code that builds a trimesh Trimesh/Scene and return STL bytes.
+    Expect the code to define one of: `mesh` (Trimesh) or `scene` (Scene).
+    """
+    if trimesh is None:
+        raise RuntimeError("trimesh is not installed; install to enable STL mode")
+
+    cleaned = code.strip()
+    cleaned = re.sub(r'^```(?:python|py)?', '', cleaned, flags=re.IGNORECASE | re.MULTILINE)
+    cleaned = re.sub(r'```\s*$', '', cleaned, flags=re.MULTILINE)
+    if not cleaned.endswith('\n'):
+        cleaned += '\n'
+
+    # Constrained globals for execution
+    g = {
+        '__builtins__': __builtins__,
+        'trimesh': trimesh,
+        'np': np,
+    }
+    l = {}
+    compile(cleaned, '<stl>', 'exec')
+    exec(cleaned, g, l)
+
+    mesh = l.get('mesh') or g.get('mesh')
+    scene = l.get('scene') or g.get('scene')
+    if mesh is None and scene is None:
+        # try to find any Trimesh instance
+        for v in list(l.values()) + list(g.values()):
+            if hasattr(trimesh, 'Trimesh') and isinstance(v, trimesh.Trimesh):
+                mesh = v
+                break
+        if mesh is None and hasattr(trimesh, 'Scene'):
+            for v in list(l.values()) + list(g.values()):
+                if isinstance(v, trimesh.Scene):
+                    scene = v
+                    break
+
+    if scene is not None and hasattr(scene, 'dump'):  # combine geometries
+        geoms = []
+        for name, geom in scene.geometry.items():
+            if isinstance(geom, trimesh.Trimesh):
+                geoms.append(geom)
+        if geoms:
+            mesh = trimesh.util.concatenate(geoms)
+
+    if mesh is None:
+        # last attempt: many scenes can export directly
+        if scene is not None and hasattr(scene, 'export'):
+            data = scene.export(file_type='stl')
+            return data if isinstance(data, (bytes, bytearray)) else str(data).encode('utf-8')
+        raise RuntimeError("No 'mesh' or 'scene' found after executing trimesh code")
+
+    # Export mesh to STL bytes
+    data = mesh.export(file_type='stl')
+    return data if isinstance(data, (bytes, bytearray)) else str(data).encode('utf-8')
+
 def _salient_word(text: str) -> str:
     """Pick a short, filesystem-safe salient token from the text for filenames."""
     if not text:
@@ -131,17 +194,24 @@ def _salient_word(text: str) -> str:
     return re.sub(r'[^a-z0-9]+', '', best) or 'organogram'
 
 
-def _save_gallery_item(prompt: str, answer: str, code: str, image_bytes: bytes) -> dict:
+def _save_gallery_item(prompt: str, answer: str, code: str, image_bytes: bytes, stl_bytes: bytes = None) -> dict:
     ts = datetime.datetime.utcnow().strftime('%Y%m%d-%H%M%S')
     word = _salient_word(prompt)
     base = f"{ts}_{word}"
     png_path = os.path.join(GALLERY_DIR, f"{base}.png")
     txt_path = os.path.join(GALLERY_DIR, f"{base}.txt")
     json_path = os.path.join(GALLERY_DIR, f"{base}.json")
+    stl_path = os.path.join(GALLERY_DIR, f"{base}.stl") if stl_bytes else None
 
-    # write image
-    with open(png_path, 'wb') as f:
-        f.write(image_bytes)
+    # write image only if provided
+    has_image = bool(image_bytes) and len(image_bytes) > 0
+    if has_image:
+        try:
+            with open(png_path, 'wb') as f:
+                f.write(image_bytes)
+        except Exception as e:
+            logging.error(f"Error writing PNG file: {e}")
+            has_image = False
 
     # write text
     try:
@@ -157,13 +227,24 @@ def _save_gallery_item(prompt: str, answer: str, code: str, image_bytes: bytes) 
     except Exception:
         pass
 
+    # write STL if provided
+    if stl_bytes:
+        try:
+            with open(stl_path, 'wb') as f:
+                f.write(stl_bytes)
+        except Exception as e:
+            logging.error(f"Error writing STL file: {e}")
+            stl_path = None
+
     meta = {
         'basename': base,
         'timestamp': ts,
         'prompt': prompt,
         'answer': answer,
         'code': code,
-        'image_url': f"/api/gallery/image/{base}.png"
+        'image_url': f"/api/gallery/image/{base}.png" if has_image else None,
+        'stl_url': f"/api/gallery/file/{base}.stl" if stl_bytes and stl_path else None,
+        'modes': [m for m in (['plot'] if has_image else []) + (['stl'] if stl_bytes and stl_path else [])]
     }
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(meta, f)
@@ -260,12 +341,14 @@ def generate():
             'Authorization': f"Bearer {api_key}",
             'X-API-Key': api_key  # some providers accept this header instead of Authorization
         }
-        # Ask for a conceptual summary followed by a fenced matplotlib code block
+        # Ask for a conceptual summary, then matplotlib code, then a trimesh STL code block
         user_instruction = (
             prompt
             + "\n\nWrite first a concise 120-180 word conceptual summary describing the organogram's design decisions: shapes/schematics, arrows/flows, colors and their meanings, acoustical rationale, organological relations, and performative interactions."
-            + " Then, provide the executable Python matplotlib code in a single fenced code block (```python ... ```)."
-            + " Do not include any additional commentary after the code block."
+            + "\n\nThen, add a section titled 'Materials' as an enumerated shopping list with quantities and dimensions for building the instrument (e.g., '1 PVC tube, 30 cm length, 2.5 cm diameter'). If part of the instrument is virtual or hybrid, include 'Virtual Materials' items for assets (e.g., textures, shaders, samples)."
+            + "\n\nThen, provide the executable Python matplotlib code in a single fenced code block (```python ... ```)."
+            + "\n\nFinally, provide a second fenced Python code block that uses trimesh to build a simple, printable 3D representation of the instrument (units in millimeters), assigning the final geometry to a variable named 'mesh' (trimesh.Trimesh). Do not save files; do not display; just build the mesh object."
+            + "\n\nDo not include any additional commentary after the code blocks."
         )
         body = {
             "model": model_name,
@@ -323,7 +406,22 @@ def generate():
         data = response.json()
         raw_response = data['choices'][0]['message']['content'].strip()
         # Try to extract a prose summary by removing code blocks
-        summary_text = re.sub(r"```[\s\S]*?```", "", raw_response).strip()
+        text_no_code = re.sub(r"```[\s\S]*?```", "", raw_response).strip()
+        # Extract materials section if present
+        materials_text = None
+        try:
+            m = re.search(r"(?is)(?:^|\n)\s*(materials|bill of materials|bom)\s*[:\n]+([\s\S]*?)($|\n\s*\n)")
+            if m:
+                candidate = m.group(2).strip()
+                # keep bullet/numbered lines
+                lines = [ln for ln in candidate.splitlines() if re.match(r"\s*([\-\*\u2022]|\d+\.|\d+\))", ln) or len(ln.strip()) > 0]
+                materials_text = "\n".join(lines).strip()
+        except Exception:
+            pass
+        # Summary is text without code minus materials portion
+        summary_text = text_no_code
+        if materials_text:
+            summary_text = summary_text.replace(materials_text, "").strip()
         # First pass: closed code fences
         code_blocks = re.findall(r"```(?:python|py)?\s*([\s\S]*?)```", raw_response, re.DOTALL | re.IGNORECASE)
         # Fallback: detect an opening fence without a closing fence and grab to end
@@ -341,27 +439,65 @@ def generate():
                 if start_idx != -1:
                     code_blocks = [raw_response[start_idx:]]
         if code_blocks:
+            image_base64 = None
+            image_bytes = None
+            stl_bytes = None
+            plot_code = None
+            stl_code = None
+            # Search blocks for plot and STL builders
             for code in code_blocks:
-                if 'matplotlib' in code or 'plt.' in code:
-                    image_base64 = execute_matplotlib_code(code)
-                    # Save to gallery
+                if image_base64 is None and ('matplotlib' in code or 'plt.' in code):
+                    plot_code = code
                     try:
+                        image_base64 = execute_matplotlib_code(code)
                         image_bytes = base64.b64decode(image_base64)
-                        meta = _save_gallery_item(prompt, summary_text or raw_response, code, image_bytes)
-                        if summary_text:
-                            meta['summary'] = summary_text
                     except Exception as e:
-                        logging.error(f"Error saving gallery item: {e}")
-                        meta = None
-                    return jsonify({
-                        "type": "plot",
-                        "content": code.strip(),
-                        "image": image_base64,
-                        "gallery": meta,
-                        "summary": summary_text
-                    })
-            return jsonify({"type": "code", "content": code_blocks[0].strip(), "summary": summary_text})
-        return jsonify({"type": "text", "content": raw_response, "summary": summary_text})
+                        logging.error(f"Matplotlib execution failed: {e}")
+                if stl_bytes is None and ('trimesh' in code or 'import trimesh' in code):
+                    stl_code = code
+                    try:
+                        stl_bytes = execute_trimesh_code(code)
+                    except Exception as e:
+                        logging.error(f"Trimesh execution failed: {e}")
+
+            meta = None
+            if image_bytes is not None or stl_bytes is not None:
+                try:
+                    meta = _save_gallery_item(
+                        prompt,
+                        summary_text or raw_response,
+                        plot_code or stl_code or '',
+                        image_bytes if image_bytes is not None else b'',
+                        stl_bytes=stl_bytes
+                    )
+                    if summary_text:
+                        meta['summary'] = summary_text
+                    if materials_text:
+                        meta['materials_text'] = materials_text
+                except Exception as e:
+                    logging.error(f"Error saving gallery item: {e}")
+
+            # Prefer plot response if available
+            if image_base64 is not None:
+                return jsonify({
+                    "type": "plot",
+                    "content": (plot_code or '').strip(),
+                    "image": image_base64,
+                    "gallery": meta,
+                    "summary": summary_text,
+                    "materials": materials_text
+                })
+            # Else if only STL present, respond as stl mode
+            if stl_bytes is not None:
+                return jsonify({
+                    "type": "stl",
+                    "content": (stl_code or '').strip(),
+                    "gallery": meta,
+                    "summary": summary_text,
+                    "materials": materials_text
+                })
+            return jsonify({"type": "code", "content": code_blocks[0].strip(), "summary": summary_text, "materials": materials_text})
+        return jsonify({"type": "text", "content": raw_response, "summary": summary_text, "materials": materials_text})
     except Exception as e:
         logging.error(f"Error in /api/generate: {e}")
         return jsonify({'error': str(e)}), 500
@@ -400,10 +536,15 @@ def predict():
 @log_activity('version')
 def version():
     try:
-        return jsonify({'version': get_version()})
+        v = get_version()
+        response = jsonify({'version': v})
+        response.headers['Content-Type'] = 'application/json'
+        return response
     except Exception as e:
         logging.error(f"Error in /api/version: {e}")
-        return jsonify({'error': str(e)}), 500
+        error_response = jsonify({'version': '0.0.0', 'error': str(e)})
+        error_response.headers['Content-Type'] = 'application/json'
+        return error_response, 500
 
 
 @app.route('/api/health', methods=['GET'])
@@ -547,6 +688,60 @@ def gallery_image(filename):
     except Exception as e:
         logging.error(f"Error serving gallery image {filename}: {e}")
         return jsonify({'error': 'Image not found'}), 404
+
+
+@app.route('/api/gallery/file/<path:filename>', methods=['GET'])
+def gallery_file(filename):
+    """Serve arbitrary gallery files (e.g., STL)."""
+    try:
+        return send_from_directory(GALLERY_DIR, filename, as_attachment=True)
+    except Exception as e:
+        logging.error(f"Error serving gallery file {filename}: {e}")
+        return jsonify({'error': 'File not found'}), 404
+
+
+
+
+@app.route('/api/dev/save', methods=['POST'])
+def dev_save():
+    # Restricted in production unless explicitly enabled
+    if not app.debug and os.getenv('ENABLE_DEV_SAVE', '') != '1':
+        return jsonify({'error': 'dev_save disabled'}), 403
+    try:
+        data = request.get_json(force=True) or {}
+        prompt = (data.get('prompt') or 'dev test').strip()
+        summary = (data.get('summary') or '').strip()
+        matplotlib_code = data.get('matplotlib_code') or ''
+        trimesh_code = data.get('trimesh_code') or ''
+
+        image_bytes = b''
+        stl_bytes = None
+        plot_code = None
+        stl_code = None
+
+        if matplotlib_code.strip():
+            try:
+                image_b64 = execute_matplotlib_code(matplotlib_code)
+                image_bytes = base64.b64decode(image_b64)
+                plot_code = matplotlib_code
+            except Exception as e:
+                logging.error(f"Dev matplotlib exec failed: {e}")
+        if trimesh_code.strip():
+            try:
+                stl_bytes = execute_trimesh_code(trimesh_code)
+                stl_code = trimesh_code
+            except Exception as e:
+                logging.error(f"Dev trimesh exec failed: {e}")
+
+        if not image_bytes and not stl_bytes:
+            return jsonify({'error': 'No outputs produced'}), 400
+
+        code_to_save = plot_code or stl_code or ''
+        meta = _save_gallery_item(prompt, summary, code_to_save, image_bytes, stl_bytes=stl_bytes)
+        return jsonify({'ok': True, 'gallery': meta})
+    except Exception as e:
+        logging.error(f"Error in /api/dev/save: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

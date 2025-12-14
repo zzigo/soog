@@ -36,11 +36,21 @@ const fetchVersion = async () => {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Server returned ${response.status}: ${errorText}`);
+      throw new Error(`Server returned ${response.status}`);
     }
 
-    const data = await response.json();
+    // Check if response has content before parsing JSON
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      throw new Error("Invalid response type");
+    }
+
+    const text = await response.text();
+    if (!text || text.trim().length === 0) {
+      throw new Error("Empty response");
+    }
+
+    const data = JSON.parse(text);
     if (data.version !== version.value) {
       version.value = data.version;
       if (aceEditorInstance) {
