@@ -22,14 +22,14 @@ const editor = ref(null);
 const version = ref("0.0.0");
 let aceEditorInstance;
 const commandHistory = ref([]);
-let historyIndex = ref(-1);
-let currentCommand = ref("");
+let historyIndex = -1;
+let currentCommand = "";
 
 const fetchVersion = async () => {
   try {
     const config = useRuntimeConfig();
     const baseURL = config.public.apiBase || "http://localhost:10000";
-    const response = await fetch(`${baseURL}/api/version`, {
+    const response = await fetch(`${baseURL}/version`, {
       headers: {
         Accept: "application/json",
       },
@@ -134,7 +134,7 @@ const addToHistory = (content) => {
     commandHistory.value[commandHistory.value.length - 1] !== content
   ) {
     commandHistory.value.push(content);
-    historyIndex.value = commandHistory.value.length;
+    historyIndex = commandHistory.value.length;
   }
 };
 
@@ -190,13 +190,13 @@ onMounted(async () => {
         name: "previousCommand",
         bindKey: { win: "Ctrl-Up", mac: "Command-Up" },
         exec: () => {
-          if (historyIndex.value > 0) {
-            if (historyIndex.value === commandHistory.value.length) {
-              currentCommand.value = aceEditorInstance.getValue();
+          if (historyIndex > 0) {
+            if (historyIndex === commandHistory.value.length) {
+              currentCommand = aceEditorInstance.getValue();
             }
-            historyIndex.value--;
+            historyIndex--;
             aceEditorInstance.setValue(
-              commandHistory.value[historyIndex.value]
+              commandHistory.value[historyIndex]
             );
             aceEditorInstance.clearSelection();
           }
@@ -206,12 +206,12 @@ onMounted(async () => {
         name: "nextCommand",
         bindKey: { win: "Ctrl-Down", mac: "Command-Down" },
         exec: () => {
-          if (historyIndex.value < commandHistory.value.length) {
-            historyIndex.value++;
+          if (historyIndex < commandHistory.value.length) {
+            historyIndex++;
             aceEditorInstance.setValue(
-              historyIndex.value === commandHistory.value.length
-                ? currentCommand.value
-                : commandHistory.value[historyIndex.value]
+              historyIndex === commandHistory.value.length
+                ? currentCommand
+                : commandHistory.value[historyIndex]
             );
             aceEditorInstance.clearSelection();
           }
