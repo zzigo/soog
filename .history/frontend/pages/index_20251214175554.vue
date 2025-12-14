@@ -1,6 +1,23 @@
 <template>
   <div class="app-container">
-    <div class="settings">
+    <!-- Left column: resizable editor -->
+    <div class="left-column" :style="{ width: leftWidth + '%' }">
+      <div class="editor-wrapper">
+        <AceEditor 
+          ref="editorRef" 
+          @evaluate="handleEvaluate"
+        />
+      </div>
+    </div>
+    <!-- Draggable divider -->
+    <div 
+      class="divider" 
+      @mousedown="startDrag" 
+      @touchstart.prevent="startDragTouch"
+    ></div>
+    <!-- Right column hosts HUD and Results -->
+    <div class="right-column" :style="{ width: (100 - leftWidth) + '%' }">
+      <div class="hud">
       <button @click="toggleShowCode" class="icon-button" :title="showCode ? 'Hide Code' : 'Show Code'">
         <svg v-if="showCode" class="icon" viewBox="0 0 24 24">
           <path fill="currentColor" d="M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9M12,4.5C17,4.5 21.27,7.61 23,12C21.27,16.39 17,19.5 12,19.5C7,19.5 2.73,16.39 1,12C2.73,7.61 7,4.5 12,4.5M3.18,12C4.83,15.36 8.24,17.5 12,17.5C15.76,17.5 19.17,15.36 20.82,12C19.17,8.64 15.76,6.5 12,6.5C8.24,6.5 4.83,8.64 3.18,12Z" />
@@ -48,51 +65,17 @@
     <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" stroke="currentColor" stroke-width="1.2" fill="none"/>
   </svg>
 </button>
-    </div>
-    <div class="editor-wrapper">
-      <AceEditor 
-        ref="editorRef" 
-        @evaluate="handleEvaluate"
-      />
-    </div>
+      </div>
+      
+  <!-- Results Panel occupies the rest of right column -->
     <Transition
       enter-active-class="fadeIn"
       leave-active-class="fadeOut"
       :duration="300"
       mode="out-in"
     > 
-      <div v-if="hasResults" class="results-panel" :key="transitionKey">
+       <div v-if="hasResults" class="results-panel" :key="transitionKey">
         <div class="results-header">
-          <div class="tabs">
-            <button 
-              v-if="plotImage" 
-              :class="{active: activeTab==='plot'}" 
-              @click="activeTab='plot'"
-            >
-              Organogram
-            </button>
-            <button 
-              v-if="summary" 
-              :class="{active: activeTab==='summary'}" 
-              @click="activeTab='summary'"
-            >
-              Summary
-            </button>
-            <button 
-              v-if="generatedCode" 
-              :class="{active: activeTab==='code'}" 
-              @click="activeTab='code'"
-            >
-              Code
-            </button>
-            <button 
-              v-if="stlUrl" 
-              :class="{active: activeTab==='stl'}" 
-              @click="activeTab='stl'"
-            >
-              3D Model
-            </button>
-          </div>
           <div class="actions">
             <a v-if="stlUrl" :href="stlUrl" class="download-btn" download>
               Download STL
@@ -108,7 +91,8 @@
           </div>
         </div>
         <div v-if="expandResults" class="results-content">
-          <div v-if="activeTab==='plot' && plotImage" class="tab-content">
+          <!-- Image Tab -->
+          <div v-if="plotImage" class="tab-section">
             <img 
               :src="`data:image/png;base64,${plotImage}`" 
               alt="Plot"
@@ -116,20 +100,25 @@
               class="plot-image"
             />
           </div>
-          <div v-if="activeTab==='summary' && summary" class="tab-content">
-            <pre class="summary-text">{{ summary }}</pre>
-          </div>
-          <div v-if="activeTab==='code' && generatedCode" class="tab-content">
-            <pre class="code-text">{{ generatedCode }}</pre>
-          </div>
-          <div v-if="activeTab==='stl' && stlUrl" class="tab-content">
+          
+          <!-- 3D Model Tab -->
+          <div v-if="stlUrl" class="tab-section">
             <ClientOnly>
-              <StlViewer :url="stlUrl" />
+              <div class="stl-viewer-container">
+                <StlViewer :url="stlUrl" />
+              </div>
             </ClientOnly>
+          </div>
+          
+          <!-- Summary Tab -->
+          <div v-if="summary" class="tab-section">
+            <div class="summary-content" v-html="summaryHtml"></div>
           </div>
         </div>
       </div>
     </Transition>
+    </div>
+
     <Transition
       enter-active-class="fadeIn"
       leave-active-class="fadeOut"
@@ -174,6 +163,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRuntimeConfig } from '#app';
+import { marked } from 'marked';
 import AceEditor from '~/components/AceEditor.vue';
 import HelpModal from '~/components/HelpModal.vue';
 import GalleryModal from '~/components/GalleryModal.vue';
@@ -181,9 +171,19 @@ import StlViewer from '~/components/StlViewer.vue';
 import { useRandomPrompt } from '~/composables/useRandomPrompt';
 import { useFavicon } from '~/composables/useFavicon';
 
+// Configure marked
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+});
+
 // State variables
 const { startProcessing, completeProcessing } = useFavicon();
 const editorRef = ref(null);
+const leftWidth = ref(50);
+let dragging = false;
+let startX = 0;
+let startLeft = 50;
 const loading = ref(false);
 const progress = ref(0);
 const error = ref(null);
@@ -191,6 +191,26 @@ const plotImage = ref(null);
 const summary = ref(null);
 const generatedCode = ref(null);
 const stlUrl = ref(null);
+const materials = ref([]);
+const materialsText = ref('');
+const virtualKeywords = [
+  'texture','shader','sample','sampling','synthesis','granular','wavetable','fm','additive','subtractive','midi','vst','plugin','max/msp','pure data','supercollider','osc','convolution','impulse response','ir','reverb','impulse','unity','unreal','game engine','shader graph','material graph'
+];
+const materialsTextDisplay = computed(() => {
+  if (!materialsText.value) return '';
+  // Basic highlight: wrap lines containing virtual keywords
+  const lines = materialsText.value.split(/\n+/).map(ln => {
+    const lower = ln.toLowerCase();
+    const isVirtual = virtualKeywords.some(k => lower.includes(k));
+    return isVirtual ? `<span class="mat-virtual">${ln}</span>` : `<span class="mat-physical">${ln}</span>`;
+  });
+  return lines.join('\n');
+});
+
+const summaryHtml = computed(() => {
+  if (!summary.value) return '';
+  return marked(summary.value);
+});
 const activeTab = ref('plot');
 const expandResults = ref(true);
 const showCode = ref(true);
@@ -216,11 +236,19 @@ onMounted(() => {
   checkDevice();
   window.addEventListener('resize', checkDevice);
   window.addEventListener('keydown', handleEscapeKey);
+  window.addEventListener('mousemove', onDrag);
+  window.addEventListener('mouseup', stopDrag);
+  window.addEventListener('touchmove', onDragTouch, { passive: false });
+  window.addEventListener('touchend', stopDrag);
 });
 
 onUnmounted(() => {
   window.removeEventListener('resize', checkDevice);
   window.removeEventListener('keydown', handleEscapeKey);
+  window.removeEventListener('mousemove', onDrag);
+  window.removeEventListener('mouseup', stopDrag);
+  window.removeEventListener('touchmove', onDragTouch);
+  window.removeEventListener('touchend', stopDrag);
 });
 
 const handleClear = () => {
@@ -232,6 +260,32 @@ const handleClear = () => {
 const toggleShowCode = () => {
   showCode.value = !showCode.value;
 };
+
+function startDrag(e) {
+  dragging = true;
+  startX = e.clientX;
+  startLeft = leftWidth.value;
+}
+function onDrag(e) {
+  if (!dragging) return;
+  const dx = e.clientX - startX;
+  const vw = window.innerWidth;
+  const deltaPct = (dx / vw) * 100;
+  leftWidth.value = Math.min(80, Math.max(20, startLeft + deltaPct));
+}
+function stopDrag() { dragging = false; }
+function startDragTouch(e) {
+  dragging = true;
+  startX = e.touches[0].clientX;
+  startLeft = leftWidth.value;
+}
+function onDragTouch(e) {
+  if (!dragging) return;
+  const dx = e.touches[0].clientX - startX;
+  const vw = window.innerWidth;
+  const deltaPct = (dx / vw) * 100;
+  leftWidth.value = Math.min(80, Math.max(20, startLeft + deltaPct));
+}
 
 const handleRandomPrompt = async () => {
   if (editorRef.value) {
@@ -296,38 +350,136 @@ const handleEvaluate = async (selectedText) => {
   startProgress();
   startProcessing();
 
-  try {
+  async function callOnce() {
     const response = await fetch(`${apiBase.value}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: selectedText }),
     });
-
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to process request');
     }
+    return await response.json();
+  }
 
-    const data = await response.json();
+  function extractMaterials(text) {
+    if (!text) return [];
+    const physical = [
+      'spruce','maple','rosewood','ebony','mahogany','cedar','pine','oak','bamboo','reed','brass','bronze','copper','steel','aluminum','nickel','silver','gold','titanium','carbon fiber','fiberglass','plastic','acrylic','rubber','leather','gut','nylon','silk','ceramic','clay','glass','cork','felt'
+    ];
+    const virtual = [
+      'texture','shader','sample','sampling','synthesis','granular','wavetable','fm','additive','subtractive','midi','vst','plugin','max/msp','pure data','supercollider','osc','convolution','impulse response','ir','reverb','impulse','unity','unreal','game engine','shader graph','material graph'
+    ];
+    const found = new Map();
+    const lower = text.toLowerCase();
+    function add(name, type) {
+      const key = name.toLowerCase();
+      if (!found.has(key)) found.set(key, { name, type });
+    }
+    physical.forEach(w => { if (lower.includes(w)) add(w, 'physical'); });
+    virtual.forEach(w => { if (lower.includes(w)) add(w, 'virtual'); });
+    return Array.from(found.values());
+  }
+
+  try {
+    let data = await callOnce();
     
-    // Add response to editor with appropriate styling
-    if (data.type === 'text') {
-      editorRef.value.addToEditor(data.content, 'text');
-      plotImage.value = null;
+  // Reset results
+  plotImage.value = null;
+    summary.value = null;
+    generatedCode.value = null;
+    stlUrl.value = null;
+  materials.value = [];
+  materialsText.value = '';
+    
+    // Extract results from response
+    if (data.summary) summary.value = data.summary;
+    
+    if (data.type === 'plot' || data.type === 'stl') {
+      if (data.content) {
+        generatedCode.value = data.content;
+      }
+      if (data.image) {
+        plotImage.value = data.image;
+      }
+      if (data.gallery?.stl_url) {
+        // Convert relative URL to absolute
+        const url = data.gallery.stl_url;
+        if (url.startsWith('http')) {
+          stlUrl.value = url;
+        } else if (apiBase.value.endsWith('/api') && url.startsWith('/api/')) {
+          stlUrl.value = apiBase.value + url.substring(4);
+        } else {
+          stlUrl.value = apiBase.value + url;
+        }
+      }
+
+      // Materials: prefer explicit field, else derive from summary
+      if (typeof data.materials === 'string' && data.materials.trim()) {
+        materialsText.value = data.materials.trim();
+      } else if (Array.isArray(data.materials) && data.materials.length) {
+        materialsText.value = data.materials.map(x => (typeof x === 'string' ? x : (x.name || ''))).filter(Boolean).join('\n');
+      } else if (summary.value) {
+        const list = extractMaterials(summary.value).map(m => `- ${m.name}`);
+        materialsText.value = list.join('\n');
+      }
+      
+      // Auto-select appropriate tab
+      if (plotImage.value) {
+        activeTab.value = 'plot';
+      } else if (stlUrl.value) {
+        activeTab.value = 'stl';
+      } else if (materialsText.value) {
+        activeTab.value = 'materials';
+      } else if (summary.value) {
+        activeTab.value = 'summary';
+      } else if (generatedCode.value) {
+        activeTab.value = 'code';
+      }
+      
+      // Optionally add code to editor
+      if (showCode.value && data.content) {
+        editorRef.value.addToEditor(data.content, data.type);
+      }
+      
+      transitionKey.value++; // Increment transition key for new results
     } else if (data.type === 'code') {
+      generatedCode.value = data.content;
+      activeTab.value = 'code';
       if (showCode.value) {
         editorRef.value.addToEditor(data.content, 'code');
       }
-      plotImage.value = null;
-    } else if (data.type === 'plot') {
-      if (showCode.value) {
-        editorRef.value.addToEditor(data.content, 'plot');
-      }
-      transitionKey.value++; // Increment transition key for new plot
-      plotImage.value = data.image;
+    } else if (data.type === 'text') {
+      editorRef.value.addToEditor(data.content, 'text');
     } else {
       editorRef.value.addToEditor('Unexpected response type.', 'text');
-      plotImage.value = null;
+    }
+
+    // Auto-retry once if nothing useful returned
+    if (!plotImage.value && !stlUrl.value && !summary.value && !generatedCode.value) {
+      try {
+        const retry = await callOnce();
+        // shallow merge: prefer any missing fields
+        if (retry.summary && !summary.value) summary.value = retry.summary;
+        if (retry.type === 'plot' && retry.image && !plotImage.value) plotImage.value = retry.image;
+        if (retry.gallery?.stl_url && !stlUrl.value) {
+          const url = retry.gallery.stl_url;
+          stlUrl.value = url.startsWith('http') ? url : (apiBase.value.endsWith('/api') && url.startsWith('/api/') ? apiBase.value + url.substring(4) : apiBase.value + url);
+        }
+        if (retry.content && !generatedCode.value) generatedCode.value = retry.content;
+        if (!materialsText.value && summary.value) {
+          const list = extractMaterials(summary.value).map(m => `- ${m.name}`);
+          materialsText.value = list.join('\n');
+        }
+        if (plotImage.value) activeTab.value = 'plot';
+        else if (stlUrl.value) activeTab.value = 'stl';
+  else if (materialsText.value) activeTab.value = 'materials';
+        else if (summary.value) activeTab.value = 'summary';
+        else if (generatedCode.value) activeTab.value = 'code';
+      } catch (e) {
+        // ignore retry error, keep original error handling
+      }
     }
   } catch (err) {
     console.error(err);
@@ -421,18 +573,49 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
 <style scoped>
 .app-container {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  position: relative;
+  gap: 0;
+}
+
+.left-column {
+  width: 50%;
+  height: 100vh;
+  display: block;
+  min-width: 0;
+}
+
+.right-column {
+  width: 50%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.divider {
+  width: 6px;
+  cursor: col-resize;
+  background: rgba(255,255,255,0.06);
+  z-index: 5;
+  flex-shrink: 0;
+}
+
+.editor-wrapper {
+  flex: 1;
+  height: 100%;
   position: relative;
 }
 
-.settings {
-  position: fixed;
-  top: 10px;
-  right: 20px;
-  z-index: 100;
+.hud {
+  padding: 10px 16px;
   display: flex;
   gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
 }
 
 .icon-button {
@@ -560,5 +743,229 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   padding: 8px 16px;
   border-radius: 4px;
   z-index: 1000;
+}
+
+.results-panel {
+  height: 100%;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.results-header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 12px 20px;
+  background: #000;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.results-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #000;
+  padding: 16px;
+  scrollbar-gutter: stable both-edges;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  align-content: start;
+}
+
+.tab-section {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 3%;
+  padding: 24px;
+  min-height: 250px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  position: relative;
+}
+
+.tab-section:has(.plot-image) {
+  min-height: 400px;
+  max-height: calc(100vh - 200px);
+}
+
+.tab-section:has(.stl-viewer-container) {
+  min-height: 500px;
+  height: 600px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.download-btn {
+  background: #4CAF50;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.download-btn:hover {
+  background: #45a049;
+}
+
+.plot-image {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+  border-radius: 8px;
+}
+
+.summary-text,
+.code-text {
+  white-space: pre-wrap;
+  background: transparent;
+  padding: 0;
+  border: none;
+  color: #eee;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+  width: 100%;
+  text-align: left;
+  align-self: flex-start;
+}
+
+.tab-section:has(.summary-text),
+.tab-section:has(.code-text) {
+  align-items: flex-start;
+}
+
+.summary-content {
+  color: #eee;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  width: 100%;
+  text-align: left;
+}
+
+.summary-content :deep(h1),
+.summary-content :deep(h2),
+.summary-content :deep(h3),
+.summary-content :deep(h4),
+.summary-content :deep(h5),
+.summary-content :deep(h6) {
+  color: #4CAF50;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+}
+
+.summary-content :deep(h1) { font-size: 1.8em; }
+.summary-content :deep(h2) { font-size: 1.5em; }
+.summary-content :deep(h3) { font-size: 1.3em; }
+
+.summary-content :deep(p) {
+  margin: 0.8em 0;
+}
+
+.summary-content :deep(ul),
+.summary-content :deep(ol) {
+  margin: 1em 0;
+  padding-left: 2em;
+}
+
+.summary-content :deep(li) {
+  margin: 0.4em 0;
+}
+
+.summary-content :deep(code) {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+.summary-content :deep(pre) {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.summary-content :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.summary-content :deep(a) {
+  color: #4CAF50;
+  text-decoration: none;
+}
+
+.summary-content :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.summary-content :deep(strong) {
+  font-weight: 600;
+  color: #fff;
+}
+
+.summary-content :deep(em) {
+  font-style: italic;
+  color: #ddd;
+}
+
+.summary-content :deep(blockquote) {
+  border-left: 3px solid #4CAF50;
+  padding-left: 1em;
+  margin: 1em 0;
+  color: #aaa;
+}
+
+.stl-viewer-container {
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+}
+
+.tab-section:has(.summary-content) {
+  align-items: flex-start;
+}
+
+.materials-text pre { white-space: pre-wrap; }
+.mat-virtual { color: #00bcd4; }
+.mat-physical { color: #cddc39; }
+
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+  
+  .left-column, .right-column {
+    width: 100%;
+  }
+  .left-column { height: 50vh; }
+  .right-column { height: 50vh; }
 }
 </style>

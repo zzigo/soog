@@ -15,13 +15,14 @@
     "@vite-pwa/nuxt": "^0.5.0",
     "ace-builds": "^1.37.4",
     "caniuse-lite": "^1.0.30001753",
+    "marked": "^17.0.1",
     "nuxt": "^3.15.1",
     "pino": "^9.6.0",
     "pino-pretty": "^10.3.0",
+    "three": "^0.164.1",
     "vue": "latest",
     "vue-ace-editor": "^1.0.3",
-    "vue-router": "latest",
-    "three": "^0.164.1"
+    "vue-router": "latest"
   },
   "devDependencies": {
     "@nuxt/types": "latest",

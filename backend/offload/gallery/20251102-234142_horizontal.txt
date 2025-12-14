@@ -1,0 +1,77 @@
+# Prompt
+
+make a helmothz resonator made of a sphere, with a microphone in the middle and a movable speakers on an horizontal axis crossing the middle of the sphere
+
+# Summary
+
+The Helmholtz resonator organogram abstracts the spherical resonant cavity as a large blue circle, representing its air volume and fundamental resonance properties. A central small rhombus in orange marks the microphone's position, capturing internal acoustic pressure. A horizontal axis through the sphere's center hosts a movable speaker, depicted as a grey horizontal cone with directional arrows indicating its adjustable position along this axis. This speaker emits sound into the cavity, with its placement modulating coupling efficiency and resonant excitation. Blue numeric annotations quantify key parameters: sphere diameter, microphone sensitivity, and speaker displacement range. The color scheme follows organological conventions: blue for resonant air volumes, orange for transducers, and grey for electronic components. Arrows illustrate the signal flow from speaker excitation through cavity resonance to microphone capture. This design enables performative interaction through real-time speaker positioning, creating dynamic feedback systems and variable resonant filtering effects.
+
+
+
+```python
+import trimesh
+import numpy as np
+
+# Create sphere (resonator cavity)
+sphere_mesh = trimesh.creation.icosphere(subdivisions=3, radius=200)  # 400mm diameter
+
+# Create microphone (small central rhombus)
+mic_vertices = np.array([[15, 0, 0], [0, 15, 0], [-15, 0, 0], [0, -15, 0], [0, 0, 0]])
+mic_faces = np.array([[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]])
+mic_mesh = trimesh.Trimesh(vertices=mic_vertices, faces=mic_faces)
+
+# Create speaker (movable cone)
+speaker_vertices = np.array([
+    [-30, 0, 0], [30, 15, 0], [30, -15, 0],  # Base triangle
+    [-15, 0, 10], [15, 7.5, 10], [15, -7.5, 10]  # Top triangle (smaller)
+])
+speaker_faces = np.array([
+    [0, 1, 2],  # Base
+    [3, 4, 5],  # Top
+    [0, 1, 4], [0, 4, 3],  # Side 1
+    [1, 2, 5], [1, 5,
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Circle, Polygon, FancyArrow
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(10, 8))
+plt.gcf().patch.set_alpha(0.0)
+
+# Sphere resonator
+sphere = Circle((0, 0), 2, fill=False, color='blue', linewidth=2.5)
+ax.add_patch(sphere)
+
+# Microphone in center (rhombus)
+mic_points = np.array([[0.3, 0], [0, 0.3], [-0.3, 0], [0, -0.3]])
+mic = Polygon(mic_points, color='orange', alpha=0.8)
+ax.add_patch(mic)
+
+# Horizontal axis
+ax.axhline(y=0, color='white', linestyle='--', alpha=0.5, xmin=0.1, xmax=0.9)
+
+# Movable speaker (horizontal cone)
+speaker_points = np.array([[-0.3, 0.15], [0.3, 0], [-0.3, -0.15]])
+speaker = Polygon(speaker_points, color='grey', alpha=0.8)
+ax.add_patch(speaker)
+
+# Speaker position arrow
+arrow = FancyArrow(0, 0.5, 1.5, 0, width=0.05, head_width=0.2, 
+                  head_length=0.3, color='yellow', alpha=0.7)
+ax.add_patch(arrow)
+
+# Measurements
+ax.text(0, 2.3, 'Ø400mm', color='blue', ha='center', fontsize=10)
+ax.text(0, 0, 'Mic', color='orange', ha='center', va='center', fontsize=8)
+ax.text(1.8, 0.2, 'Speaker\nposition', color='yellow', fontsize=8)
+
+ax.set_xlim(-3, 3)
+ax.set_ylim(-3, 3)
+ax.set_aspect('equal')
+ax.axis('off')
+
+for spine in ax.spines.values():
+    spine.set_visible(False)

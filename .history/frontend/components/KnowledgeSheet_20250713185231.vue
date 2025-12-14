@@ -29,23 +29,11 @@ const props = defineProps({
 })
 const emit = defineEmits(['update', 'deleteRow'])
 
-const editRows = reactive(props.rows.map(row => {
-  const newRow = {}
-  props.columns.forEach(col => {
-    newRow[col] = row[col] || ''
-  })
-  return newRow
-}))
+const editRows = reactive(props.rows.map(row => ({ ...row })))
 
 watch(() => props.rows, (newRows) => {
-  // Deep copy to avoid mutating parent, ensure all columns exist
-  editRows.splice(0, editRows.length, ...newRows.map(row => {
-    const newRow = {}
-    props.columns.forEach(col => {
-      newRow[col] = row[col] || ''
-    })
-    return newRow
-  }))
+  // Deep copy to avoid mutating parent
+  editRows.splice(0, editRows.length, ...newRows.map(row => ({ ...row })))
 })
 
 function emitUpdate() {

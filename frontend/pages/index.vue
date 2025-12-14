@@ -1,7 +1,7 @@
 <template>
   <div class="app-container">
-    <!-- Right column hosts HUD and Results; Left column hosts Editor -->
-    <div class="left-column">
+    <!-- Left column: resizable editor -->
+    <div class="left-column" :style="{ width: leftWidth + '%' }">
       <div class="editor-wrapper">
         <AceEditor 
           ref="editorRef" 
@@ -9,7 +9,14 @@
         />
       </div>
     </div>
-    <div class="right-column">
+    <!-- Draggable divider -->
+    <div 
+      class="divider" 
+      @mousedown="startDrag" 
+      @touchstart.prevent="startDragTouch"
+    ></div>
+    <!-- Right column hosts HUD and Results -->
+    <div class="right-column" :style="{ width: (100 - leftWidth) + '%' }">
       <div class="hud">
       <button @click="toggleShowCode" class="icon-button" :title="showCode ? 'Hide Code' : 'Show Code'">
         <svg v-if="showCode" class="icon" viewBox="0 0 24 24">
@@ -60,52 +67,15 @@
 </button>
       </div>
       
-      <!-- Results Panel occupies the rest of right column -->
+  <!-- Results Panel occupies the rest of right column -->
     <Transition
       enter-active-class="fadeIn"
       leave-active-class="fadeOut"
       :duration="300"
       mode="out-in"
     > 
-      <div v-if="hasResults" class="results-panel" :key="transitionKey">
+       <div v-if="hasResults" class="results-panel" :key="transitionKey">
         <div class="results-header">
-          <div class="tabs">
-            <button 
-              v-if="plotImage" 
-              :class="{active: activeTab==='plot'}" 
-              @click="activeTab='plot'"
-            >
-              Organogram
-            </button>
-            <button 
-              v-if="summary" 
-              :class="{active: activeTab==='summary'}" 
-              @click="activeTab='summary'"
-            >
-              Summary
-            </button>
-            <button 
-              v-if="generatedCode" 
-              :class="{active: activeTab==='code'}" 
-              @click="activeTab='code'"
-            >
-              Code
-            </button>
-            <button 
-              v-if="materials && materials.length" 
-              :class="{active: activeTab==='materials'}" 
-              @click="activeTab='materials'"
-            >
-              Materials
-            </button>
-            <button 
-              v-if="stlUrl" 
-              :class="{active: activeTab==='stl'}" 
-              @click="activeTab='stl'"
-            >
-              3D Model
-            </button>
-          </div>
           <div class="actions">
             <a v-if="stlUrl" :href="stlUrl" class="download-btn" download>
               Download STL
@@ -121,7 +91,8 @@
           </div>
         </div>
         <div v-if="expandResults" class="results-content">
-          <div v-if="activeTab==='plot' && plotImage" class="tab-content">
+          <!-- Image Tab -->
+          <div v-if="plotImage" class="tab-section">
             <img 
               :src="`data:image/png;base64,${plotImage}`" 
               alt="Plot"
@@ -129,23 +100,19 @@
               class="plot-image"
             />
           </div>
-          <div v-if="activeTab==='summary' && summary" class="tab-content">
-            <pre class="summary-text">{{ summary }}</pre>
-          </div>
-          <div v-if="activeTab==='code' && generatedCode" class="tab-content">
-            <pre class="code-text">{{ generatedCode }}</pre>
-          </div>
-          <div v-if="activeTab==='materials' && materials && materials.length" class="tab-content materials">
-            <div class="chips">
-              <span v-for="m in materials" :key="m.name" class="chip" :class="m.type">
-                {{ m.name }}
-              </span>
-            </div>
-          </div>
-          <div v-if="activeTab==='stl' && stlUrl" class="tab-content">
+          
+          <!-- 3D Model Tab -->
+          <div v-if="stlUrl" class="tab-section">
             <ClientOnly>
-              <StlViewer :url="stlUrl" />
+              <div class="stl-viewer-container">
+                <StlViewer :url="stlUrl" />
+              </div>
             </ClientOnly>
+          </div>
+          
+          <!-- Summary Tab -->
+          <div v-if="summary" class="tab-section">
+            <div class="summary-content" v-html="summaryHtml"></div>
           </div>
         </div>
       </div>
@@ -196,6 +163,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRuntimeConfig } from '#app';
+import { marked } from 'marked';
 import AceEditor from '~/components/AceEditor.vue';
 import HelpModal from '~/components/HelpModal.vue';
 import GalleryModal from '~/components/GalleryModal.vue';
@@ -203,9 +171,19 @@ import StlViewer from '~/components/StlViewer.vue';
 import { useRandomPrompt } from '~/composables/useRandomPrompt';
 import { useFavicon } from '~/composables/useFavicon';
 
+// Configure marked
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+});
+
 // State variables
 const { startProcessing, completeProcessing } = useFavicon();
 const editorRef = ref(null);
+const leftWidth = ref(50);
+let dragging = false;
+let startX = 0;
+let startLeft = 50;
 const loading = ref(false);
 const progress = ref(0);
 const error = ref(null);
@@ -214,6 +192,25 @@ const summary = ref(null);
 const generatedCode = ref(null);
 const stlUrl = ref(null);
 const materials = ref([]);
+const materialsText = ref('');
+const virtualKeywords = [
+  'texture','shader','sample','sampling','synthesis','granular','wavetable','fm','additive','subtractive','midi','vst','plugin','max/msp','pure data','supercollider','osc','convolution','impulse response','ir','reverb','impulse','unity','unreal','game engine','shader graph','material graph'
+];
+const materialsTextDisplay = computed(() => {
+  if (!materialsText.value) return '';
+  // Basic highlight: wrap lines containing virtual keywords
+  const lines = materialsText.value.split(/\n+/).map(ln => {
+    const lower = ln.toLowerCase();
+    const isVirtual = virtualKeywords.some(k => lower.includes(k));
+    return isVirtual ? `<span class="mat-virtual">${ln}</span>` : `<span class="mat-physical">${ln}</span>`;
+  });
+  return lines.join('\n');
+});
+
+const summaryHtml = computed(() => {
+  if (!summary.value) return '';
+  return marked(summary.value);
+});
 const activeTab = ref('plot');
 const expandResults = ref(true);
 const showCode = ref(true);
@@ -239,11 +236,19 @@ onMounted(() => {
   checkDevice();
   window.addEventListener('resize', checkDevice);
   window.addEventListener('keydown', handleEscapeKey);
+  window.addEventListener('mousemove', onDrag);
+  window.addEventListener('mouseup', stopDrag);
+  window.addEventListener('touchmove', onDragTouch, { passive: false });
+  window.addEventListener('touchend', stopDrag);
 });
 
 onUnmounted(() => {
   window.removeEventListener('resize', checkDevice);
   window.removeEventListener('keydown', handleEscapeKey);
+  window.removeEventListener('mousemove', onDrag);
+  window.removeEventListener('mouseup', stopDrag);
+  window.removeEventListener('touchmove', onDragTouch);
+  window.removeEventListener('touchend', stopDrag);
 });
 
 const handleClear = () => {
@@ -255,6 +260,32 @@ const handleClear = () => {
 const toggleShowCode = () => {
   showCode.value = !showCode.value;
 };
+
+function startDrag(e) {
+  dragging = true;
+  startX = e.clientX;
+  startLeft = leftWidth.value;
+}
+function onDrag(e) {
+  if (!dragging) return;
+  const dx = e.clientX - startX;
+  const vw = window.innerWidth;
+  const deltaPct = (dx / vw) * 100;
+  leftWidth.value = Math.min(80, Math.max(20, startLeft + deltaPct));
+}
+function stopDrag() { dragging = false; }
+function startDragTouch(e) {
+  dragging = true;
+  startX = e.touches[0].clientX;
+  startLeft = leftWidth.value;
+}
+function onDragTouch(e) {
+  if (!dragging) return;
+  const dx = e.touches[0].clientX - startX;
+  const vw = window.innerWidth;
+  const deltaPct = (dx / vw) * 100;
+  leftWidth.value = Math.min(80, Math.max(20, startLeft + deltaPct));
+}
 
 const handleRandomPrompt = async () => {
   if (editorRef.value) {
@@ -355,11 +386,12 @@ const handleEvaluate = async (selectedText) => {
     let data = await callOnce();
     
   // Reset results
-    plotImage.value = null;
+  plotImage.value = null;
     summary.value = null;
     generatedCode.value = null;
     stlUrl.value = null;
   materials.value = [];
+  materialsText.value = '';
     
     // Extract results from response
     if (data.summary) summary.value = data.summary;
@@ -384,10 +416,13 @@ const handleEvaluate = async (selectedText) => {
       }
 
       // Materials: prefer explicit field, else derive from summary
-      if (Array.isArray(data.materials) && data.materials.length) {
-        materials.value = data.materials.map(m => ({ name: m.name || m, type: m.type || 'physical' }));
+      if (typeof data.materials === 'string' && data.materials.trim()) {
+        materialsText.value = data.materials.trim();
+      } else if (Array.isArray(data.materials) && data.materials.length) {
+        materialsText.value = data.materials.map(x => (typeof x === 'string' ? x : (x.name || ''))).filter(Boolean).join('\n');
       } else if (summary.value) {
-        materials.value = extractMaterials(summary.value);
+        const list = extractMaterials(summary.value).map(m => `- ${m.name}`);
+        materialsText.value = list.join('\n');
       }
       
       // Auto-select appropriate tab
@@ -395,7 +430,7 @@ const handleEvaluate = async (selectedText) => {
         activeTab.value = 'plot';
       } else if (stlUrl.value) {
         activeTab.value = 'stl';
-      } else if (materials.value && materials.value.length) {
+      } else if (materialsText.value) {
         activeTab.value = 'materials';
       } else if (summary.value) {
         activeTab.value = 'summary';
@@ -433,10 +468,13 @@ const handleEvaluate = async (selectedText) => {
           stlUrl.value = url.startsWith('http') ? url : (apiBase.value.endsWith('/api') && url.startsWith('/api/') ? apiBase.value + url.substring(4) : apiBase.value + url);
         }
         if (retry.content && !generatedCode.value) generatedCode.value = retry.content;
-        if ((!materials.value || !materials.value.length) && summary.value) materials.value = extractMaterials(summary.value);
+        if (!materialsText.value && summary.value) {
+          const list = extractMaterials(summary.value).map(m => `- ${m.name}`);
+          materialsText.value = list.join('\n');
+        }
         if (plotImage.value) activeTab.value = 'plot';
         else if (stlUrl.value) activeTab.value = 'stl';
-        else if (materials.value && materials.value.length) activeTab.value = 'materials';
+  else if (materialsText.value) activeTab.value = 'materials';
         else if (summary.value) activeTab.value = 'summary';
         else if (generatedCode.value) activeTab.value = 'code';
       } catch (e) {
@@ -537,14 +575,17 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   display: flex;
   flex-direction: row;
   height: 100vh;
+  width: 100vw;
+  overflow: hidden;
   position: relative;
+  gap: 0;
 }
 
 .left-column {
   width: 50%;
   height: 100vh;
-  display: flex;
-  flex-direction: column;
+  display: block;
+  min-width: 0;
 }
 
 .right-column {
@@ -552,6 +593,15 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   height: 100vh;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+}
+
+.divider {
+  width: 6px;
+  cursor: col-resize;
+  background: rgba(255,255,255,0.06);
+  z-index: 5;
+  flex-shrink: 0;
 }
 
 .editor-wrapper {
@@ -700,49 +750,58 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   background: #000;
   display: flex;
   flex-direction: column;
-  z-index: 1;
+  position: relative;
+  overflow: hidden;
 }
 
 .results-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   padding: 12px 20px;
   background: #000;
-  order: 2;
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .results-content {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   background: #000;
-  order: 1;
+  padding: 16px;
+  scrollbar-gutter: stable both-edges;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  align-content: start;
 }
 
-.tabs {
+.tab-section {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 3%;
+  padding: 24px;
+  min-height: 250px;
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  position: relative;
 }
 
-.tabs button {
-  background: transparent;
-  color: #666;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.2s;
+.tab-section:has(.plot-image) {
+  min-height: 400px;
+  max-height: calc(100vh - 200px);
 }
 
-.tabs button:hover {
-  color: #aaa;
-}
-
-.tabs button.active {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.05);
+.tab-section:has(.stl-viewer-container) {
+  min-height: 500px;
+  height: 600px;
 }
 
 .actions {
@@ -767,20 +826,14 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   background: #45a049;
 }
 
-.tab-content {
-  padding: 20px;
-  min-height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .plot-image {
+  width: 100%;
+  height: auto;
   max-width: 100%;
-  max-height: 90vh;
+  max-height: 100%;
   object-fit: contain;
   display: block;
-  border-radius: 0;
+  border-radius: 8px;
 }
 
 .summary-text,
@@ -795,21 +848,114 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   line-height: 1.6;
   margin: 0;
   width: 100%;
+  text-align: left;
+  align-self: flex-start;
 }
 
-.materials .chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.tab-section:has(.summary-text),
+.tab-section:has(.code-text) {
+  align-items: flex-start;
 }
-.chip {
-  padding: 6px 10px;
-  border-radius: 16px;
-  font-size: 12px;
-  color: #111;
+
+.summary-content {
+  color: #eee;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  width: 100%;
+  text-align: left;
 }
-.chip.physical { background: #cddc39; }
-.chip.virtual { background: #00bcd4; }
+
+.summary-content :deep(h1),
+.summary-content :deep(h2),
+.summary-content :deep(h3),
+.summary-content :deep(h4),
+.summary-content :deep(h5),
+.summary-content :deep(h6) {
+  color: #4CAF50;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+}
+
+.summary-content :deep(h1) { font-size: 1.8em; }
+.summary-content :deep(h2) { font-size: 1.5em; }
+.summary-content :deep(h3) { font-size: 1.3em; }
+
+.summary-content :deep(p) {
+  margin: 0.8em 0;
+}
+
+.summary-content :deep(ul),
+.summary-content :deep(ol) {
+  margin: 1em 0;
+  padding-left: 2em;
+}
+
+.summary-content :deep(li) {
+  margin: 0.4em 0;
+}
+
+.summary-content :deep(code) {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+.summary-content :deep(pre) {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.summary-content :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.summary-content :deep(a) {
+  color: #4CAF50;
+  text-decoration: none;
+}
+
+.summary-content :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.summary-content :deep(strong) {
+  font-weight: 600;
+  color: #fff;
+}
+
+.summary-content :deep(em) {
+  font-style: italic;
+  color: #ddd;
+}
+
+.summary-content :deep(blockquote) {
+  border-left: 3px solid #4CAF50;
+  padding-left: 1em;
+  margin: 1em 0;
+  color: #aaa;
+}
+
+.stl-viewer-container {
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+}
+
+.tab-section:has(.summary-content) {
+  align-items: flex-start;
+}
+
+.materials-text pre { white-space: pre-wrap; }
+.mat-virtual { color: #00bcd4; }
+.mat-physical { color: #cddc39; }
 
 @media (max-width: 768px) {
   .app-container {
