@@ -17,7 +17,7 @@ node_modules/
 dist/
 .nitro/
 .cache/
-
+.history
 # Nuxt dev/build outputs
 .data/
 
