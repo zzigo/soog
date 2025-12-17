@@ -818,8 +818,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   justify-content: center;
   width: 100%;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow-y: auto;
   position: relative;
+  max-height: 60vh;
 }
 
 .tab-section:has(.plot-image) {

@@ -7,12 +7,12 @@
 }
 
 soog.zztt.org {
-    handle /* {
-        reverse_proxy localhost:3000
-    }
-    
     handle /api/* {
         reverse_proxy localhost:10000
+    }
+
+    handle /* {
+        reverse_proxy localhost:3000
     }
 }
 
