@@ -100,6 +100,12 @@ function imageSrc(item) {
   if (!item) return ''
   const url = item.image_url || ''
   if (url.startsWith('http')) return url
+
+  const offloadApiBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase;
+  if (url.startsWith('/offload')) {
+      return offloadApiBase + url;
+  }
+      
   if (apiBase.endsWith('/api') && url.startsWith('/api/')) {
     return apiBase + url.substring(4)
   }
@@ -109,6 +115,12 @@ function imageSrc(item) {
 function fileHref(url) {
   if (!url) return ''
   if (url.startsWith('http')) return url
+      
+  const offloadApiBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase;
+  if (url.startsWith('/offload')) {
+      return offloadApiBase + url;
+  }
+
   if (apiBase.endsWith('/api') && url.startsWith('/api/')) {
     return apiBase + url.substring(4)
   }
