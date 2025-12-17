@@ -1,0 +1,77 @@
+# Prompt
+
+a sphere a mic a speaker
+
+# Summary
+
+**Conceptual Summary**
+
+This organogram visualizes a speculative spherical instrument integrating microphone and speaker elements. The central sphere (white circle) represents a resonant acoustical cavity, symbolizing an omnidirectional sound source with uniform wave propagation. A small rhombus (orange) denotes the microphone as an input interface, while a horizontal cone (cyan) indicates the speaker as an output interface. Arrows show the signal flow: sound enters via the mic, is processed within the spherical resonator (implied internal transformation), and exits amplified through the speaker. The performer (small white circle with dotted line) interacts from a distance, suggesting non-contact control. Colors follow organological conventions: orange for electronic input, cyan for output, white for resonance. Acoustically, the sphere provides isotropic resonance, while the electronic components enable feedback loops or spatial sound modulation, merging acoustic resonance with electroacoustic transduction in a compact, performative system.
+
+**Materials**
+
+1. 1 Acrylic hollow sphere, 200 mm diameter, 3 mm thickness
+2. 1 Omnidirectional condenser microphone capsule, 10 mm diameter
+3. 1 Full-range speaker driver, 50 mm diameter, 20 mm depth
+4. 2 Audio cables (3.5 mm), 1 m length each
+5. 1 Audio amplifier circuit board, 5V USB-powered
+6. 1 Set of silicone mounting gaskets
+7. Virtual Materials: 1 convolution reverb IR (sphere impulse response), 1 feedback delay patch (Max/MSP)
+
+
+
+```python
+import trimesh
+import numpy as np
+
+# Create spherical body
+sphere_m
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Circle, Polygon, FancyArrowPatch
+from matplotlib.lines import Line2D
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(8, 8))
+ax.set_xlim(-1.5, 1.5)
+ax.set_ylim(-1.5, 1.5)
+ax.set_aspect('equal')
+ax.axis('off')
+fig.patch.set_alpha(0.0)
+
+# Main resonant sphere (acoustical shape)
+sphere = Circle((0, 0), 1, fill=False, edgecolor='white', linewidth=2.5, alpha=0.9)
+ax.add_patch(sphere)
+
+# Microphone (input interface) - small rhombus
+mic = Polygon([[0.3, 1], [1, 0.3], [0.3, 0], [0, 0.3]], closed=True,
+              facecolor='orange', edgecolor='darkorange', linewidth=1.5)
+ax.add_patch(mic)
+
+# Speaker (output interface) - horizontal cone
+speaker = Polygon([[0.3, 1], [1, 0], [0, 0]], closed=True,
+                  facecolor='cyan', edgecolor='darkcyan', linewidth=1.5)
+speaker.set_transform(ax.transData + plt.matplotlib.transforms.Affine2D().rotate_deg(180).translate(-1.2, -0.5))
+ax.add_patch(speaker)
+
+# Arrows for signal flow
+arrow1 = FancyArrowPatch((0.65, 0.65), (0.15, 0.15),
+                         arrowstyle='->', color='yellow', linewidth=2, mutation_scale=20)
+arrow2 = FancyArrowPatch((-0.15, -0.15), (-0.65, -0.65),
+                         arrowstyle='->', color='lime', linewidth=2, mutation_scale=20)
+ax.add_patch(arrow1)
+ax.add_patch(arrow2)
+
+# Performer position
+performer = Circle((1.2, 1.2), 0.08, facecolor='white', edgecolor='white', alpha=0.7)
+ax.add_patch(performer)
+ax.plot([1.2, 0.7], [1.2, 0.7], 'w--', linewidth=1, alpha=0.5)
+
+# Labels
+ax.text(0.7, 1.1, 'Mic', color='orange', fontsize=10, ha='center')
+ax.text(-0.9, -0.9, 'Speaker', color='cyan', fontsize=10, ha='center')
+ax.text(0, 1.15, 'Spherical Resonator', color='white', fontsize=11, ha='center', weight='bold')
+ax.text(1.3, 1.3, 'Performer', color='white', fontsize=9, ha='center')

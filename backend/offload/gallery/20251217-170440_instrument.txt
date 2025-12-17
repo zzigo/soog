@@ -1,0 +1,104 @@
+# Prompt
+
+make an instrument with a bezel a cylinder and a sphere in one of its point as resonant space , making another hol on the sphere to interact like in the Udu drums
+
+# Summary
+
+**Conceptual Summary**
+
+This speculative instrument merges idiophonic, membranophonic, and aerophonic principles into a single resonant body. The organogram abstracts the main resonant chamber as a vertical rectangle (chordophone genus, indicating a tensioned skin) with a cylindrical bezel (a circle, representing an aerophone tube) attached. A sphere (a circle, representing a secondary resonant chamber) is connected at one point to the cylinder. An arrow flows from the sphere to a smaller circle on its surface, representing the interactive "finger hole" inspired by the Udu drum, where pitch and timbre are modulated by opening/closing. The primary rectangle is colored pink (skin), the cylinder and sphere are beige (gourd/ceramic), and the hole interface is marked in orange with an 'R' for relative pitch control. The acoustical rationale is a Helmholtz-like system: the main chamber provides a low fundamental, the cylinder acts as a tuned port, and the spherical chamber with its variable hole creates a coupled resonator for complex, water-like tones. The performer interacts by striking the skin (primary excitation) and modulating the sphere's hole (secondary articulation).
+
+**Materials**
+
+1.  1 ceramic or hardened clay spherical chamber, 150 mm diameter, with a 20 mm diameter opening for connection.
+2.  1 ceramic or PVC cylindrical tube, 80 mm length, 40 mm diameter, to connect sphere to main body.
+3.  1 wooden or fiberglass frame (main chamber box), 300 mm height, 200 mm width, 150 mm depth.
+4.  1 synthetic drum skin (membrane), 250 mm diameter, for the main striking surface.
+5.  Synthetic lacing and tuning rings to tension the membrane.
+6.  Adhesive (epoxy or strong clay adhesive) to join sphere and cylinder.
+
+**Virtual Materials** (for digital/physical hybrid version)
+1.  A sample library of struck membrane and variable Helmholtz resonator tones (WAV, 48kHz).
+2.  A proximity sensor (virtual asset) mapped to the sphere's hole for real-time modulation in a digital audio workstation.
+3.  A procedural texture simulating glazed ceramic for 3D model rendering.
+
+```python
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.patches import Polygon, Circle, FancyArrow, Arc
+import numpy as np
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 10)
+ax.set_aspect('equal')
+ax.axis('off')
+fig.patch.set_alpha(0.0)
+ax.set_facecolor('none')
+
+# Main resonant chamber (Membranophone/Chordophone) - Vertical Rectangle
+main_body = mpatches.Rectangle((3, 2), 2, 5, linewidth=2.5, edgecolor='pink', facecolor='none', label='Main Chamber (Skin)')
+ax.add_patch(main_body)
+# Genus semicircle (Membranophone)
+semi_circle = Arc((4, 7), 2, 1, angle=0, theta1=0, theta2=180, linewidth=2, color='pink')
+ax.add_patch(semi_circle)
+
+# Cylindrical Bezel (Aerophone) - Circle attached
+bezel = Circle((5.5, 4.5), 0.8, linewidth=2.5, edgecolor='beige', facecolor='none', label='Cylindrical Bezel')
+ax.add_patch(bezel)
+
+# Spherical chamber (Aerophone) - Circle
+sphere = Circle((7.5, 4.5), 1.2, linewidth=2.5, edgecolor='beige', facecolor='none', label='Spherical Chamber')
+ax.add_patch(sphere)
+
+# Connection lines
+ax.plot([5.5+0.8, 7.5-1.2], [4.5, 4.5], color='white', linewidth=2, linestyle='-')
+ax.plot([5, 5], [4.5, 3.5], color='white', linewidth=2, linestyle='-') # to main body
+
+# Interactive hole on sphere (Interface)
+hole = Circle((7.5, 5.7), 0.3, linewidth=2, edgecolor='orange', facecolor='none')
+ax.add_patch(hole)
+# Arrow for interaction flow
+interaction_arrow = FancyArrow(7.5, 6.2, 0, -0.4,
+
+# Code
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.patches import Polygon, Circle, FancyArrow, Arc
+import numpy as np
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 10)
+ax.set_aspect('equal')
+ax.axis('off')
+fig.patch.set_alpha(0.0)
+ax.set_facecolor('none')
+
+# Main resonant chamber (Membranophone/Chordophone) - Vertical Rectangle
+main_body = mpatches.Rectangle((3, 2), 2, 5, linewidth=2.5, edgecolor='pink', facecolor='none', label='Main Chamber (Skin)')
+ax.add_patch(main_body)
+# Genus semicircle (Membranophone)
+semi_circle = Arc((4, 7), 2, 1, angle=0, theta1=0, theta2=180, linewidth=2, color='pink')
+ax.add_patch(semi_circle)
+
+# Cylindrical Bezel (Aerophone) - Circle attached
+bezel = Circle((5.5, 4.5), 0.8, linewidth=2.5, edgecolor='beige', facecolor='none', label='Cylindrical Bezel')
+ax.add_patch(bezel)
+
+# Spherical chamber (Aerophone) - Circle
+sphere = Circle((7.5, 4.5), 1.2, linewidth=2.5, edgecolor='beige', facecolor='none', label='Spherical Chamber')
+ax.add_patch(sphere)
+
+# Connection lines
+ax.plot([5.5+0.8, 7.5-1.2], [4.5, 4.5], color='white', linewidth=2, linestyle='-')
+ax.plot([5, 5], [4.5, 3.5], color='white', linewidth=2, linestyle='-') # to main body
+
+# Interactive hole on sphere (Interface)
+hole = Circle((7.5, 5.7), 0.3, linewidth=2, edgecolor='orange', facecolor='none')
+ax.add_patch(hole)
+# Arrow for interaction flow
+interaction_arrow = FancyArrow(7.5, 6.2, 0, -0.4,

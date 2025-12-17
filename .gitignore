@@ -112,12 +112,6 @@ modeltrainer/requeriments.txt
 modeltrainer/outputModel_MantlHood/
 
 # Frontend-specific
-frontend/public/workers/
-frontend/pages/
-frontend/server/
-frontend/assets/global.css
-frontend/tsconfig.json
-frontend/package.json
 
 # LSP & Tooling
 pyrightconfig.json

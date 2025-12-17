@@ -1,0 +1,112 @@
+# Prompt
+
+# Welcome to SOOG [The Speculative Organology Organogram Generator 0.0.60]
+# Write your invented instrument, select text and press Alt+Enter to evaluate
+
+ Design the Metamaterial Violin: body crafted from acoustic cloaking materials that redirect sound waves...
+
+# Summary
+
+# Conceptual Summary
+
+The organogram for the Metamaterial Violin abstracts its core innovation: a resonant body shaped from acoustic metamaterials that redirect and sculpt sound waves. The primary acoustical shape is a vertical rectangle (chordophone) in deep violet, representing the traditional violin body, but it is embedded with a tessellated hexagonal lattice in cyan, symbolizing the metamaterial's wave-steering properties. A smaller orange circle denotes the genus (bowed string). The interface is shown as a light grey vertical rectangle (the fingerboard) with a white arrow indicating the bowing motion along the strings. Four blue numbers (4) mark the strings. A performer's position is indicated by a white circle with a dotted line connecting to the instrument. Arrows flow from the bowing interface into the metamaterial lattice, illustrating how vibrational energy is captured and redirected. The acoustical rationale is visualized through a superimposed spectrum simulation (green waveform) showing enhanced low-mid resonance and suppressed high-frequency harshness, due to the cloaking effect. This design positions the instrument within organology as a hybrid chordophone-electronophone, merging traditional string excitation with advanced material science for performative control over sound diffusion and projection.
+
+# Materials
+
+1. 1 Acoustic metamaterial composite sheet (hexagonal cell structure), 360 mm x 200 mm x 3 mm
+2. 1 Spruce wood soundboard (traditional top plate), 360 mm x 200 mm x 3 mm
+3. 1 Maple wood neck and scroll, 330 mm length
+4. 4 Violin strings (steel core, synthetic winding), full set
+5. 1 Ebony fingerboard, 270 mm length, 25 mm width
+6. 1 Carbon fiber tailpiece with integrated fine tuners
+7. 1 Maple wood bridge, 42 mm height
+8. 1 Set of geared tuning pegs (4)
+9. 1 Pernambuco wood bow, 740 mm length
+10. 1 Set of acoustic dampening pads (for experimental modulation), 50 mm x 50 mm (4 pieces)
+
+## Virtual Materials
+1. 1 Finite Element Analysis (FEA) simulation file for metamaterial resonance (.sim)
+2. 1 Sample library of redirected wave impulses (24-bit, 96 kHz)
+3. 1 Custom physically-informed digital reverb impulse response (IR)
+4. 1 3D model texture for hexagonal lattice (Procedural PBR shader)
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Rectangle, Circle, Polygon, FancyArrow, Arc
+import matplotlib.path as mpath
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(12, 8))
+plt.gcf().patch.set_alpha(0.0)
+ax.set_aspect('equal')
+ax.set_xlim(-1, 11)
+ax.set_ylim(-1, 9)
+ax.axis('off')
+
+# Main resonant body (Chordophone - vertical rectangle)
+body = Rectangle((4, 2), width=2, height=6, facecolor='darkviolet', edgecolor='white', linewidth=2, zorder=1)
+ax.add_patch(body)
+
+# Metamaterial hexagonal lattice overlay
+hex_center_x = 5
+hex_center_y = 5
+hex_radius = 0.8
+for i in range(-1, 2):
+    for j in range(-2, 3):
+        x = hex_center_x + hex_radius * 1.5 * i
+        y = hex_center_y + hex_radius * np.sqrt(3) * (j + 0.5 * (i % 2))
+        hexagon = Polygon([(x + hex_radius * np.cos(np.pi/3 * k), y + hex_radius * np.sin(np.pi/3 * k)) for k in range(6)],
+                          closed=True, facecolor='none', edgecolor='cyan', linewidth=1.5, alpha=0.7, zorder=2)
+        ax.add_patch(hexagon)
+
+# Genus indicator (semi-circle for bowed)
+genus = Arc((5, 8), width=1.2, height=1.2, theta1=180, theta2=360, color='orange', linewidth=3, zorder=3)
+ax.add_patch(genus)
+
+# Interface: Fingerboard (vertical rectangle)
+fingerboard = Rectangle((4.8, 2), width=0.4, height=6, facecolor='lightgrey', edgecolor='black', linewidth=1.5, zorder=1)
+ax.add_patch(fingerboard)
+
+# Bowing motion arrow
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Rectangle, Circle, Polygon, FancyArrow, Arc
+import matplotlib.path as mpath
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(12, 8))
+plt.gcf().patch.set_alpha(0.0)
+ax.set_aspect('equal')
+ax.set_xlim(-1, 11)
+ax.set_ylim(-1, 9)
+ax.axis('off')
+
+# Main resonant body (Chordophone - vertical rectangle)
+body = Rectangle((4, 2), width=2, height=6, facecolor='darkviolet', edgecolor='white', linewidth=2, zorder=1)
+ax.add_patch(body)
+
+# Metamaterial hexagonal lattice overlay
+hex_center_x = 5
+hex_center_y = 5
+hex_radius = 0.8
+for i in range(-1, 2):
+    for j in range(-2, 3):
+        x = hex_center_x + hex_radius * 1.5 * i
+        y = hex_center_y + hex_radius * np.sqrt(3) * (j + 0.5 * (i % 2))
+        hexagon = Polygon([(x + hex_radius * np.cos(np.pi/3 * k), y + hex_radius * np.sin(np.pi/3 * k)) for k in range(6)],
+                          closed=True, facecolor='none', edgecolor='cyan', linewidth=1.5, alpha=0.7, zorder=2)
+        ax.add_patch(hexagon)
+
+# Genus indicator (semi-circle for bowed)
+genus = Arc((5, 8), width=1.2, height=1.2, theta1=180, theta2=360, color='orange', linewidth=3, zorder=3)
+ax.add_patch(genus)
+
+# Interface: Fingerboard (vertical rectangle)
+fingerboard = Rectangle((4.8, 2), width=0.4, height=6, facecolor='lightgrey', edgecolor='black', linewidth=1.5, zorder=1)
+ax.add_patch(fingerboard)
+
+# Bowing motion arrow

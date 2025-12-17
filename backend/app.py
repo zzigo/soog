@@ -700,6 +700,92 @@ def gallery_file(filename):
         return jsonify({'error': 'File not found'}), 404
 
 
+@app.route('/api/gallery/item/<string:basename>', methods=['DELETE'])
+def gallery_delete_item(basename):
+    """Delete a gallery item by its basename."""
+    try:
+        # Basic validation on basename
+        if not re.match(r'^[a-zA-Z0-9_\-]+$', basename):
+            return jsonify({'error': 'Invalid basename format'}), 400
+
+        files_to_delete = []
+        for ext in ['.json', '.png', '.txt', '.stl']:
+            filename = f"{basename}{ext}"
+            path = os.path.join(GALLERY_DIR, filename)
+            if os.path.exists(path):
+                files_to_delete.append(path)
+
+        if not files_to_delete:
+            return jsonify({'error': 'Item not found'}), 404
+
+        for path in files_to_delete:
+            try:
+                os.remove(path)
+            except OSError as e:
+                logging.warning(f"Could not delete file {path}: {e}")
+                # Decide if you want to fail the whole operation or just log
+                # For robustness, we log and continue
+
+        return jsonify({'ok': True, 'message': f'Item {basename} deleted'})
+    except Exception as e:
+        logging.error(f"Error deleting gallery item {basename}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/gallery/item/<string:basename>/rename', methods=['POST'])
+def gallery_rename_item(basename):
+    """Rename a gallery item."""
+    try:
+        data = request.json
+        new_name = data.get('newName', '').strip()
+
+        if not new_name or not re.match(r'^[a-zA-Z0-9_\-]+$', new_name):
+            return jsonify({'error': 'Invalid new name format'}), 400
+        
+        if not re.match(r'^[a-zA-Z0-9_\-]+$', basename):
+            return jsonify({'error': 'Invalid basename format'}), 400
+
+        timestamp = basename.split('_')[0]
+        new_basename = f"{timestamp}_{new_name}"
+
+        # Check if new name already exists
+        if os.path.exists(os.path.join(GALLERY_DIR, f"{new_basename}.json")):
+            return jsonify({'error': 'New name already exists'}), 409
+
+        # Rename files
+        renamed_files = []
+        for ext in ['.json', '.png', '.txt', '.stl']:
+            old_path = os.path.join(GALLERY_DIR, f"{basename}{ext}")
+            if os.path.exists(old_path):
+                new_path = os.path.join(GALLERY_DIR, f"{new_basename}{ext}")
+                os.rename(old_path, new_path)
+                renamed_files.append(new_path)
+        
+        if not renamed_files:
+            return jsonify({'error': 'Item not found'}), 404
+
+        # Update JSON metadata
+        json_path = os.path.join(GALLERY_DIR, f"{new_basename}.json")
+        if os.path.exists(json_path):
+            with open(json_path, 'r+') as f:
+                meta = json.load(f)
+                meta['basename'] = new_basename
+                if meta.get('image_url'):
+                    meta['image_url'] = f"/api/gallery/image/{new_basename}.png"
+                if meta.get('stl_url'):
+                    meta['stl_url'] = f"/api/gallery/file/{new_basename}.stl"
+                
+                f.seek(0)
+                json.dump(meta, f)
+                f.truncate()
+
+        return jsonify({'ok': True, 'message': f'Item {basename} renamed to {new_basename}', 'newBasename': new_basename})
+
+    except Exception as e:
+        logging.error(f"Error renaming gallery item {basename}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 
 
 @app.route('/api/dev/save', methods=['POST'])
