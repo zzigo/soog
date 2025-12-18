@@ -16,7 +16,7 @@ deactivate
 # 3. Frontend
 echo "→ Building frontend"
 cd /opt/soog/frontend || exit 1
-bun run build || exit 1
+npm run build || exit 1
 
 # 4. Restart services
 echo "→ Restarting services"
