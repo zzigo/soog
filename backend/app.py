@@ -1215,6 +1215,16 @@ def execute_matplotlib_code(code: str) -> str:
 
         def _safe_fancy_arrow_patch(*args, **kwargs):
             # Accept both FancyArrowPatch(posA, posB, ...) and Arrow-like (x, y, dx, dy, ...) signatures.
+            # Some model outputs mix annotate-style kwargs that FancyArrowPatch does not accept.
+            xy = kwargs.pop('xy', None)
+            xytext = kwargs.pop('xytext', None)
+            if xytext is not None and 'posA' not in kwargs and len(args) < 1:
+                kwargs['posA'] = xytext
+            if xy is not None and 'posB' not in kwargs and len(args) < 2:
+                kwargs['posB'] = xy
+            kwargs.pop('xycoords', None)
+            kwargs.pop('textcoords', None)
+            kwargs.pop('annotation_clip', None)
             if len(args) >= 4 and all(isinstance(v, (int, float)) for v in args[:4]):
                 return _safe_arrow(*args, **kwargs)
             kwargs.pop('head_width', None)
@@ -1245,6 +1255,11 @@ def execute_matplotlib_code(code: str) -> str:
         setattr(plt, 'RegularPolygon', RegularPolygon)
         setattr(plt, 'Arrow', _safe_arrow)
         setattr(plt, 'FancyArrowPatch', _safe_fancy_arrow_patch)
+        try:
+            import matplotlib.patches as _mpatches
+            setattr(_mpatches, 'FancyArrowPatch', _safe_fancy_arrow_patch)
+        except Exception:
+            pass
 
         safe_globals = {
             '__builtins__': __builtins__,
