@@ -1190,13 +1190,52 @@ def execute_matplotlib_code(code: str) -> str:
                 s += close_c * missing + '\n'
         return s
 
+    def looks_like_narrative_line(line: str) -> bool:
+        stripped = (line or '').strip()
+        if not stripped:
+            return False
+        if re.match(r'^\d+\.\s+[A-Za-z].*$', stripped):
+            return True
+        if re.match(r'^[-*]\s+[A-Za-z].*$', stripped):
+            return True
+        if re.match(r'^[A-Z][A-Z0-9 _-]{3,}$', stripped):
+            return True
+        if stripped.lower().startswith(('conceptual summary', 'materials:', 'summary:')):
+            return True
+        return False
+
     code_to_run = cleaned
-    # Try pre-compilation; on SyntaxError, retry with balanced code
+    # Try pre-compilation; recover from common narrative lines before fallback repair.
     try:
         compile(code_to_run, '<string>', 'exec')
-    except SyntaxError:
-        code_to_run = balance_brackets(cleaned)
-        compile(code_to_run, '<string>', 'exec')
+    except SyntaxError as syn_err:
+        lines = cleaned.splitlines()
+        recovered = False
+
+        # Remove obvious non-Python narrative lines that models sometimes inject.
+        for _ in range(8):
+            lineno = getattr(syn_err, 'lineno', None)
+            if not lineno or lineno < 1 or lineno > len(lines):
+                break
+            bad_line = lines[lineno - 1]
+            if not looks_like_narrative_line(bad_line):
+                break
+            lines.pop(lineno - 1)
+            candidate = "\n".join(lines).strip()
+            if candidate:
+                candidate += "\n"
+            try:
+                compile(candidate, '<string>', 'exec')
+                code_to_run = candidate
+                recovered = True
+                break
+            except SyntaxError as next_err:
+                syn_err = next_err
+                continue
+
+        if not recovered:
+            code_to_run = balance_brackets(cleaned)
+            code_to_run = _compile_with_truncation(code_to_run, '<string>')
 
     # Execute and capture the current figure
     try:
