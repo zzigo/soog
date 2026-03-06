@@ -1,0 +1,232 @@
+# Prompt
+
+Refine this existing organogram and geometry as a new version.
+Keep the same instrument identity and improve only what is requested.
+
+Change Request:
+- describe the corrections/additions for this next version
+
+BASE CONTEXT (for iteration):
+
+## Base Prompt
+[REFACT] add flute holes to the tube and improve organogram as it was before
+
+## Base Conceptual Summary
+### Conceptual Summary
+
+The organogram for the flute with added holes is designed to illustrate both the acoustic and interface components. The central symbol is a vertical rectangle representing a chordophone, specifically a flute. The vertical rectangle is segmented to show the presence of holes, indicated by small round patches. Below, the inferior attachment zone indicates the finger placement mechanism and the method of sound excitation, using a semi-circle to denote breath control. Arrows connect the finger holes to the breath control mechanism, highlighting the interaction during performance. The colors are used to distinguish between the acoustical components (blue for holes) and the interface (black for the finger placement and breath control). The organogram also includes a spectrum simulation to indicate the range of frequencies produced by the instrument.
+
+## Base Materials
+### Materials
+1. 1 PVC tube, 300 mm length, 10 mm diameter, wall thickness 1 mm, material PVC, category aerophone, acoustic target resonance.
+2. 8 Small round stickers, 5 mm diameter, material sticker, color blue, for holes.
+3. 1 Set of fingering marks, 10 mm diameter, material sticker, color black, for finger placement.
+4. 1 Small semi-circle, 20 mm diameter, material sticker, color orange, for breath control.
+
+### Virtual Materials
+1. Texture for PVC tube, material pvc_texture.png.
+2. Texture for stickers, material sticker_texture.png.
+
+
+
+```python
+import trimesh
+from trimesh.creation import cylinder
+
+# Define the flute as a cylinder with holes
+flute_length = 300
+flute_diameter = 10
+flute_wall_thickness = 1
+
+# Create the cylindrical body of the flute
+flute_body = cylinder(half_extents=[flute_diameter / 2, flute_length / 2, flute_wall_thickness / 2])
+
+# Create the holes
+holes = []
+for i in range(
+
+## Base Organogram Code (matplotlib)
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Polygon, Circle, Ellipse, Patch, FancyArrowPatch
+from matplotlib.collections import PatchCollection
+from matplotlib.transforms import Affine2D
+
+fig, ax = plt.subplots(figsize=(10, 6), facecolor='k')
+plt.style.use('dark_background')
+
+# Chordophone symbol
+chordophone = Polygon([(0, 0), (0, 2), (1, 2), (1, 0)], fill=True, color='orange')
+ax.add_patch(chordophone)
+
+# Add holes
+for i in range(1, 7):
+    hole = Circle((i*0.2, 1.5), 0.15, fill=True, color='blue')
+    ax.add_patch(hole)
+
+# Add breath control
+breath_control = Ellipse((0.5, 1.7), 0.4, 0.2, fill=True, color='orange')
+ax.add_patch(breath_control)
+
+# Add finger placement marks
+finger_marks = Circle((0.2, 1.5), 0.15, fill=True, color='black')
+ax.add_patch(finger_marks)
+
+# Connect breath control to holes
+for i in range(1, 7):
+    arrow = FancyArrowPatch((0.5, 1.7), (i*0.2, 1.5), arrowstyle='<|-|>', mutation_scale=20, color='grey')
+    ax.add_patch(arrow)
+
+# Simulate spectrum
+freqs = np.linspace(200, 2000, 100)
+ampl = np.sin(freqs * np.pi / 100)
+plt.plot(freqs, ampl, color='blue')
+
+# Performer position
+performer = Circle((0.1, 1.8), 0.05, fill=True, color='white', alpha=0.5)
+ax.add_patch(performer)
+ax.annotate('Performer', (0.1, 1.6), color='white')
+
+# Spine settings
+ax.spines['bottom'].set_color('black')
+ax.spines['left'].set_color('black')
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_alpha(0.5)
+
+# Grid and ticks
+ax.grid(True, color='grey', alpha=0.3)
+ax.set_xticks([0, 1, 2, 3, 4, 5, 6])
+ax.set_yticks([0, 1, 2])
+
+# Labeling
+ax.text(0.5, 2.1, 'Chordophone', ha='center', fontsize=14, color='white')
+
+plt.show()
+```
+
+## Base Geometry Code (trimesh)
+```python
+import trimesh
+body = trimesh.creation.cylinder(radius=18, height=180, sections=48)
+mouth = trimesh.creation.cylinder(radius=10, height=35, sections=32)
+mouth.apply_translation((0, 0, 107.5))
+base = trimesh.creation.box(extents=(24, 24, 10))
+base.apply_translation((0, 0, -95))
+mesh = trimesh.util.concatenate([body, mouth, base])
+```
+
+# Summary
+
+### Conceptual Summary
+The updated organogram for the flute emphasizes both the acoustic and interface components. The central symbol remains a vertical rectangle, representing the chordophone family. This rectangle is now segmented to include eight small round patches indicating the holes, each marked with a blue color for clarity. Below, the inferior attachment zone features a semi-circle (orange) to denote breath control, with black finger placement marks (circular stickers) connected to the holes via arrows. This design highlights the interaction between the performer's breath and the instrument's holes. A spectrum simulation (blue line) illustrates the range of frequencies produced by the instrument. The colors differentiate between acoustical components and interface elements, enhancing the organogram's readability.
+
+# Materials
+
+### Materials
+1. 1 PVC tube, 300 mm length, 10 mm diameter, wall thickness 1 mm, material PVC, category aerophone, acoustic target resonance.
+2. 8 Small round stickers, 5 mm diameter, material sticker, color blue, for holes.
+3. 1 Set of fingering marks, 10 mm diameter, material sticker, color black, for finger placement.
+4. 1 Small semi-circle, 20 mm diameter, material sticker, color orange, for breath control.
+
+### Python Code for Matplotlib Organogram
+
+
+
+### Python Code for Trimesh 3D Representation
+
+```python
+import trimesh
+from trimesh.creation import cylinder
+
+# Define the flute as a cylinder with holes
+flute_length = 300
+flute_diameter = 10
+flute_wall_thickness = 1
+
+# Create the cylindrical body of the flute
+flute_body = cylinder(half_extents=[flute_diameter / 2, flute_length / 2, flute_wall_thickness / 2])
+
+# Create the holes
+holes = []
+for i in range(1, 9):
+    hole = cylinder(radius
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 56137
+- group_id: hybrid_add_flute
+- version: v11.1
+- source: 20260306-092921_hybrid_add_flute_v1_1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Polygon, Circle, Ellipse, Patch, FancyArrowPatch
+from matplotlib.collections import PatchCollection
+from matplotlib.transforms import Affine2D
+
+fig, ax = plt.subplots(figsize=(10, 6), facecolor='k')
+plt.style.use('dark_background')
+
+# Chordophone symbol
+chordophone = Polygon([(0, 0), (0, 2), (1, 2), (1, 0)], fill=True, color='orange')
+ax.add_patch(chordophone)
+
+# Add holes
+for i in range(1, 9):
+    hole = Circle((i*0.2, 1.5), 0.15, fill=True, color='blue')
+    ax.add_patch(hole)
+
+# Add breath control
+breath_control = Ellipse((0.5, 1.7), 0.4, 0.2, fill=True, color='orange')
+ax.add_patch(breath_control)
+
+# Add finger placement marks
+finger_marks = Circle((0.2, 1.5), 0.15, fill=True, color='black')
+ax.add_patch(finger_marks)
+
+# Connect breath control to holes
+for i in range(1, 9):
+    arrow = FancyArrowPatch((0.5, 1.7), (i*0.2, 1.5), arrowstyle='<|-|>', mutation_scale=20, color='grey')
+    ax.add_patch(arrow)
+
+# Simulate spectrum
+freqs = np.linspace(200, 2000, 100)
+ampl = np.sin(freqs * np.pi / 100)
+plt.plot(freqs, ampl, color='blue')
+
+# Performer position
+performer = Circle((0.1, 1.8), 0.05, fill=True, color='white', alpha=0.5)
+ax.add_patch(performer)
+ax.annotate('Performer', (0.1, 1.6), color='white')
+
+# Spine settings
+ax.spines['bottom'].set_color('black')
+ax.spines['left'].set_color('black')
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_alpha(0.5)
+
+# Grid and ticks
+ax.grid(True, color='grey', alpha=0.3)
+ax.set_xticks([0, 1, 2, 3, 4, 5, 6, 7, 8])
+ax.set_yticks([0, 1, 2])
+
+# Labeling
+ax.text(0.5, 2.1, 'Chordophone', ha='center', fontsize=14, color='white')
+
+plt.show()
+
+# Geometry Code (trimesh)
+
+import trimesh
+body = trimesh.creation.cylinder(radius=18, height=180, sections=48)
+mouth = trimesh.creation.cylinder(radius=10, height=35, sections=32)
+mouth.apply_translation((0, 0, 107.5))
+base = trimesh.creation.box(extents=(24, 24, 10))
+base.apply_translation((0, 0, -95))
+mesh = trimesh.util.concatenate([body, mouth, base])

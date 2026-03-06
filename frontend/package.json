@@ -13,6 +13,7 @@
   "dependencies": {
     "@types/pino": "^7.0.5",
     "@vite-pwa/nuxt": "^0.5.0",
+    "3d-force-graph": "^1.79.1",
     "ace-builds": "^1.37.4",
     "caniuse-lite": "^1.0.30001753",
     "marked": "^17.0.1",

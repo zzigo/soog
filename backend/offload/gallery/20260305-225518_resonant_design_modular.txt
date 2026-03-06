@@ -1,0 +1,64 @@
+# Prompt
+
+Design a resonant modular bamboo flute organogram
+
+# Summary
+
+### Conceptual Summary
+
+The resonant modular bamboo flute organogram designs a flexible instrument capable of various tonal configurations through interchangeable components. The central geometric form is an **Aerophone (Circle)** to represent the fundamental shape of the flute body. Modular sections like chambers and resonators are represented by smaller circles connected via arrows, indicating their attachment points and flow of air. Arrows between the main circle and these modifiable parts highlight the dynamic nature of the instrument setup.
+
+**Colors and Meanings**:
+- **Bamboo Body**: Orange to represent the material.
+- **Resonator Chambers**: Light Yellow for interchangeable components.
+- **Modular Connectors**: Grey to denote flexible attachment points.
+
+**Acoustical Rationale**:
+The modular design allows users to explore different resonances by adding or removing chambers, adjusting their lengths and diameters, thus altering the fundamental frequency. The connection arrows represent airflow paths and indicate how modifications affect sound quality.
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 43819
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Plotting the organogram
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Bamboo flute main circle
+ax.add_patch(plt.Circle((2.5, 4), 1.2, color='orange'))
+
+# Resonator chamber A and B circles
+ax.add_patch(plt.Circle((3.5, 4), 0.6, color='lightyellow'))
+ax.add_patch(plt.Circle((4.5, 4), 0.9, color='lightyellow'))
+
+# Modular connectors
+connector1 = plt.Circle((3.2, 3.8), 0.15, color='grey')
+connector2 = plt.Circle((4.8, 3.8), 0.15, color='grey')
+ax.add_patch(connector1)
+ax.add_patch(connector2)
+
+# Arrows for airflow
+arrow1 = plt.FancyArrowPatch((2.5, 3.9), (3.5, 4), arrowstyle='->', lw=2.5, mutation_scale=20, color='white')
+arrow2 = plt.FancyArrowPatch((2.5, 3.9), (4.5, 4), arrowstyle='->', lw=2.5, mutation_scale=20, color='white')
+
+ax.add_patch(arrow1)
+ax.add_patch(arrow2)
+
+# Labels for components
+ax.text(3.6, 4.3, 'Chamber A', ha='center', va='bottom', color='black')
+ax.text(4.6, 4.3, 'Chamber B', ha='center', va='bottom', color='black')
+
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_color('black')
+ax.spines['bottom'].set_color('black')
+ax.grid(True, color='grey', alpha=0.3)
+
+plt.gca().patch.set_alpha(0)  # Transparent background

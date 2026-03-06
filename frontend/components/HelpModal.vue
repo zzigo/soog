@@ -74,6 +74,15 @@
             <li>On mobile devices, use the "Evaluate" button at the bottom of the screen</li>
           </ul>
 
+          <h4>Reversioning:</h4>
+          <ul>
+            <li>Start your prompt with <kbd>*</kbd> or <kbd>+</kbd> to trigger reversion mode.</li>
+            <li>You can also use a header like <kbd>[REFACT source=&lt;basename&gt; group=&lt;group_id&gt; title=&lt;name&gt;]</kbd>.</li>
+            <li>Use <strong>Gallery → Load Code</strong> to preload previous organogram + geometry, then append your corrections.</li>
+            <li>During generation, the processing HUD will show <code>[reversion]</code> when reversion mode is active.</li>
+            <li>New iterations are saved in the same grouped name with incremental versions (<code>1, 2, 3...</code>).</li>
+          </ul>
+
           <p class="tip">
             <strong>Tip:</strong> Start by describing an instrument or a combination of instruments you'd like to visualize. 
             SOOG will help you create an organogram representation.

@@ -1,0 +1,121 @@
+# Prompt
+
+refact the geometry based on organogram
+
+# Summary
+
+### Conceptual Summary
+
+The organogram design for this speculative instrument integrates traditional organological principles with innovative geometrical and acoustic enhancements. The central symbol represents a hybrid instrument, combining elements of idiophones, aerophones, and electronophones. The base is a cube, signifying its versatile and robust nature, with internal segmentation indicating the presence of strings and membranes. Arrows point to a performer, emphasizing the direct interaction. The bottom zone includes a contact interface (hammer) and support (lap), while the lateral zones encode cultural and technical metadata. Materials like wood and plastic are used for their acoustic properties, with the wood providing warmth and the plastic offering lightweight stability. The instrument’s geometry is designed to produce a rich, balanced sound with strong projection and intricate overtones.
+
+# Materials
+
+### Materials
+1. 1 PVC tube, 30 cm length, 2.5 cm diameter
+2. 0.5 cm wood, 15 cm x 15 cm x 15 cm
+3. 0.2 cm plastic, 10 cm x 10 cm x 10 cm
+4. 0.1 cm copper, 5 cm x 5 cm x 5 cm
+5. 1 hammer, 2 cm diameter, 10 cm length
+6. 10 strings, 1 mm diameter, 50 cm length
+7. 1 membrane, 10 cm diameter
+
+### Virtual Materials
+1. Texture for wood material
+2. Texture for plastic material
+3. Material shader for copper
+4. Sample library for strings and membranes
+
+
+
+```python
+from trimesh import Trimesh
+import trimesh.creation as tc
+
+# Define organogram components
+cube = tc.box(half_extents=[2.5, 2.5, 2.5])
+tetrahedron = tc.tetrahedron()
+cylinder = tc.cylinder(radius=0.5, length=10)
+cone = tc.cone(radius=1, height=5)
+membrane = tc.disk(radius=5, thickness=0.1)
+
+# Map: cube -> box -> stable assembly
+# Map: tetrahedron -> tetrahedron -> pointed transients
+# Map: cylinder -> cylinder -> elongated thin components
+# Map: cone -> cone -> conic radiation
+# Map: membrane -> disk -> distributed cavity pathways
+
+# Combine components
+mesh = cube + tetrahedron + cylinder + cone + membrane
+mesh.apply_translation([10, 0, 0])
+
+# Assign materials
+# cube.material = 'wood
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 159758
+- group_id: hybrid_refact_geometry
+- version: v1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+import numpy as np
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.set_aspect('equal')
+
+# Central symbol (cube)
+cube = plt.Rectangle((0, 0), 5, 5, color='orange', alpha=0.5)
+ax.add_patch(cube)
+
+# Internal segmentation
+plt.plot([1, 2, 3, 4], [2, 3, 4, 5], color='blue', linewidth=2.5, alpha=0.7)
+
+# Arrows
+ax.annotate("", xy=(2.5, 2.5), xytext=(3.5, 2.5), arrowprops=dict(arrowstyle="->", color='white', lw=2))
+ax.annotate("", xy=(3.5, 2.5), xytext=(3.5, 3.5), arrowprops=dict(arrowstyle="->", color='white', lw=2))
+
+# Performer position
+plt.plot(2.5, 2.5, "o", color='white', markersize=5)
+plt.text(2.5, 2.2, "Performer", color='white')
+
+# Material and component labels
+plt.text(2, 2, "Wood", color='white')
+plt.text(2, 3, "Plastic", color='white')
+plt.text(3, 4, "Strings", color='blue')
+plt.text(4, 4, "Membrane", color='pink')
+
+# Color and number indicators
+plt.text(2.5, 5, "10", color='blue')
+plt.text(3.5, 5, "1", color='pink')
+
+# Axes and grid
+ax.set_xlim([0, 5])
+ax.set_ylim([0, 5])
+ax.grid(True, color='grey', alpha=0.3)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_color('black')
+ax.spines['bottom'].set_color('black')
+ax.set_axis_off()
+
+plt.show()
+
+# Geometry Code (trimesh)
+
+import numpy as np
+import trimesh
+
+# map: electronic core -> chassis box, transducers -> conical emitters, control node -> sphere
+chassis = trimesh.creation.box(extents=(159.26, 77.33, 33.83))
+horn_l = trimesh.creation.cone(radius=16.52, height=59.63, sections=36)
+horn_l.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2, [0, 1, 0]))
+horn_l.apply_translation((86.0, 21.65, 0))
+horn_r = horn_l.copy()
+horn_r.apply_translation((0, -43.3, 0))
+control = trimesh.creation.icosphere(subdivisions=2, radius=7.73)
+control.apply_translation((-44.59, 0, 24.36))
+mesh = trimesh.util.concatenate([chassis, horn_l, horn_r, control])

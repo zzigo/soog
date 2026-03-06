@@ -6,8 +6,6 @@
 import {
   onMounted,
   ref,
-  defineExpose,
-  defineEmits,
   onUnmounted,
   nextTick,
 } from "vue";
@@ -121,6 +119,13 @@ const addToEditor = (content, type = "text") => {
   });
 };
 
+const setEditorContent = (content = "") => {
+  if (!aceEditorInstance) return;
+  aceEditorInstance.session.setValue(content);
+  aceEditorInstance.clearSelection();
+  aceEditorInstance.gotoLine(1, 0, true);
+};
+
 const clearEditor = () => {
   if (aceEditorInstance) {
     aceEditorInstance.session.setValue("");
@@ -143,6 +148,7 @@ defineExpose({
   aceEditor: () => aceEditorInstance,
   clearEditor,
   addToHistory,
+  setEditorContent,
 });
 
 onMounted(async () => {

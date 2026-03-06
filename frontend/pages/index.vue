@@ -18,6 +18,18 @@
     <!-- Right column hosts HUD and Results -->
     <div class="right-column" :style="{ width: (100 - leftWidth) + '%' }">
       <div class="hud">
+      <span class="model-name" :title="currentModel || ''">{{ shortModelLabel }}</span>
+      <button
+        @click="cycleOllamaModel"
+        class="icon-button model-cycle-button"
+        :disabled="modelSwitching || ollamaModels.length < 2"
+        :title="`Model: ${currentModel || 'loading...'} (click to cycle)`"
+      >
+        <svg class="icon" viewBox="0 0 24 24">
+          <path fill="currentColor" d="M12,4V1L8,5L12,9V6A6,6 0 0,1 18,12C18,13 17.75,13.96 17.3,14.8L18.76,16.26C19.53,15.05 20,13.57 20,12A8,8 0 0,0 12,4M6.7,9.2L5.24,7.74C4.47,8.95 4,10.43 4,12A8,8 0 0,0 12,20V23L16,19L12,15V18A6,6 0 0,1 6,12C6,11 6.25,10.04 6.7,9.2Z"/>
+        </svg>
+      </button>
+
       <button @click="toggleShowCode" class="icon-button" :title="showCode ? 'Hide Code' : 'Show Code'">
         <svg v-if="showCode" class="icon" viewBox="0 0 24 24">
           <path fill="currentColor" d="M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9M12,4.5C17,4.5 21.27,7.61 23,12C21.27,16.39 17,19.5 12,19.5C7,19.5 2.73,16.39 1,12C2.73,7.61 7,4.5 12,4.5M3.18,12C4.83,15.36 8.24,17.5 12,17.5C15.76,17.5 19.17,15.36 20.82,12C19.17,8.64 15.76,6.5 12,6.5C8.24,6.5 4.83,8.64 3.18,12Z" />
@@ -67,56 +79,55 @@
 </button>
       </div>
       
-  <!-- Results Panel occupies the rest of right column -->
-    <Transition
-      enter-active-class="fadeIn"
-      leave-active-class="fadeOut"
-      :duration="300"
-      mode="out-in"
-    > 
-       <div v-if="hasResults" class="results-panel" :key="transitionKey">
-        <div class="results-header">
-          <div class="actions">
-            <a v-if="stlUrl" :href="stlUrl" class="download-btn" download>
-              Download STL
-            </a>
-            <button @click="expandResults = !expandResults" class="icon-button" :title="expandResults ? 'Minimize' : 'Expand'">
-              <svg v-if="expandResults" class="icon" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" />
-              </svg>
-              <svg v-else class="icon" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M7,14L12,9L17,14H7Z" />
-              </svg>
-            </button>
-          </div>
-        </div>
-        <div v-if="expandResults" class="results-content">
-          <!-- Image Tab -->
-          <div v-if="plotImage" class="tab-section">
-            <img 
-              :src="`data:image/png;base64,${plotImage}`" 
-              alt="Plot"
-              @click="showLightbox = true"
-              class="plot-image"
-            />
-          </div>
-          
-          <!-- 3D Model Tab -->
-          <div v-if="stlUrl" class="tab-section">
-            <ClientOnly>
-              <div class="stl-viewer-container">
-                <StlViewer :url="stlUrl" />
+      <Transition
+        enter-active-class="fadeIn"
+        leave-active-class="fadeOut"
+        :duration="300"
+        mode="out-in"
+      >
+        <div v-if="hasResults" class="results-panel" :key="transitionKey">
+          <div class="results-split">
+            <section class="panel panel-organogram">
+              <h3 class="section-title">ORGANOGRAM</h3>
+              <img
+                v-if="plotImage"
+                :src="`data:image/png;base64,${plotImage}`"
+                alt="Organogram"
+                @click="showLightbox = true"
+                class="plot-image"
+              />
+            </section>
+
+            <section class="panel panel-text">
+              <div class="section-header">
+                <h3 class="section-title">CONCEPTUAL SUMMARY</h3>
+                <span v-if="responseMetaText" class="section-meta">{{ responseMetaText }}</span>
               </div>
-            </ClientOnly>
-          </div>
-          
-          <!-- Summary Tab -->
-          <div v-if="summary" class="tab-section">
-            <div class="summary-content" v-html="summaryHtml"></div>
+              <div class="summary-content" v-html="summaryHtml"></div>
+              <div class="section-header materials-title">
+                <h3 class="section-title">MATERIALS</h3>
+                <span v-if="responseMetaText" class="section-meta">{{ responseMetaText }}</span>
+              </div>
+              <pre class="materials-list">{{ materialsText }}</pre>
+            </section>
+
+            <section class="panel panel-stl">
+              <div class="section-header">
+                <h3 class="section-title">GEOMETRY</h3>
+                <button v-if="stlUrl" @click="downloadCurrentStl" class="download-btn">
+                  Download STL
+                </button>
+              </div>
+              <ClientOnly>
+                <div v-if="stlUrl" class="stl-viewer-container">
+                  <StlViewer :url="stlUrl" />
+                </div>
+                <div v-else class="stl-placeholder">No STL geometry generated for this response.</div>
+              </ClientOnly>
+            </section>
           </div>
         </div>
-      </div>
-    </Transition>
+      </Transition>
     </div>
 
     <Transition
@@ -140,7 +151,7 @@
     </Transition>
     <div class="footer">
       <div v-if="loading" class="loading">
-        Processing... {{ Math.round(progress) }}%
+        {{ loadingStatus }}
       </div>
       <button 
         v-if="isMobileOrTablet" 
@@ -155,7 +166,7 @@
     <HelpModal v-model="showHelp" />
     <GalleryModal 
       v-model="showGallery" 
-      @load-code="code => { if (editorRef?.value) { editorRef.value.clearEditor(); editorRef.value.addToEditor(code, 'code') } }" 
+      @load-code="loadCodeFromGallery"
     />
   </div>
 </template>
@@ -186,41 +197,64 @@ let startX = 0;
 let startLeft = 50;
 const loading = ref(false);
 const progress = ref(0);
+const elapsedMs = ref(0);
+const responseTimesMs = ref([]);
+const isReversioning = ref(false);
 const error = ref(null);
 const plotImage = ref(null);
 const summary = ref(null);
-const generatedCode = ref(null);
+const organogramCode = ref('');
+const geometryCode = ref('');
 const stlUrl = ref(null);
-const materials = ref([]);
 const materialsText = ref('');
-const virtualKeywords = [
-  'texture','shader','sample','sampling','synthesis','granular','wavetable','fm','additive','subtractive','midi','vst','plugin','max/msp','pure data','supercollider','osc','convolution','impulse response','ir','reverb','impulse','unity','unreal','game engine','shader graph','material graph'
-];
-const materialsTextDisplay = computed(() => {
-  if (!materialsText.value) return '';
-  // Basic highlight: wrap lines containing virtual keywords
-  const lines = materialsText.value.split(/\n+/).map(ln => {
-    const lower = ln.toLowerCase();
-    const isVirtual = virtualKeywords.some(k => lower.includes(k));
-    return isVirtual ? `<span class="mat-virtual">${ln}</span>` : `<span class="mat-physical">${ln}</span>`;
-  });
-  return lines.join('\n');
-});
+const ollamaModels = ref([]);
+const currentModel = ref('');
+const modelSwitching = ref(false);
+const responseModel = ref('');
+const responseElapsedMs = ref(0);
 
 const summaryHtml = computed(() => {
   if (!summary.value) return '';
   return marked(summary.value);
 });
-const activeTab = ref('plot');
-const expandResults = ref(true);
 const showCode = ref(true);
 const showHelp = ref(false);
 const showGallery = ref(false);
 const transitionKey = ref(0);
 const isMobileOrTablet = ref(false);
 const showLightbox = ref(false);
+const RESPONSE_TIMES_KEY = 'soog_response_times_ms';
+const MAX_RESPONSE_SAMPLES = 20;
 
-const hasResults = computed(() => !!(plotImage.value || summary.value || generatedCode.value || stlUrl.value));
+const averageResponseMs = computed(() => {
+  if (!responseTimesMs.value.length) return 20000;
+  const total = responseTimesMs.value.reduce((sum, ms) => sum + ms, 0);
+  return total / responseTimesMs.value.length;
+});
+
+const loadingStatus = computed(() => {
+  const pct = Math.round(progress.value);
+  const elapsedSec = (elapsedMs.value / 1000).toFixed(1);
+  const avgSec = (averageResponseMs.value / 1000).toFixed(1);
+  const etaMs = Math.max(0, averageResponseMs.value - elapsedMs.value);
+  const etaSec = (etaMs / 1000).toFixed(1);
+  const prefix = isReversioning.value ? '[reversion] ' : '';
+  return `${prefix}Processing... ${pct}% | ${elapsedSec}s elapsed | avg ${avgSec}s | ETA ${etaSec}s`;
+});
+
+const shortModelLabel = computed(() => {
+  const model = currentModel.value || 'model?';
+  return model.length > 22 ? `${model.slice(0, 22)}...` : model;
+});
+
+const responseMetaText = computed(() => {
+  const parts = [];
+  if (responseModel.value) parts.push(`model: ${responseModel.value}`);
+  if (responseElapsedMs.value > 0) parts.push(`elapsed: ${(responseElapsedMs.value / 1000).toFixed(1)}s`);
+  return parts.join(' | ');
+});
+
+const hasResults = computed(() => !!(plotImage.value || summary.value || materialsText.value || stlUrl.value));
 
 const checkDevice = () => {
   isMobileOrTablet.value = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -233,6 +267,8 @@ const handleEscapeKey = (e) => {
 };
 
 onMounted(() => {
+  loadResponseTimeHistory();
+  fetchOllamaModels();
   checkDevice();
   window.addEventListener('resize', checkDevice);
   window.addEventListener('keydown', handleEscapeKey);
@@ -243,6 +279,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  clearInterval(progressInterval);
   window.removeEventListener('resize', checkDevice);
   window.removeEventListener('keydown', handleEscapeKey);
   window.removeEventListener('mousemove', onDrag);
@@ -314,29 +351,332 @@ const handleMobileEvaluate = () => {
   }
 };
 
-// Progress simulation
+const loadResponseTimeHistory = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(RESPONSE_TIMES_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    responseTimesMs.value = parsed
+      .filter((n) => Number.isFinite(n) && n > 0 && n < 10 * 60 * 1000)
+      .slice(-MAX_RESPONSE_SAMPLES);
+  } catch {
+    responseTimesMs.value = [];
+  }
+};
+
+const saveResponseTimeHistory = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(RESPONSE_TIMES_KEY, JSON.stringify(responseTimesMs.value.slice(-MAX_RESPONSE_SAMPLES)));
+  } catch {
+    // ignore storage write errors
+  }
+};
+
+const registerResponseTime = (ms) => {
+  if (!Number.isFinite(ms) || ms <= 0) return;
+  responseTimesMs.value.push(ms);
+  if (responseTimesMs.value.length > MAX_RESPONSE_SAMPLES) {
+    responseTimesMs.value = responseTimesMs.value.slice(-MAX_RESPONSE_SAMPLES);
+  }
+  saveResponseTimeHistory();
+};
+
+// Progress based on real elapsed time and rolling average
 let progressInterval;
+let requestStartAt = 0;
 const startProgress = () => {
+  clearInterval(progressInterval);
+  requestStartAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  elapsedMs.value = 0;
   progress.value = 0;
   progressInterval = setInterval(() => {
-    if (progress.value < 90) {
-      progress.value += Math.random() * 15;
-      if (progress.value > 90) progress.value = 90;
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    elapsedMs.value = Math.max(0, now - requestStartAt);
+
+    // Keep progress realistic: approach ~92% by average time, then slowly creep to 98%.
+    const avg = Math.max(3000, averageResponseMs.value);
+    const ratio = elapsedMs.value / avg;
+    if (ratio <= 1) {
+      progress.value = Math.min(92, ratio * 92);
+    } else {
+      const over = (elapsedMs.value - avg) / avg;
+      progress.value = Math.min(98, 92 + Math.log1p(over) * 6);
     }
-  }, 1200);
+  }, 200);
 };
 
 const completeProgress = () => {
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  if (requestStartAt > 0) {
+    elapsedMs.value = Math.max(0, now - requestStartAt);
+    registerResponseTime(elapsedMs.value);
+  }
   clearInterval(progressInterval);
   progress.value = 100;
   setTimeout(() => {
     progress.value = 0;
+    elapsedMs.value = 0;
+    requestStartAt = 0;
   }, 500);
 };
 
 // Runtime configuration
 const config = useRuntimeConfig();
-const apiBase = ref(config.public.apiBase || 'https://soog.onrender.com/api');
+const apiBase = ref(config.public.apiBase || 'http://127.0.0.1:10000/api');
+
+function formatGeneratedCode(plotCode, stlCode) {
+  const sections = [];
+  if (plotCode && plotCode.trim()) {
+    sections.push([
+      "## organogram (matplotlib)",
+      "```python",
+      plotCode.trim(),
+      "```"
+    ].join('\n'));
+  }
+  if (stlCode && stlCode.trim()) {
+    sections.push([
+      "## geometry (trimesh)",
+      "```python",
+      stlCode.trim(),
+      "```"
+    ].join('\n'));
+  }
+  return sections.join('\n\n');
+}
+
+function safeToken(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function inferTitleToken(item) {
+  const explicit = safeToken(item?.title_slug || item?.title);
+  if (explicit) return explicit;
+  const basename = String(item?.basename || '');
+  if (!basename) return '';
+  const rawTail = basename.split('_').slice(1).join('_');
+  if (!rawTail) return '';
+  const withoutVersion = rawTail.replace(/_v\d+(?:_\d+)?(?:_\d+)?$/i, '');
+  return safeToken(withoutVersion || rawTail);
+}
+
+function resolveAssetUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  if (apiBase.value.endsWith('/api') && url.startsWith('/api/')) {
+    return apiBase.value + url.substring(4);
+  }
+  return apiBase.value + url;
+}
+
+function stlFilenameFromUrl(url, fallback = 'model.stl') {
+  try {
+    if (!url) return fallback;
+    const pathname = new URL(resolveAssetUrl(url), window.location.origin).pathname;
+    const last = pathname.split('/').pop() || '';
+    if (last.toLowerCase().endsWith('.stl')) return last;
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function downloadCurrentStl() {
+  if (!stlUrl.value) return;
+  try {
+    const response = await fetch(stlUrl.value);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload?.error || `STL download failed (${response.status})`);
+    }
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = stlFilenameFromUrl(stlUrl.value);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch (e) {
+    error.value = e?.message || 'STL download failed';
+  }
+}
+
+async function fetchImageBase64(url) {
+  const resolved = resolveAssetUrl(url);
+  if (!resolved || typeof window === 'undefined') return null;
+  try {
+    const response = await fetch(resolved);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+        const parts = dataUrl.split(',');
+        resolve(parts.length > 1 ? parts[1] : null);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+function buildRefactorDraft(item) {
+  if (!item || typeof item !== 'object') return '';
+
+  const source = safeToken(item.basename);
+  const group = safeToken(item.group_id || item.basename || item.title_slug || item.title);
+  const title = inferTitleToken(item);
+
+  const headerTokens = ['REFACT'];
+  if (source) headerTokens.push(`source=${source}`);
+  if (group) headerTokens.push(`group=${group}`);
+  if (title) headerTokens.push(`title=${title}`);
+  const header = `[${headerTokens.join(' ')}]`;
+
+  const summaryText = (item.summary || item.answer || '').trim();
+  const materials = (item.materials_text || '').trim();
+  const plotCode = (item.plot_code || item.code || '').trim();
+  const stlCode = (item.stl_code || '').trim();
+
+  const lines = [
+    header,
+    'Refine this existing organogram and geometry as a new version.',
+    'Keep the same instrument identity and improve only what is requested.',
+    '',
+    'Change Request:',
+    '- describe the corrections/additions for this next version',
+    '',
+    'BASE CONTEXT (for iteration):',
+    '',
+    '## Base Prompt',
+    (item.prompt || '(no stored prompt)').trim(),
+    '',
+    '## Base Conceptual Summary',
+    summaryText || '(no stored summary)',
+    '',
+    '## Base Materials',
+    materials || '(no stored materials)',
+    ''
+  ];
+
+  if (plotCode) {
+    lines.push('## Base Organogram Code (matplotlib)');
+    lines.push('```python');
+    lines.push(plotCode);
+    lines.push('```');
+    lines.push('');
+  }
+
+  if (stlCode) {
+    lines.push('## Base Geometry Code (trimesh)');
+    lines.push('```python');
+    lines.push(stlCode);
+    lines.push('```');
+    lines.push('');
+  }
+
+  return `${lines.join('\n').trim()}\n`;
+}
+
+async function loadCodeFromGallery(item) {
+  if (!item || !editorRef.value) return;
+
+  const draft = buildRefactorDraft(item);
+  if (editorRef.value.setEditorContent) {
+    editorRef.value.setEditorContent(draft);
+  } else {
+    editorRef.value.clearEditor();
+    editorRef.value.addToEditor(draft, 'code');
+  }
+  if (editorRef.value.addToHistory) {
+    editorRef.value.addToHistory(draft);
+  }
+
+  summary.value = item.summary || item.answer || null;
+  materialsText.value = item.materials_text || '';
+  organogramCode.value = (item.plot_code || item.code || '').trim();
+  geometryCode.value = (item.stl_code || '').trim();
+  responseModel.value = (item.llm_model || '').trim();
+  responseElapsedMs.value = Number.isFinite(Number(item.elapsed_ms))
+    ? Number(item.elapsed_ms)
+    : 0;
+
+  stlUrl.value = item.stl_url ? resolveAssetUrl(item.stl_url) : null;
+  plotImage.value = item.image_url ? await fetchImageBase64(item.image_url) : null;
+  showGallery.value = false;
+}
+
+async function fetchOllamaModels() {
+  try {
+    const response = await fetch(`${apiBase.value}/ollama/models`, {
+      headers: { 'Accept': 'application/json' }
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload?.ok) {
+      return;
+    }
+    ollamaModels.value = Array.isArray(payload.models) ? payload.models : [];
+    currentModel.value = payload.current_model || '';
+  } catch {
+    // keep UI quiet when models endpoint isn't available
+  }
+}
+
+async function cycleOllamaModel() {
+  if (modelSwitching.value) return;
+  modelSwitching.value = true;
+  try {
+    if (!ollamaModels.value.length) {
+      await fetchOllamaModels();
+    }
+    if (ollamaModels.value.length < 2) {
+      error.value = 'Need at least 2 installed Ollama models to cycle.';
+      return;
+    }
+    const currentIdx = Math.max(0, ollamaModels.value.indexOf(currentModel.value));
+    const nextIdx = (currentIdx + 1) % ollamaModels.value.length;
+    const nextModel = ollamaModels.value[nextIdx];
+
+    const response = await fetch(`${apiBase.value}/ollama/model`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ model: nextModel })
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error || `Failed to switch model (${response.status})`);
+    }
+    currentModel.value = payload.model || nextModel;
+    error.value = null;
+  } catch (e) {
+    error.value = e?.message || 'Model switch failed.';
+  } finally {
+    modelSwitching.value = false;
+  }
+}
+
+function isRefactorPrompt(text) {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) return false;
+  const first = trimmed.split('\n')[0].trim();
+  if (!first) return false;
+  return first.startsWith('[REFACT') || first.startsWith('*') || first.startsWith('+');
+}
 
 // Handle evaluation of selected text
 const handleEvaluate = async (selectedText) => {
@@ -345,7 +685,9 @@ const handleEvaluate = async (selectedText) => {
     return;
   }
 
+  const requestStartedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   loading.value = true;
+  isReversioning.value = isRefactorPrompt(selectedText);
   error.value = null;
   startProgress();
   startProcessing();
@@ -411,110 +753,59 @@ const handleEvaluate = async (selectedText) => {
   }
 
   try {
-    let data = await callOnce();
-    
-  // Reset results
-  plotImage.value = null;
+    const data = await callOnce();
+
+    // Reset results
+    plotImage.value = null;
     summary.value = null;
-    generatedCode.value = null;
+    organogramCode.value = '';
+    geometryCode.value = '';
     stlUrl.value = null;
-  materials.value = [];
-  materialsText.value = '';
-    
-    // Extract results from response
+    materialsText.value = '';
+    responseModel.value = '';
+    responseElapsedMs.value = 0;
+
+    if (!data.image) {
+      throw new Error('Backend did not return an organogram image. Generation aborted.');
+    }
+    plotImage.value = data.image;
+
     if (data.summary) summary.value = data.summary;
-    
-    if (data.type === 'plot' || data.type === 'stl') {
-      if (data.content) {
-        generatedCode.value = data.content;
-      }
-      if (data.image) {
-        plotImage.value = data.image;
-      }
-      if (data.gallery?.stl_url) {
-        // Convert relative URL to absolute
-        const url = data.gallery.stl_url;
-        if (url.startsWith('http')) {
-          stlUrl.value = url;
-        } else if (apiBase.value.endsWith('/api') && url.startsWith('/api/')) {
-          stlUrl.value = apiBase.value + url.substring(4);
-        } else {
-          stlUrl.value = apiBase.value + url;
-        }
-      }
+    responseModel.value = (data.llm_model || currentModel.value || '').trim();
+    const requestEndedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const clientElapsed = Math.max(0, requestEndedAt - requestStartedAt);
+    responseElapsedMs.value = Number.isFinite(Number(data.elapsed_ms))
+      ? Number(data.elapsed_ms)
+      : Math.round(clientElapsed);
 
-      // Materials: prefer explicit field, else derive from summary
-      if (typeof data.materials === 'string' && data.materials.trim()) {
-        materialsText.value = data.materials.trim();
-      } else if (Array.isArray(data.materials) && data.materials.length) {
-        materialsText.value = data.materials.map(x => (typeof x === 'string' ? x : (x.name || ''))).filter(Boolean).join('\n');
-      } else if (summary.value) {
-        const list = extractMaterials(summary.value).map(m => `- ${m.name}`);
-        materialsText.value = list.join('\n');
-      }
-      
-      // Auto-select appropriate tab
-      if (plotImage.value) {
-        activeTab.value = 'plot';
-      } else if (stlUrl.value) {
-        activeTab.value = 'stl';
-      } else if (materialsText.value) {
-        activeTab.value = 'materials';
-      } else if (summary.value) {
-        activeTab.value = 'summary';
-      } else if (generatedCode.value) {
-        activeTab.value = 'code';
-      }
-      
-      // Optionally add code to editor
-      if (showCode.value && data.content) {
-        editorRef.value.addToEditor(data.content, data.type);
-      }
-      
-      transitionKey.value++; // Increment transition key for new results
-    } else if (data.type === 'code') {
-      generatedCode.value = data.content;
-      activeTab.value = 'code';
-      if (showCode.value) {
-        editorRef.value.addToEditor(data.content, 'code');
-      }
-    } else if (data.type === 'text') {
-      editorRef.value.addToEditor(data.content, 'text');
-    } else {
-      editorRef.value.addToEditor('Unexpected response type.', 'text');
+    organogramCode.value = (data.plot_code || data.content || '').trim();
+    geometryCode.value = (data.stl_code || '').trim();
+
+    stlUrl.value = data.gallery?.stl_url ? resolveAssetUrl(data.gallery.stl_url) : null;
+
+    if (typeof data.materials === 'string' && data.materials.trim()) {
+      materialsText.value = data.materials.trim();
+    } else if (Array.isArray(data.materials) && data.materials.length) {
+      materialsText.value = data.materials.map(x => (typeof x === 'string' ? x : (x.name || ''))).filter(Boolean).join('\n');
+    } else if (summary.value) {
+      const list = extractMaterials(summary.value).map(m => `- ${m.name}`);
+      materialsText.value = list.join('\n');
     }
 
-    // Auto-retry once if nothing useful returned
-    if (!plotImage.value && !stlUrl.value && !summary.value && !generatedCode.value) {
-      try {
-        const retry = await callOnce();
-        // shallow merge: prefer any missing fields
-        if (retry.summary && !summary.value) summary.value = retry.summary;
-        if (retry.type === 'plot' && retry.image && !plotImage.value) plotImage.value = retry.image;
-        if (retry.gallery?.stl_url && !stlUrl.value) {
-          const url = retry.gallery.stl_url;
-          stlUrl.value = url.startsWith('http') ? url : (apiBase.value.endsWith('/api') && url.startsWith('/api/') ? apiBase.value + url.substring(4) : apiBase.value + url);
-        }
-        if (retry.content && !generatedCode.value) generatedCode.value = retry.content;
-        if (!materialsText.value && summary.value) {
-          const list = extractMaterials(summary.value).map(m => `- ${m.name}`);
-          materialsText.value = list.join('\n');
-        }
-        if (plotImage.value) activeTab.value = 'plot';
-        else if (stlUrl.value) activeTab.value = 'stl';
-  else if (materialsText.value) activeTab.value = 'materials';
-        else if (summary.value) activeTab.value = 'summary';
-        else if (generatedCode.value) activeTab.value = 'code';
-      } catch (e) {
-        // ignore retry error, keep original error handling
-      }
+    // Append structured code sections in editor (left panel)
+    const codeBundle = formatGeneratedCode(organogramCode.value, geometryCode.value);
+    if (showCode.value && codeBundle && editorRef.value) {
+      editorRef.value.addToEditor(codeBundle, 'code');
     }
+
+    transitionKey.value++;
   } catch (err) {
     console.error(err);
     error.value = err.message;
   } finally {
     completeProgress();
     loading.value = false;
+    isReversioning.value = false;
     completeProcessing();
   }
 };
@@ -538,13 +829,18 @@ function goToSomap() {
   if (route.path !== '/somap') router.push('/somap')
 }
 
+function isAltDigitShortcut(event, digit) {
+  return event.altKey && (event.code === `Digit${digit}` || event.key === String(digit))
+}
+
 // Shortcuts Alt+1 (Soog), Alt+2 (Somap)
 function handleToggleShortcuts(e) {
-  if (e.altKey && e.key === '1') {
+  if (isAltDigitShortcut(e, 1)) {
     goToSoog()
     e.preventDefault()
+    return
   }
-  if (e.altKey && e.key === '2') {
+  if (isAltDigitShortcut(e, 2)) {
     goToSomap()
     e.preventDefault()
   }
@@ -587,9 +883,8 @@ async function handleGalleryArrows(e) {
     galleryIndex = Math.min(galleryItems.length - 1, galleryIndex + 1)
   }
   const item = galleryItems[galleryIndex]
-  if (item?.code && editorRef.value) {
-    editorRef.value.clearEditor()
-    editorRef.value.addToEditor(item.code, 'code')
+  if (item && editorRef.value) {
+    await loadCodeFromGallery(item)
   }
 }
 
@@ -607,6 +902,8 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   overflow: hidden;
   position: relative;
   gap: 0;
+  padding: 0 !important;
+  margin: 0;
 }
 
 .left-column {
@@ -614,6 +911,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   height: 100vh;
   display: block;
   min-width: 0;
+  overflow: hidden;
 }
 
 .right-column {
@@ -625,48 +923,87 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
 }
 
 .divider {
-  width: 6px;
+  width: 1px;
   cursor: col-resize;
-  background: rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.25);
   z-index: 5;
   flex-shrink: 0;
+  position: relative;
+}
+
+.divider::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+  background: transparent;
 }
 
 .editor-wrapper {
   flex: 1;
+  width: 100%;
   height: 100%;
   position: relative;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+.left-column :deep(.ace_editor),
+.left-column :deep(.ace_scroller),
+.left-column :deep(.ace_content) {
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .hud {
-  padding: 10px 16px;
+  padding: 8px 16px;
   display: flex;
   gap: 8px;
   justify-content: flex-end;
   align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
 }
 
 .icon-button {
   background: transparent;
   border: none;
   color: white;
-  padding: 8px;
+  padding: 6px;
   cursor: pointer;
-  border-radius: 50%;
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.3s;
+  transition: opacity 0.2s;
 }
 
 .icon-button:hover {
-  background: rgba(255, 255, 255, 0.1);
+  opacity: 0.7;
 }
 
 .icon-button.active,
 .icon-button:hover {
   opacity: 1;
-  filter: drop-shadow(0 0 4px #fff);
+  filter: none;
+}
+
+.icon-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.model-name {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-right: 2px;
+  letter-spacing: 0.03em;
+}
+
+.model-cycle-button {
+  margin-right: 2px;
 }
 
 .icon {
@@ -782,108 +1119,123 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   overflow: hidden;
 }
 
-.results-header {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  padding: 12px 20px;
-  background: #000;
-  position: sticky;
-  top: 0;
-  z-index: 2;
-}
-
-.results-content {
+.results-split {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  background: #000;
-  padding: 16px;
-  scrollbar-gutter: stable both-edges;
-  min-width: 0;
+  background: transparent;
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
-  align-content: start;
+  grid-template-rows: minmax(260px, 1.1fr) minmax(260px, 0.95fr) minmax(260px, 1fr);
+  gap: 0;
+  padding: 0 16px 88px 16px;
+  box-sizing: border-box;
 }
 
-.tab-section {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 3%;
-  padding: 24px;
-  min-height: 250px;
+.panel {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 12px 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panel + .panel {
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.section-title {
+  margin: 0 0 10px 0;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 400;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.section-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.58);
+  white-space: nowrap;
+}
+
+.panel-organogram {
+  justify-content: center;
+}
+
+.panel-text {
+  overflow: auto;
+}
+
+.materials-title {
+  margin-top: 14px;
+}
+
+.materials-list {
+  white-space: pre-wrap;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.panel-stl {
+  min-height: 280px;
+}
+
+.stl-viewer-container {
+  width: 100%;
+  flex: 1;
+  min-height: 240px;
+}
+
+.stl-placeholder {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  box-sizing: border-box;
-  overflow-y: auto;
-  position: relative;
-  max-height: 60vh;
-}
-
-.tab-section:has(.plot-image) {
-  min-height: 400px;
-  max-height: calc(100vh - 200px);
-}
-
-.tab-section:has(.stl-viewer-container) {
-  min-height: 500px;
-  height: 600px;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+  color: #9e9e9e;
+  font-size: 13px;
+  border: none;
+  border-radius: 0;
 }
 
 .download-btn {
-  background: #4CAF50;
-  color: white;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
   border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
+  padding: 0;
+  border-radius: 0;
   font-size: 12px;
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.2s;
+  transition: opacity 0.2s;
 }
 
 .download-btn:hover {
-  background: #45a049;
+  opacity: 0.7;
 }
 
 .plot-image {
   width: 100%;
-  height: auto;
+  height: 100%;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
   display: block;
-  border-radius: 8px;
-}
-
-.summary-text,
-.code-text {
-  white-space: pre-wrap;
-  background: transparent;
-  padding: 0;
-  border: none;
-  color: #eee;
-  font-family: 'Courier New', monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  margin: 0;
-  width: 100%;
-  text-align: left;
-  align-self: flex-start;
-}
-
-.tab-section:has(.summary-text),
-.tab-section:has(.code-text) {
-  align-items: flex-start;
+  border-radius: 0;
 }
 
 .summary-content {
@@ -972,20 +1324,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   color: #aaa;
 }
 
-.stl-viewer-container {
-  width: 100%;
-  height: 100%;
-  min-height: 500px;
-}
-
-.tab-section:has(.summary-content) {
-  align-items: flex-start;
-}
-
-.materials-text pre { white-space: pre-wrap; }
-.mat-virtual { color: #00bcd4; }
-.mat-physical { color: #cddc39; }
-
 @media (max-width: 768px) {
   .app-container {
     flex-direction: column;
@@ -996,5 +1334,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   }
   .left-column { height: 50vh; }
   .right-column { height: 50vh; }
+  .results-split {
+    grid-template-rows: minmax(180px, 1fr) minmax(180px, 1fr) minmax(220px, 1fr);
+    padding-bottom: 110px;
+  }
 }
 </style>

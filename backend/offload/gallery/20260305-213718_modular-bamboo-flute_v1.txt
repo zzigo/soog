@@ -1,0 +1,59 @@
+# Prompt
+
+Organogram of a modular bamboo flute with performer gesture arrows
+
+# Summary
+
+### Conceptual Summary
+
+The organogram represents a modular bamboo flute designed for experimental music. The core of the instrument consists of several connected bamboo pipes, each with different lengths to produce varying pitches. The performer interacts with the instrument through hand gestures, which are depicted as arrows connecting the pipes and indicating airflow or pressure changes. The color scheme includes light yellow for the bamboo pipes, indicating their material; green semi-circles for the genus, symbolizing the aerophone category; and white circles representing the performer's position, emphasizing the interactive nature of the instrument.
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 247653
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Polygon, Circle, FancyArrowPatch
+
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Define the pipes and their connections
+pipe1 = Polygon([[0, 0], [50, 2.5]], color='lightyellow', alpha=0.8)
+pipe2 = Polygon([[-30, -2.5], [-50, 0], [-30, 2.5]], color='lightyellow', alpha=0.8)
+pipe3 = Polygon([[10, -2.5], [30, 0], [10, 2.5]], color='lightyellow', alpha=0.8)
+
+ax.add_patch(pipe1)
+ax.add_patch(pipe2)
+ax.add_patch(pipe3)
+
+# Draw connections with arrows
+arrow1 = FancyArrowPatch((-45, -1), (15, 1), arrowstyle='<|-|>', mutation_scale=20, color='white')
+arrow2 = FancyArrowPatch((25, -1), (-5, 1), arrowstyle='<|-|>', mutation_scale=20, color='white')
+
+ax.add_patch(arrow1)
+ax.add_patch(arrow2)
+
+# Draw performer
+performer = Circle((-40, -3.5), radius=0.5, facecolor='white', edgecolor='black')
+ax.add_patch(performer)
+
+# Add genus symbol
+genus = plt.Circle((0, 1), 1.5, color=(0.298, 0.784, 0.133), alpha=0.5)
+ax.add_patch(genus)
+
+# Set plot limits and remove spines
+ax.set_xlim(-60, 60)
+ax.set_ylim(-5, 5)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_color('black')
+ax.spines['bottom'].set_color('black')
+ax.grid(True, color='grey', alpha=0.3)
+
+plt.show()

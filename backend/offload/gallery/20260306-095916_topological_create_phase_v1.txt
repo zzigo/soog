@@ -1,0 +1,96 @@
+# Prompt
+
+Create a topological phase transition horn whose timbre changes with the emergence of non-Abelian anyons, shown through phase diagram animations...
+
+# Summary
+
+### Conceptual Summary
+
+The topological phase transition horn is designed to morph its timbre based on the emergence of non-Abelian anyons, a phenomenon from topological quantum field theory. The organogram will use a vertical rectangle for the chordophone family, symbolizing its stringed nature. Arrows will denote the flow of phase transitions, starting from the initial state to the final state with anyons. The top half of the rectangle will be in a vibrant blue to represent the string components, while the lower half will transition to a golden color to signify the emergence of non-Abelian anyons. The instrument's geometry will include a variable length pipe, which changes its fundamental frequency as the phase transitions occur. The organological relations will be depicted with symbols for strings and phase transitions, and the performative interactions will be illustrated through a series of phase diagrams.
+
+# Materials
+
+### Materials
+1. 1 PVC tube, 300 mm length, 20 mm diameter, 2 mm wall thickness, plastic, stringed, fundamental frequency target: 440 Hz
+2. 100 grams of blue string material, 0.5 mm diameter, string tension target: 150 N
+3. 10 grams of golden string material, 0.5 mm diameter, string tension target: 200 N
+4. 100 grams of phase transition material, custom blend, for 20% phase transition efficiency
+
+### Virtual Materials
+1. 1 texture file "non-Abelian_phases.png" for visualizing phase transitions
+2. 1 shader program "phase_shaders.glsl" for rendering phase transitions with color gradients
+
+
+
+```python
+import trimesh
+
+# Define the geometry of the topological phase transition horn
+base = trimesh.creation.box(extents=[30, 20, 200])
+top = trimesh.creation.box(extents=[25, 15, 100])
+transition = trimesh.creation.box(extents=[20, 10, 50])
+
+# Combine the geometries
+mesh = base + top + transition
+
+# Assign the final geometry to a variable named
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 60413
+- group_id: topological_create_phase_20260306-095916
+- version: v1.0
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Polygon, FancyArrowPatch
+
+# Create the organogram
+fig, ax = plt.subplots(figsize=(10, 6))
+plt.style.use('dark_background')
+
+# Define the chordophone symbol as a vertical rectangle
+chordophone = Polygon(np.array([[0, 1], [0.8, 1], [0.8, 0.3], [0, 0.3]]), color='orange')
+ax.add_patch(chordophone)
+
+# Add phase transition arrows
+phase_transition1 = FancyArrowPatch((0.4, 0.2), (0.6, 0.2), mutation_scale=20, arrowstyle='->', color='lightblue')
+phase_transition2 = FancyArrowPatch((0.6, 0.2), (0.8, 0.2), mutation_scale=20, arrowstyle='->', color='lightblue')
+ax.add_patch(phase_transition1)
+ax.add_patch(phase_transition2)
+
+# Add text labels
+ax.text(0.5, 0.95, "Topological Phase Transition Horn", ha='center', va='center', color='white', fontsize=16)
+ax.text(0.5, 0.25, "Non-Abelian Anyons", ha='center', va='center', color='yellow', fontsize=12)
+ax.text(0.4, 0.35, "Initial State", ha='center', va='center', color='white', fontsize=10)
+ax.text(0.8, 0.35, "Final State", ha='center', va='center', color='white', fontsize=10)
+
+# Add string components
+ax.text(0.2, 0.35, "Strings", ha='center', va='center', color='white', fontsize=10)
+ax.text(0.2, 0.25, "Phase Transitions", ha='center', va='center', color='white', fontsize=10)
+
+# Set plot limits and remove spines
+ax.set_xlim(-0.1, 1.1)
+ax.set_ylim(0, 1.1)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_color('black')
+ax.spines['bottom'].set_color('black')
+ax.grid(True, color='grey', alpha=0.3)
+ax.set_xticks([])
+ax.set_yticks([])
+
+plt.show()
+
+# Geometry Code (trimesh)
+
+import trimesh
+body = trimesh.creation.cylinder(radius=18, height=180, sections=48)
+mouth = trimesh.creation.cylinder(radius=10, height=35, sections=32)
+mouth.apply_translation((0, 0, 107.5))
+base = trimesh.creation.box(extents=(24, 24, 10))
+base.apply_translation((0, 0, -95))
+mesh = trimesh.util.concatenate([body, mouth, base])

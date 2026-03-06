@@ -1,7 +1,27 @@
 import { defineNuxtConfig } from "nuxt/config";
+import { networkInterfaces } from "node:os";
+
+const getLocalIPv4 = () => {
+  const nets = networkInterfaces();
+  for (const entries of Object.values(nets)) {
+    if (!entries) continue;
+    for (const item of entries) {
+      if (item && item.family === "IPv4" && !item.internal) {
+        return item.address;
+      }
+    }
+  }
+  return null;
+};
+
+const localIPv4 = getLocalIPv4();
+const devApiBase = localIPv4
+  ? `http://${localIPv4}:10000/api`
+  : "http://127.0.0.1:10000/api";
 
 export default defineNuxtConfig({
   experimental: {
+    appManifest: false,
     payloadExtraction: false,
     viewTransition: true,
     renderJsonPayloads: true,
@@ -13,20 +33,16 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      apiBase: "https://soog.zztt.org/api", // Public backend URL for production
+      apiBase:
+        process.env.NUXT_PUBLIC_API_BASE ||
+        (process.env.NODE_ENV === "development"
+          ? devApiBase
+          : "https://soog.zztt.org/api"),
     },
   },
 
   nitro: {
     preset: "node-server", // Suitable for Render deployment as a dynamic app
-  },
-
-  vite: {
-    server: {
-      fs: {
-        allow: ["node_modules"], // Ensure Vite can access necessary modules
-      },
-    },
   },
 
   devServer: {

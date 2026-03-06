@@ -2,42 +2,41 @@
 
 A Flask-based API that powers SOOG. It provides:
 
-- /api/generate: Calls DeepSeek chat completion and optionally returns code or a rendered matplotlib plot.
-- /api/predict: Runs a small multimodal model (DistilBERT + CLIP + attention head) on text + image.
-- /api/somap/*: Simple CRUD endpoints backed by ArangoDB collections.
-- /api/version: Returns backend version from `version.txt`.
-- /api/health: Lightweight health check with version and device info.
-- /log: HTML view of structured JSON logs.
+- `/api/generate`: Calls Ollama chat completion and optionally returns code or a rendered matplotlib plot.
+- `/api/predict`: Runs a small multimodal model (DistilBERT + CLIP + attention head) on text + image.
+- `/api/somap/graph`: Builds a knowledge graph from markdown notes in `backend/soopub` (folders, notes, tags, wikilinks).
+- `/api/version`: Returns backend version from `version.txt`.
+- `/api/health`: Lightweight health check with version and device info.
+- `/api/ollama/verify`: Verifies Ollama connectivity and model availability.
+- `/log`: HTML view of structured JSON logs.
 
 ## Requirements
 
 - Python 3.10+
 - macOS or Linux recommended
+- Ollama installed where the backend runs
 - Optional: NVIDIA GPU + CUDA for faster Torch inference
 - Optional: Redis if you plan to use the cache utilities (not wired by default in `app.py` yet)
-- ArangoDB if you use the `/api/somap/*` endpoints
 
-Python dependencies are listed in `requirements.txt` (includes torch, transformers, matplotlib, python-arango, etc.).
+Python dependencies are listed in `requirements.txt` (includes torch, transformers, matplotlib, trimesh, etc.).
 
 ## Environment variables
 
 Copy `.env.example` to `.env` and fill in values:
 
-- DEEPSEEK_API_KEY: API key for DeepSeek chat.
-- DEEPSEEK_MODEL: Optional model name (default `deepseek-chat`).
-- DEEPSEEK_BASE_URL: Optional base URL (default `https://api.deepseek.com`).
-- PORT: Port for Flask (default 10000).
-- HF_HOME: Optional path for Hugging Face cache (defaults to `./.cache/huggingface`).
-- ARANGO_URL: e.g. http://localhost:8529
-- ARANGO_DB: Database name, e.g. `somap`
-- ARANGO_USER: Username, e.g. `root`
-- ARANGO_PASS: Password (don’t hardcode secrets in code).
-
-Note: `app.py` currently defines a default password if env is missing; prefer setting ARANGO_* in `.env` for safety.
+- `OLLAMA_BASE_URL`: Ollama endpoint (default `http://localhost:11434`).
+- `OLLAMA_MODEL`: Model name (default `qwen2.5:7b-instruct`).
+- `OLLAMA_API_KEY`: Optional; only needed if your Ollama endpoint is behind auth proxy.
+- `PORT`: Port for Flask (default 10000).
+- `HF_HOME`: Optional path for Hugging Face cache (defaults to `./.cache/huggingface`).
 
 ## Running locally (fish shell)
 
 ```fish
+# 0) Start Ollama and pull model (one time pull)
+ollama serve
+ollama pull qwen2.5:7b-instruct
+
 # 1) Create and activate a virtualenv
 python3 -m venv venv
 source venv/bin/activate.fish
@@ -46,16 +45,28 @@ source venv/bin/activate.fish
 pip install -r requirements.txt
 
 # 3) Set env (if you didn’t create .env yet)
-set -gx DEEPSEEK_API_KEY "sk-..."
+set -gx OLLAMA_BASE_URL "http://localhost:11434"
+set -gx OLLAMA_MODEL "qwen2.5:7b-instruct"
 set -gx PORT 10000
-# Optional Arango settings
-set -gx ARANGO_URL "http://localhost:8529"
-set -gx ARANGO_DB "somap"
-set -gx ARANGO_USER "root"
-set -gx ARANGO_PASS "<your-pass>"
-
 # 4) Run the server
 python app.py
+```
+
+### Ubuntu/VPN deployment (Ollama installed on same server)
+
+Set `/opt/soog/backend/.env` on the VPN Ubuntu host:
+
+```env
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen2.5:7b-instruct
+PORT=10000
+```
+
+Then ensure model/service are ready on Ubuntu:
+
+```bash
+ollama pull qwen2.5:7b-instruct
+sudo systemctl restart soog-backend.service
 ```
 
 ### Or use the Makefile (works from any shell)
@@ -85,12 +96,13 @@ chmod +x scripts/dev.sh
 PORT=10000 bash scripts/dev.sh
 ```
 
-The server listens on 0.0.0.0:$PORT (default 10000). Health check:
+The server listens on `0.0.0.0:$PORT` (default 10000). Health check:
 
-- GET http://localhost:10000/api/health
+- `GET http://localhost:10000/api/health`
 
 ## Notes
 
+- `/api/generate` tries Ollama OpenAI-compatible endpoint (`/v1/chat/completions`) first, then native Ollama (`/api/chat`).
 - Heavy models: The `/api/predict` endpoint loads DistilBERT and CLIP and an attention head; first call can be slow due to downloads. Models are cached under `./.cache/huggingface`.
 - Checkpoints: If `modeltrainer/outputModel/multimodal_model_final.pth` exists, it will be loaded.
 - Logs: Structured JSON logs are written to `backend/logs/app.json`. View logs at `/log`.
@@ -98,17 +110,18 @@ The server listens on 0.0.0.0:$PORT (default 10000). Health check:
 
 ## Troubleshooting
 
-- DeepSeek 401/403: Ensure `DEEPSEEK_API_KEY` is set in your environment.
-	- Check `/api/health` → `deepseek.configured` is true and model/base_url are correct.
-	- Try a different model (set `DEEPSEEK_MODEL=deepseek-chat` or your allowed model).
-	- Use `/api/deepseek/verify` to test credentials (GET `/v1/models`), no sensitive data exposed.
-	- Some environments require `/v1/chat/completions` instead of `/chat/completions`; backend now tries both.
-	- If still 401, verify your account and key permissions on DeepSeek dashboard.
-- Arango connection errors: Verify Arango is running and your ARANGO_* env values are correct.
-- Torch/transformers install: On macOS with ARM, some combos may be slow or need extra wheels; you can temporarily disable `/api/predict` if not needed.
-- Port conflict: If 5000 is in use, use `PORT=10000` (the default in app.py) and run again.
+- Ollama not reachable:
+  - Check `/api/health` and verify `ollama.base_url` and `ollama.model`.
+  - Call `/api/ollama/verify` (or legacy alias `/api/deepseek/verify`) to test model listing.
+  - On Ubuntu server, check `ollama serve` is running and listening on `127.0.0.1:11434`.
+- Configured model missing:
+  - Run `ollama pull qwen2.5:7b-instruct`.
+- Torch/transformers install:
+  - On macOS with ARM, some combos may be slow or need extra wheels; you can temporarily disable `/api/predict` if not needed.
+- Port conflict:
+  - If 5000 is in use, use `PORT=10000` (the default in `app.py`) and run again.
 
-Security: Never place `DEEPSEEK_API_KEY` in the frontend `.env` (it’s public in client bundles). Keep it only in `backend/.env`.
+Security: If you use `OLLAMA_API_KEY` behind a proxy, keep it only in `backend/.env` and never expose it to frontend env files.
 
 ## Optional: Redis cache
 

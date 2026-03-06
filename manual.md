@@ -19,3 +19,11 @@ exec fish
 
 ## Backend
 source venv/bin/activate.fish
+
+FLASK_DEBUG=1 FLASK_RELOAD=1 python app.py
+
+
+## frontend
+pkill ollama
+ollama serve
+

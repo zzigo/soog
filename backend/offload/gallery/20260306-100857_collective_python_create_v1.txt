@@ -1,0 +1,115 @@
+# Prompt
+
+Create the Neuromancer's Flute: keys that tap into the collective unconscious for microtonal divisions...
+
+# Summary
+
+```python
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.patches import Polygon, FancyArrowPatch, Circle, Arc
+import numpy as np
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(12, 12))
+ax.set_aspect('equal')
+ax.set_xlim(-1.2, 1.2)
+ax.set_ylim(-1.2, 1.2)
+ax.axis('off')
+fig.patch.set_alpha(0.0)
+
+# Acoustical space: concentric circles (collective unconscious) and spiral bore
+circle1 = Circle((0, 0), 1.0, fill=False, edgecolor='blue', linewidth=2.5, alpha=0.7, label='Collective Unconscious (Water)')
+circle2 = Circle((0, 0), 0.7, fill=False, edgecolor='lightblue', linewidth=2.5, alpha=0.7)
+circle3 = Circle((0, 0), 0.4, fill=False, edgecolor='cyan', linewidth=2.5, alpha=0.7)
+ax.add_patch(circle1)
+ax.add_patch(circle2)
+ax.add_patch(circle3)
+
+# Spiral bore (aerophone tube)
+theta = np.linspace(0, 8*np.pi, 1000)
+r = 0.1 * theta
+x = r * np.cos(theta) * 0.3
+y = r * np.sin(theta) * 0.3
+ax.plot(x, y, color='lightgrey', linewidth=3, label='Spiral Bore (Bone)')
+
+# Interface: 24 keys as rhombuses (electronophones) in a circular arrangement
+keys = []
+for i in range(24):
+    angle = 2*np.pi * i/24
+    radius = 0.85
+    cx = radius * np.cos(angle)
+    cy = radius * np.sin(angle)
+    rhombus = Polygon([[cx-0.05, cy], [cx, cy+0.05], [cx+0.05, cy], [cx, cy-0.05]], 
+                      closed=True, facecolor='green', edgecolor='orange', linewidth=2, alpha=0.8)
+    ax.add_patch(rhombus)
+    ax.text(cx, cy, str(i+1), color='blue', ha='center', va='center', fontsize=8, weight='bold')
+    keys.append((cx, cy))
+
+# Arrows: flow from keys to central spiral (neural input to sound generation)
+for (cx, cy) in keys:
+    arrow = FancyArrowPatch((cx, cy), (0
+
+# Generation Metadata
+
+- model: deepseek-v3.2:cloud
+- elapsed_ms: 47099
+- group_id: collective_python_create_20260306-100857
+- version: v1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.patches import Polygon, FancyArrowPatch, Circle, Arc
+import numpy as np
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(12, 12))
+ax.set_aspect('equal')
+ax.set_xlim(-1.2, 1.2)
+ax.set_ylim(-1.2, 1.2)
+ax.axis('off')
+fig.patch.set_alpha(0.0)
+
+# Acoustical space: concentric circles (collective unconscious) and spiral bore
+circle1 = Circle((0, 0), 1.0, fill=False, edgecolor='blue', linewidth=2.5, alpha=0.7, label='Collective Unconscious (Water)')
+circle2 = Circle((0, 0), 0.7, fill=False, edgecolor='lightblue', linewidth=2.5, alpha=0.7)
+circle3 = Circle((0, 0), 0.4, fill=False, edgecolor='cyan', linewidth=2.5, alpha=0.7)
+ax.add_patch(circle1)
+ax.add_patch(circle2)
+ax.add_patch(circle3)
+
+# Spiral bore (aerophone tube)
+theta = np.linspace(0, 8*np.pi, 1000)
+r = 0.1 * theta
+x = r * np.cos(theta) * 0.3
+y = r * np.sin(theta) * 0.3
+ax.plot(x, y, color='lightgrey', linewidth=3, label='Spiral Bore (Bone)')
+
+# Interface: 24 keys as rhombuses (electronophones) in a circular arrangement
+keys = []
+for i in range(24):
+    angle = 2*np.pi * i/24
+    radius = 0.85
+    cx = radius * np.cos(angle)
+    cy = radius * np.sin(angle)
+    rhombus = Polygon([[cx-0.05, cy], [cx, cy+0.05], [cx+0.05, cy], [cx, cy-0.05]], 
+                      closed=True, facecolor='green', edgecolor='orange', linewidth=2, alpha=0.8)
+    ax.add_patch(rhombus)
+    ax.text(cx, cy, str(i+1), color='blue', ha='center', va='center', fontsize=8, weight='bold')
+    keys.append((cx, cy))
+
+# Arrows: flow from keys to central spiral (neural input to sound generation)
+for (cx, cy) in keys:
+    arrow = FancyArrowPatch((cx, cy), (0
+
+# Geometry Code (trimesh)
+
+import trimesh
+body = trimesh.creation.cylinder(radius=18, height=180, sections=48)
+mouth = trimesh.creation.cylinder(radius=10, height=35, sections=32)
+mouth.apply_translation((0, 0, 107.5))
+base = trimesh.creation.box(extents=(24, 24, 10))
+base.apply_translation((0, 0, -95))
+mesh = trimesh.util.concatenate([body, mouth, base])

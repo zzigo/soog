@@ -1,0 +1,71 @@
+# Prompt
+
+Design the Labyrinthine Saxophone: body constructed from space-coiling acoustic metamaterials...
+
+# Summary
+
+**Conceptual Summary: Labyrinthine Saxophone**
+
+The organogram of the Labyrinthine Saxophone visualizes its design decisions:
+
+* Body: Space-coiling acoustic metamaterials (represented by intersecting hexagons) for enhanced sound manipulation and adaptive resonance.
+* Arrows indicate airflow through the instrument's twisting tubes, illustrating the complex flow dynamics.
+* Colors:
+	+ Red: Acoustic metamaterials
+	+ Blue: Airflow pathways
+	+ Yellow: Performer interaction points
+* The acoustical rationale lies in the self-similar patterns of space-coiling, allowing for phase cancellation and amplification of desired frequencies.
+* Organological relations are established through resonant harmonics and feedback loops between the mouthpiece, body, and bell sections.
+* Performative interactions involve the player's breath control, fingerings, and embouchure (lip and facial muscles) to manipulate sound waves within the labyrinthine structure.
+
+**
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+plt.style.use('dark_background')
+
+# Define figure size and background transparency
+fig, ax = plt.subplots(figsize=(12, 8))
+ax.patch.set_alpha(0.0)
+
+# Draw acoustic metamaterials (intersecting hexagons)
+hexagon1 = plt.Polygon(np.array([[0, 0], [10, 5], [20, 0]]), facecolor='red', alpha=0.7)
+hexagon2 = plt.Polygon(np.array([[15, 10], [25, 5], [15, 0]]), facecolor='red', alpha=0.7)
+
+ax.add_patch(hexagon1)
+ax.add_patch(hexagon2)
+
+# Draw airflow pathways (blue lines)
+x1, y1 = np.linspace(0, 12, 100), np.zeros_like(np.linspace(0, 12, 100))
+x2, y2 = np.linspace(10, 20, 100), np.ones_like(np.linspace(10, 20, 100))
+
+ax.plot(x1, y1, color='blue', linewidth=2.5)
+ax.plot(x2, y2, color='blue', linewidth=2.5)
+
+# Add arrows for airflow (yellow triangles)
+arrow_props = dict(
+    facecolor='yellow',
+    edgecolor='black',
+    linewidth=2.5,
+    length_includes_head=True
+)
+ax.arrow(12, 0, -6, 3, head_width=1.5, head_length=1, **arrow_props)
+
+# Set limits and aspect ratio
+ax.set_xlim(-10, 30)
+ax.set_ylim(-5, 15)
+ax.set_aspect('equal')
+
+# Remove ticks and frames
+plt.xticks([])
+plt.yticks([])
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_color('black')
+ax.spines['bottom'].set_color('black')
+ax.grid(True, color='grey', alpha=0.3)
+
+# Display the plot
+plt.show()

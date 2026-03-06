@@ -1,0 +1,46 @@
+# Prompt
+
+Imagine the Phononic Crystal Viola: body structured with acoustic higher-order topology...
+
+# Summary
+
+### Conceptual Summary
+The Phononic Crystal Viola is designed as a hybrid instrument combining traditional viola acoustics with advanced acoustic crystal topology. Its organogram features a square idiophone base symbol with internal segmentations representing the crystal lattice structure and its resonance modes. The lower region depicts the bowing interface and support structure. The lateral zones contain information on hardness scales and cultural significance. The instrument's body is structured with acoustic higher-order topology to optimize sound projection and sustain. Performative interactions are enhanced through adjustable crystal elements, allowing musicians to fine-tune the instrument's acoustics in real-time.
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 57788
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Organogram Elements
+ax.add_patch(plt.Rectangle((0.1, 0.1), 0.8, 0.8, fill=False, edgecolor='white', linewidth=2.5))
+ax.add_patch(plt.Rectangle((0.2, 0.2), 0.6, 0.6, fill=False, edgecolor='black', linewidth=2.5))
+ax.add_patch(plt.Rectangle((0.35, 0.35), 0.3, 0.3, fill=False, edgecolor='orange', linewidth=2.5))
+ax.add_patch(plt.Rectangle((0.45, 0.45), 0.2, 0.2, fill=False, edgecolor='black', linewidth=2.5))
+ax.add_patch(plt.Circle((0.55, 0.55), 0.05, fill=False, edgecolor='black', linewidth=2.5))
+
+# Connections
+ax.annotate('', xy=(0.2, 0.2), xytext=(0.3, 0.35), arrowprops=dict(facecolor='white', arrowstyle='->', linewidth=2.5))
+ax.annotate('', xy=(0.55, 0.55), xytext=(0.65, 0.65), arrowprops=dict(facecolor='white', arrowstyle='->', linewidth=2.5))
+
+# Labels
+ax.text(0.55, 0.55, '500 Hz', fontsize=10, color='white')
+ax.text(0.3, 0.35, '1000 Hz', fontsize=10, color='white')
+ax.text(0.65, 0.65, '1500 Hz', fontsize=10, color='white')
+
+# Background and Grid
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+ax.set_axis_off()
+ax.grid(True, color='grey', alpha=0.3)
+
+plt.show()

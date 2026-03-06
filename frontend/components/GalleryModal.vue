@@ -8,7 +8,7 @@
         <div class="header-center">
           <div v-if="current && !renaming" class="actions">
             <button @click="loadCode">Load Code</button>
-            <a v-if="current.stl_url" :href="fileHref(current.stl_url)" class="download" download>STL</a>
+            <button v-if="current.stl_url" @click="downloadCurrentStl">STL</button>
             <button @click="toggleRename">Rename</button>
             <button @click="deleteItem" class="delete">Delete</button>
           </div>
@@ -22,42 +22,66 @@
           <button class="close" @click="close">×</button>
         </div>
       </header>
+
       <section class="modal-body">
         <div class="left">
           <div class="list" :key="galleryKey">
             <div
-              v-for="(item, idx) in items"
-              :key="item.basename"
+              v-for="group in groupedItems"
+              :key="group.groupId"
               class="list-item"
-              :class="{ active: idx === currentIndex }"
-              @click="select(idx)"
+              :class="{ active: currentGroupId === group.groupId }"
+              @click="selectGroup(group)"
             >
-              <div class="title">{{ formatTitle(item) }}</div>
-              <div class="time">{{ formatTime(item.timestamp) }}</div>
+              <div class="group-head">
+                <div class="title">{{ group.title }}</div>
+                <div class="item-meta">
+                  <div v-if="group.hasAnyStl" class="stl-badge">STL</div>
+                  <div class="time">{{ formatTime(group.latestTimestamp) }}</div>
+                </div>
+              </div>
+              <div class="versions">
+                <button
+                  v-for="version in group.versions"
+                  :key="version.basename"
+                  class="version-chip"
+                  :class="{ active: current?.basename === version.basename }"
+                  @click.stop="selectVersion(version.basename)"
+                >
+                  {{ version.displayVersion }}
+                </button>
+              </div>
             </div>
           </div>
+
           <div v-if="current" class="details">
             <h4>Prompt</h4>
             <pre class="text">{{ current.prompt }}</pre>
             <h4>Summary</h4>
-            <pre class="text">{{ current.summary || current.answer }}</pre>
+            <div class="text markdown" v-html="currentSummaryHtml"></div>
           </div>
         </div>
+
         <div class="right">
-          <div class="tabs">
-            <button :disabled="!current?.image_url" :class="{active: rightTab==='plot', disabled: !current?.image_url}" @click="rightTab='plot'">Organogram</button>
-            <button :disabled="!current?.stl_url" :class="{active: rightTab==='stl', disabled: !current?.stl_url}" @click="rightTab='stl'">3D Model</button>
+          <div v-if="current" class="split-view">
+            <section class="viewer-panel">
+              <h4 class="viewer-title">Organogram</h4>
+              <div class="viewer">
+                <img v-if="current?.image_url" :src="imageSrc(current)" class="image" alt="organogram" />
+                <div v-else class="empty">No organogram image</div>
+              </div>
+            </section>
+            <section class="viewer-panel">
+              <h4 class="viewer-title">3D Model</h4>
+              <div class="viewer">
+                <ClientOnly>
+                  <StlViewer v-if="current?.stl_url" :url="fileHref(current.stl_url)" />
+                  <div v-else class="empty">No STL available</div>
+                </ClientOnly>
+              </div>
+            </section>
           </div>
-          <div class="viewer">
-            <template v-if="current">
-              <img v-if="rightTab==='plot' && current?.image_url" :src="imageSrc(current)" class="image" alt="organogram" />
-              <ClientOnly v-else>
-                <StlViewer v-if="current?.stl_url" :url="fileHref(current.stl_url)" />
-                <div v-else class="empty">No STL available</div>
-              </ClientOnly>
-            </template>
-            <div v-else class="empty">No item selected</div>
-          </div>
+          <div v-else class="empty full-empty">No item selected</div>
         </div>
       </section>
     </div>
@@ -67,6 +91,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRuntimeConfig } from '#app'
+import { marked } from 'marked'
 import StlViewer from '~/components/StlViewer.vue'
 
 const props = defineProps({
@@ -75,146 +100,254 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'load-code'])
 
 const items = ref([])
-const currentIndex = ref(0)
-const current = computed(() => items.value[currentIndex.value] || null)
-const rightTab = ref('plot')
+const selectedBasename = ref('')
 const renaming = ref(false)
 const newName = ref('')
 const galleryKey = ref(0)
 
-watch(() => current.value, (val) => {
-  if (!val) return
-  if (val.image_url) rightTab.value = 'plot'
-  else if (val.stl_url) rightTab.value = 'stl'
-  else rightTab.value = 'plot'
-  renaming.value = false
+const current = computed(() => items.value.find((item) => item.basename === selectedBasename.value) || null)
+const currentSummaryHtml = computed(() => {
+  const source = current.value?.summary || current.value?.answer || ''
+  if (!source) return ''
+  return marked(source)
 })
 
 const config = useRuntimeConfig()
 const apiBase = config.public.apiBase || 'http://localhost:10000/api'
 
-function close() { emit('update:modelValue', false) }
-function select(i) { currentIndex.value = i }
+function close() {
+  emit('update:modelValue', false)
+}
+
+function inferGroupId(item) {
+  return (item?.group_id || item?.basename || '').trim()
+}
+
+function inferTitle(item) {
+  if (item?.title && String(item.title).trim()) return String(item.title).trim()
+  if (item?.title_slug) return String(item.title_slug).replace(/_/g, '-')
+  const basename = String(item?.basename || '')
+  if (!basename) return 'untitled'
+  const body = basename.replace(/^\d{8}-\d{6}_/, '')
+  return body.replace(/_v\d+(?:_\d+)?(?:_\d+)?$/i, '').replace(/_/g, '-')
+}
+
+function numericVersion(item) {
+  const fromIndex = Number(item?.version_index)
+  if (Number.isFinite(fromIndex) && fromIndex > 0) return Math.trunc(fromIndex)
+
+  const versionText = String(item?.version || '').trim().toLowerCase().replace(/^v/, '')
+  const plain = versionText.match(/^(\d+)$/)
+  if (plain) return Math.max(1, Number(plain[1]))
+
+  const legacy = versionText.match(/^(\d+)\.(\d+)$/)
+  if (legacy) {
+    const major = Number(legacy[1])
+    const minor = Number(legacy[2])
+    if (major === 1) return Math.max(1, minor + 1)
+  }
+  return 1
+}
+
+const groupedItems = computed(() => {
+  const groups = new Map()
+  const sorted = [...items.value].sort((a, b) => String(b?.timestamp || '').localeCompare(String(a?.timestamp || '')))
+
+  for (const item of sorted) {
+    const groupId = inferGroupId(item)
+    if (!groupId) continue
+    if (!groups.has(groupId)) {
+      groups.set(groupId, {
+        groupId,
+        title: inferTitle(item),
+        versions: [],
+        latestTimestamp: item?.timestamp || '',
+        hasAnyStl: false
+      })
+    }
+    const group = groups.get(groupId)
+    group.versions.push(item)
+    if (String(item?.timestamp || '') > String(group.latestTimestamp || '')) {
+      group.latestTimestamp = item.timestamp
+    }
+    group.hasAnyStl = group.hasAnyStl || Boolean(item?.stl_url)
+  }
+
+  const result = []
+  for (const group of groups.values()) {
+    const ascending = [...group.versions].sort((a, b) => {
+      const av = numericVersion(a)
+      const bv = numericVersion(b)
+      if (av !== bv) return av - bv
+      return String(a?.timestamp || '').localeCompare(String(b?.timestamp || ''))
+    })
+    group.versions = ascending.map((item, idx) => ({
+      ...item,
+      displayVersion: numericVersion(item) || idx + 1
+    }))
+    group.latest = group.versions[group.versions.length - 1] || null
+    result.push(group)
+  }
+
+  result.sort((a, b) => String(b.latestTimestamp || '').localeCompare(String(a.latestTimestamp || '')))
+  return result
+})
+
+const currentGroup = computed(() => {
+  if (!current.value) return null
+  return groupedItems.value.find((group) => group.versions.some((version) => version.basename === current.value.basename)) || null
+})
+const currentGroupId = computed(() => currentGroup.value?.groupId || '')
+
+watch(() => current.value, (value) => {
+  if (!value) return
+  renaming.value = false
+})
+
+function selectVersion(basename) {
+  selectedBasename.value = basename
+}
+
+function selectGroup(group) {
+  if (!group) return
+  const latest = group.latest || group.versions[group.versions.length - 1]
+  if (latest?.basename) selectedBasename.value = latest.basename
+}
 
 function imageSrc(item) {
   if (!item) return ''
   const url = item.image_url || ''
   if (url.startsWith('http')) return url
 
-  const offloadApiBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase;
-  if (url.startsWith('/offload')) {
-      return offloadApiBase + url;
-  }
-      
-  if (apiBase.endsWith('/api') && url.startsWith('/api/')) {
-    return apiBase + url.substring(4)
-  }
+  const offloadApiBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase
+  if (url.startsWith('/offload')) return offloadApiBase + url
+  if (apiBase.endsWith('/api') && url.startsWith('/api/')) return apiBase + url.substring(4)
   return apiBase + url
 }
 
 function fileHref(url) {
   if (!url) return ''
   if (url.startsWith('http')) return url
-      
-  const offloadApiBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase;
-  if (url.startsWith('/offload')) {
-      return offloadApiBase + url;
-  }
 
-  if (apiBase.endsWith('/api') && url.startsWith('/api/')) {
-    return apiBase + url.substring(4)
-  }
+  const offloadApiBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase
+  if (url.startsWith('/offload')) return offloadApiBase + url
+  if (apiBase.endsWith('/api') && url.startsWith('/api/')) return apiBase + url.substring(4)
   return apiBase + url
 }
 
-async function load() {
+async function load(preferredBasename = '') {
   const res = await fetch(`${apiBase}/gallery/list`)
   const data = await res.json()
-  items.value = data.items || []
-  currentIndex.value = 0
-}
+  const next = (data.items || []).slice().sort((a, b) => String(b?.timestamp || '').localeCompare(String(a?.timestamp || '')))
+  items.value = next
 
-function formatTitle(item) {
-  if (!item?.basename) return 'untitled'
-  const parts = item.basename.split('_')
-  if (parts.length > 1) {
-    return parts.slice(1).join('_')
+  if (preferredBasename && next.some((item) => item.basename === preferredBasename)) {
+    selectedBasename.value = preferredBasename
+    return
   }
-  return item.basename
+  selectedBasename.value = next[0]?.basename || ''
 }
 
 function formatTime(ts) {
-  if (!ts) return ''
-  return ts
-}
-
-function onKey(e) {
-  if (!props.modelValue) return
-  if (renaming.value) return 
-  if (!e.altKey) return
-  if (e.key === 'ArrowUp') {
-    e.preventDefault()
-    if (currentIndex.value > 0) currentIndex.value--
-  } else if (e.key === 'ArrowDown') {
-    e.preventDefault()
-    if (currentIndex.value < items.value.length - 1) currentIndex.value++
-  }
+  return ts || ''
 }
 
 function loadCode() {
-  if (current.value?.code) {
-    emit('load-code', current.value.code)
+  if (current.value) {
+    emit('load-code', { ...current.value })
   }
 }
 
 function toggleRename() {
-  if (!current.value) return
-  newName.value = formatTitle(current.value)
+  if (!currentGroup.value) return
+  newName.value = currentGroup.value.title
   renaming.value = true
+}
+
+async function downloadCurrentStl() {
+  if (!current.value?.stl_url) return
+  try {
+    const res = await fetch(fileHref(current.value.stl_url))
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}))
+      throw new Error(payload?.error || `STL download failed (${res.status})`)
+    }
+    const blob = await res.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = `${current.value.basename || 'model'}.stl`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(blobUrl)
+  } catch (e) {
+    alert(`Error downloading STL: ${e?.message || 'unknown error'}`)
+  }
 }
 
 async function deleteItem() {
   if (!current.value) return
-  if (!confirm(`Are you sure you want to delete ${current.value.basename}?`)) return
+  if (!confirm(`Delete version ${current.value.version || ''} from "${currentGroup.value?.title || current.value.basename}"?`)) return
 
-  const res = await fetch(`${apiBase}/gallery/item/${current.value.basename}`, {
-    method: 'DELETE'
-  })
-
-  if (res.ok) {
-    const deletedIndex = currentIndex.value
-    items.value.splice(deletedIndex, 1)
-    if (currentIndex.value >= items.value.length) {
-      currentIndex.value = items.value.length - 1
-    }
-    galleryKey.value++
-  } else {
-    const error = await res.json()
-    alert(`Error deleting item: ${error.error}`)
+  const res = await fetch(`${apiBase}/gallery/item/${current.value.basename}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}))
+    alert(`Error deleting version: ${payload?.error || res.status}`)
+    return
   }
+
+  const keepGroupId = currentGroupId.value
+  await load()
+  const sameGroup = groupedItems.value.find((group) => group.groupId === keepGroupId)
+  if (sameGroup?.latest?.basename) {
+    selectedBasename.value = sameGroup.latest.basename
+  }
+  galleryKey.value++
 }
 
 async function renameItem() {
-  if (!current.value || !newName.value.trim()) return
+  if (!currentGroup.value || !newName.value.trim()) return
 
-  const res = await fetch(`${apiBase}/gallery/item/${current.value.basename}/rename`, {
+  const oldSelected = current.value?.basename || ''
+  const groupId = currentGroup.value.groupId
+  const res = await fetch(`${apiBase}/gallery/group/${encodeURIComponent(groupId)}/rename`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ newName: newName.value.trim() })
   })
 
-  if (res.ok) {
-    const { newBasename } = await res.json()
-    items.value[currentIndex.value].basename = newBasename
-    renaming.value = false
-    galleryKey.value++ // Force re-render
-  } else {
-    const error = await res.json()
-    alert(`Error renaming item: ${error.error}`)
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    alert(`Error renaming versions: ${payload?.error || res.status}`)
+    return
   }
+
+  const mapping = new Map((payload.updated || []).map((entry) => [entry.old, entry.new]))
+  const preferred = mapping.get(oldSelected) || ''
+  await load(preferred)
+  renaming.value = false
+  galleryKey.value++
 }
 
-watch(() => props.modelValue, (v) => { if (v) load() })
+function onKey(e) {
+  if (!props.modelValue || renaming.value || !e.altKey) return
+  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+  e.preventDefault()
+
+  const ordered = [...items.value].sort((a, b) => String(b?.timestamp || '').localeCompare(String(a?.timestamp || '')))
+  if (!ordered.length) return
+  let idx = ordered.findIndex((item) => item.basename === selectedBasename.value)
+  if (idx < 0) idx = 0
+  if (e.key === 'ArrowUp') idx = Math.max(0, idx - 1)
+  if (e.key === 'ArrowDown') idx = Math.min(ordered.length - 1, idx + 1)
+  selectedBasename.value = ordered[idx].basename
+}
+
+watch(() => props.modelValue, (value) => {
+  if (value) load(selectedBasename.value)
+})
+
 onMounted(() => window.addEventListener('keydown', onKey))
 onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
@@ -230,45 +363,113 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 .modal-body { display: flex; flex: 1; overflow: hidden; }
 .left { width: 45%; border-right: 1px solid #333; display: flex; flex-direction: column; }
 .right { flex: 1; display: flex; flex-direction: column; background: #000; }
-.tabs { display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid #222; }
-.tabs button { background: #111; color: #eee; border: 1px solid #333; padding: 6px 10px; border-radius: 4px; cursor: pointer; }
-.tabs button.active { background: #1f1f1f; border-color: #666; }
-.tabs button.disabled { opacity: 0.5; cursor: not-allowed; }
-.viewer { flex: 1; display: flex; align-items: center; justify-content: center; }
+.split-view { flex: 1; display: grid; grid-template-rows: 1fr 1fr; min-height: 0; }
+.viewer-panel { display: flex; flex-direction: column; min-height: 0; }
+.viewer-panel + .viewer-panel { border-top: 1px solid #222; }
+.viewer-title {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.7);
+  border-bottom: 1px solid #1a1a1a;
+}
+.viewer { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
 .image { max-width: 100%; max-height: 100%; object-fit: contain; }
-.list { height: 40%; overflow: auto; border-bottom: 1px solid #333; }
-.list-item { 
+
+.list { height: 44%; overflow: auto; border-bottom: 1px solid #333; }
+.list-item {
+  padding: 9px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #222;
+}
+.list-item.active { background: #1b1b1b; }
+.group-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px; 
-  cursor: pointer; 
-  border-bottom: 1px solid #222; 
+  gap: 10px;
 }
-.list-item.active { background: #222; }
-.title { 
+.title {
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   flex-grow: 1;
 }
-.time { 
-  font-size: 12px; 
+.item-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  flex-shrink: 0;
+  gap: 2px;
+}
+.versions {
+  margin-top: 7px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.version-chip {
+  min-width: 24px;
+  border: 1px solid #3a3a3a;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+.version-chip.active {
+  border-color: #98ff5f;
+  color: #98ff5f;
+}
+.version-chip:hover {
+  border-color: #8a8a8a;
+}
+.stl-badge {
+  font-size: 8px;
+  line-height: 1;
+  color: #ff9a2f;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-align: right;
+}
+.time {
+  font-size: 12px;
   opacity: 0.5;
   font-style: italic;
-  flex-shrink: 0;
-  margin-left: 16px;
+  text-align: right;
 }
 .details { flex: 1; overflow: auto; padding: 12px; }
 .text { white-space: pre-wrap; background: #0b0b0b; padding: 8px; border-radius: 4px; border: 1px solid #222; }
+.markdown { white-space: normal; line-height: 1.5; }
+.markdown :deep(p) { margin: 0 0 0.7em 0; }
+.markdown :deep(ul),
+.markdown :deep(ol) { margin: 0.3em 0 0.7em 1.2em; }
+.markdown :deep(li) { margin: 0.2em 0; }
+.markdown :deep(code) { background: rgba(255, 255, 255, 0.08); padding: 1px 4px; border-radius: 3px; }
+.markdown :deep(pre) { background: #090909; border: 1px solid #1f1f1f; padding: 8px; border-radius: 4px; overflow-x: auto; }
+.markdown :deep(pre code) { background: transparent; padding: 0; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.actions button, .actions a { background: #111; color: #eee; border: 1px solid #333; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-decoration: none; }
-.actions button:hover, .actions a:hover { background: #1f1f1f; border-color: #666; }
+.actions button {
+  background: #111;
+  color: #eee;
+  border: 1px solid #333;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.actions button:hover { background: #1f1f1f; border-color: #666; }
 .actions button.delete { background: #900; }
 .rename-container { display: flex; gap: 8px; }
 .rename-container input { background: #222; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 4px; }
 .rename-container button { background: #111; color: #eee; border: 1px solid #333; padding: 6px 10px; border-radius: 4px; cursor: pointer; }
 .rename-container button:hover { background: #1f1f1f; border-color: #666; }
 .empty { color: #777; }
+.full-empty { display: flex; align-items: center; justify-content: center; flex: 1; }
 </style>

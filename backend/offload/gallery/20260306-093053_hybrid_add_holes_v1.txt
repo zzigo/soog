@@ -1,0 +1,148 @@
+# Prompt
+
+add holes
+
+# Summary
+
+### Conceptual Summary
+This organogram represents a speculative idiophone inspired by the conceptual blending of a traditional wooden marimba and a modern digital synthesizer. The central symbol is a square (idiophone) with holes (aerophones) incorporated for enhanced resonance. The inferior attachment zone indicates a contact interface with mallets and includes a digital control input for electronic modulation. The lateral information zones encode the material composition (wood) and the social function (educational tool for music therapy).
+
+# Materials
+
+### Materials
+1. 4 wooden bars, 300 mm length, 50 mm width, 20 mm thickness
+2. 16 metal pins, 10 mm diameter, 50 mm length
+3. 8 wooden mallets, 150 mm length, 20 mm diameter
+4. 1 digital controller, 100 x 50 x 20 mm
+5. 80 rubber strips, 50 mm length, 10 mm width, 2 mm thickness
+
+### Virtual Materials
+1. Wood texture (PNG, 1024x1024)
+2. Metal pin model (STL, 10 mm diameter, 50 mm length)
+3. Wooden mallet model (STL, 150 mm length, 20 mm diameter)
+4. Digital controller model (STL, 100 x 50 x 20 mm)
+5. Rubber strip model (STL, 50 mm length, 10 mm width, 2 mm thickness)
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Polygon, Circle, PathPatch
+from matplotlib.transforms import offset_copy
+from matplotlib.transforms import Affine2D
+
+# Organogram
+fig, ax = plt.subplots(figsize=(10, 6))
+plt.style.use('dark_background')
+
+# Family symbol (idiophone)
+idiophone = Polygon(((0, 0), (0, 1), (1, 1), (1, 0)), color='orange')
+ax.add_patch(idiophone)
+
+# Holes (aerophones)
+holes = [Circle((0.2, 0.3), 0.05, color='lightblue'),
+         Circle((0.8, 0.3), 0.05, color='lightblue'),
+         Circle((0.2, 0.7), 0.05, color='lightblue'),
+         Circle((0.8, 0.7), 0.05, color='lightblue'),
+         Circle((0.5, 0.2), 0.05, color='lightblue'),
+         Circle((0.5, 0.8), 0.05, color='lightblue'),
+         Circle((0.3, 0.5), 0.05, color='lightblue'),
+         Circle((0.7, 0.5), 0.05, color='lightblue')]
+for hole in holes:
+    ax.add_patch(hole)
+
+# Interface with mallets and digital control
+interface = Polygon(((0, 0), (0, 0.5), (0.5, 0.5), (0.5, 0)), color='grey')
+ax.add_patch(interface)
+ax.annotate('Mallets', xy=(0.5, 0.25), ha='center', va='center', color='white')
+ax.annotate('Digital Control', xy=(0.5, 0.75), ha='center', va='center', color='white')
+
+# Performer position
+performer = Circle((0.5, 0.2), 0.05, color='white')
+ax.add_patch(performer)
+ax.annotate('Performer', xy=(0.5, 0.15), ha='center', va='center', color='white')
+
+# Arrows for connections
+arrow1 = FancyArrowPatch((0.9, 0.5), (0.7, 0.5), arrowstyle='<->', mutation_scale=20, color='yellow')
+ax.add_patch(arrow1)
+arrow2 = FancyArrowPatch((0.2, 0.6), (0.4, 0.6), arrowstyle='<->', mutation_scale=20, color='yellow')
+ax.add_patch(arrow2)
+
+# Axes labels and legend
+ax.set_xlabel('Acoustic Components', color='white')
+ax.set_ylabel('Interface & Control', color='white')
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+ax.tick_params(colors='white')
+ax.set_xticks([])
+ax.set_yticks([]
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 46645
+- group_id: hybrid_add_holes
+- version: v1.1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Polygon, Circle, PathPatch
+from matplotlib.transforms import offset_copy
+from matplotlib.transforms import Affine2D
+
+# Organogram
+fig, ax = plt.subplots(figsize=(10, 6))
+plt.style.use('dark_background')
+
+# Family symbol (idiophone)
+idiophone = Polygon(((0, 0), (0, 1), (1, 1), (1, 0)), color='orange')
+ax.add_patch(idiophone)
+
+# Holes (aerophones)
+holes = [Circle((0.2, 0.3), 0.05, color='lightblue'),
+         Circle((0.8, 0.3), 0.05, color='lightblue'),
+         Circle((0.2, 0.7), 0.05, color='lightblue'),
+         Circle((0.8, 0.7), 0.05, color='lightblue'),
+         Circle((0.5, 0.2), 0.05, color='lightblue'),
+         Circle((0.5, 0.8), 0.05, color='lightblue'),
+         Circle((0.3, 0.5), 0.05, color='lightblue'),
+         Circle((0.7, 0.5), 0.05, color='lightblue')]
+for hole in holes:
+    ax.add_patch(hole)
+
+# Interface with mallets and digital control
+interface = Polygon(((0, 0), (0, 0.5), (0.5, 0.5), (0.5, 0)), color='grey')
+ax.add_patch(interface)
+ax.annotate('Mallets', xy=(0.5, 0.25), ha='center', va='center', color='white')
+ax.annotate('Digital Control', xy=(0.5, 0.75), ha='center', va='center', color='white')
+
+# Performer position
+performer = Circle((0.5, 0.2), 0.05, color='white')
+ax.add_patch(performer)
+ax.annotate('Performer', xy=(0.5, 0.15), ha='center', va='center', color='white')
+
+# Arrows for connections
+arrow1 = FancyArrowPatch((0.9, 0.5), (0.7, 0.5), arrowstyle='<->', mutation_scale=20, color='yellow')
+ax.add_patch(arrow1)
+arrow2 = FancyArrowPatch((0.2, 0.6), (0.4, 0.6), arrowstyle='<->', mutation_scale=20, color='yellow')
+ax.add_patch(arrow2)
+
+# Axes labels and legend
+ax.set_xlabel('Acoustic Components', color='white')
+ax.set_ylabel('Interface & Control', color='white')
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+ax.tick_params(colors='white')
+ax.set_xticks([])
+ax.set_yticks([]
+
+# Geometry Code (trimesh)
+
+import trimesh
+body = trimesh.creation.cylinder(radius=18, height=180, sections=48)
+mouth = trimesh.creation.cylinder(radius=10, height=35, sections=32)
+mouth.apply_translation((0, 0, 107.5))
+base = trimesh.creation.box(extents=(24, 24, 10))
+base.apply_translation((0, 0, -95))
+mesh = trimesh.util.concatenate([body, mouth, base])

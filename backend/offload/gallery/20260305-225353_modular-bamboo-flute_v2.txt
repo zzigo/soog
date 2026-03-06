@@ -1,0 +1,52 @@
+# Prompt
+
+Design an organogram for modular bamboo flute with feedback controller
+
+# Summary
+
+### Conceptual Summary
+
+The organogram for a modular bamboo flute with feedback controller will consist of:
+- **Geometrical Shapes**: A vertical rectangle (chordophone) to represent the flute body, and a diamond (rhombus) for the electronic control unit.
+- **Colors**: Bamboo is represented by `yellow`, the feedback controller is in `grey`.
+- **Acoustical Rationale**: The bamboo flute will be designed with adjustable length sections to allow for tuning adjustments. The feedback controller will modulate air flow and pressure, influencing pitch stability and tone quality.
+- **Organological Relations**: The feedback control unit connects to the flute body with a tube, symbolizing the electronic interface's interaction with the acoustic structure.
+- **Performative Interactions**: Performers can adjust individual sections of the bamboo flute in real-time, while the feedback controller ensures consistent sound quality.
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 52856
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.set_xlim([0, 7])
+ax.set_ylim([-3, 3])
+ax.axis('off')
+ax.grid(True, color='grey', alpha=0.3)
+
+# Bamboo flute body
+rect = plt.Rectangle((1, -1), 4, 2, edgecolor='yellow', facecolor='lightgoldenrodyellow', linewidth=2.5)
+ax.add_patch(rect)
+
+# Feedback controller
+diamond = plt.Polygon([[1.5, -0.5], [2.5, 0.5], [3.5, -0.5], [4.5, 0.5]], edgecolor='grey', facecolor='lightgray', linewidth=2.5)
+ax.add_patch(diamond)
+
+# Connection tube
+connection = plt.Polygon([[1.75, 0.25], [2.25, -0.25], [3.25, 0.25]], edgecolor='black', facecolor='white', linewidth=2)
+ax.add_patch(connection)
+
+# Arrows for interaction
+arrow = plt.FancyArrowPatch((1.875, -0.25), (2.375, -0.25), arrowstyle='<|-|>', mutation_scale=20, color='black')
+ax.add_patch(arrow)
+arrow = plt.FancyArrowPatch((4.625, 0.25), (4.125, 0.25), arrowstyle='<|-|>', mutation_scale=20, color='black')
+ax.add_patch(arrow)
+
+plt.show()
