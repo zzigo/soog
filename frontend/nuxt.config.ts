@@ -38,8 +38,8 @@ export default defineNuxtConfig({
         (process.env.NODE_ENV === "development"
           ? devApiBase
           : "https://soog.zztt.org/api"),
-      // Set to "0" to disable client-side request timeout.
-      generateTimeoutMs: process.env.NUXT_PUBLIC_GENERATE_TIMEOUT_MS || "240000",
+      // "0" means disabled (no client-side timeout cap).
+      generateTimeoutMs: process.env.NUXT_PUBLIC_GENERATE_TIMEOUT_MS || "0",
     },
   },
 

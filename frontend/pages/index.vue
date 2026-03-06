@@ -428,7 +428,7 @@ const config = useRuntimeConfig();
 const apiBase = ref(config.public.apiBase || 'http://127.0.0.1:10000/api');
 const getGenerateFetchTimeoutMs = () => {
   const value = Number(config.public.generateTimeoutMs);
-  if (!Number.isFinite(value)) return 240000;
+  if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.floor(value));
 };
 
