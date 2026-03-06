@@ -225,6 +225,7 @@ const isMobileOrTablet = ref(false);
 const showLightbox = ref(false);
 const RESPONSE_TIMES_KEY = 'soog_response_times_ms';
 const MAX_RESPONSE_SAMPLES = 20;
+const GENERATE_FETCH_TIMEOUT_MS = 240000;
 
 const averageResponseMs = computed(() => {
   if (!responseTimesMs.value.length) return 20000;
@@ -693,14 +694,27 @@ const handleEvaluate = async (selectedText) => {
   startProcessing();
 
     async function callOnce() {
-      const response = await fetch(`${apiBase.value}/generate`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ prompt: selectedText }),
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), GENERATE_FETCH_TIMEOUT_MS);
+      let response;
+      try {
+        response = await fetch(`${apiBase.value}/generate`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ prompt: selectedText }),
+          signal: controller.signal
+        });
+      } catch (fetchErr) {
+        if (fetchErr?.name === 'AbortError') {
+          throw new Error(`Generation timed out after ${Math.round(GENERATE_FETCH_TIMEOUT_MS / 1000)}s. Try a shorter prompt or lighter model.`);
+        }
+        throw fetchErr;
+      } finally {
+        clearTimeout(timeoutId);
+      }
       
       // Read body only once as text
       const text = await response.text();

@@ -128,6 +128,42 @@ def get_ollama_headers():
     return headers
 
 
+def _env_int(name: str, default: int, min_value: int = None, max_value: int = None) -> int:
+    raw = os.getenv(name, '').strip()
+    if not raw:
+        value = int(default)
+    else:
+        try:
+            value = int(raw)
+        except ValueError:
+            value = int(default)
+    if min_value is not None:
+        value = max(min_value, value)
+    if max_value is not None:
+        value = min(max_value, value)
+    return value
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name, '').strip().lower()
+    if not raw:
+        return bool(default)
+    return raw in ('1', 'true', 'yes', 'on')
+
+
+def get_generation_limits():
+    return {
+        # LLM HTTP request timeout per call.
+        'llm_timeout_sec': _env_int('OLLAMA_REQUEST_TIMEOUT_SEC', 90, min_value=15, max_value=600),
+        # Internal correction loops inside one generation.
+        'max_attempts': _env_int('SOOG_LLM_MAX_ATTEMPTS', 2, min_value=1, max_value=6),
+        # Absolute wall-clock budget for /api/generate.
+        'deadline_sec': _env_int('SOOG_GENERATE_DEADLINE_SEC', 240, min_value=45, max_value=1800),
+        # Optional second pass without soopub context (disabled by default to avoid long waits).
+        'retry_without_context': _env_bool('SOOG_RETRY_WITHOUT_CONTEXT', default=False)
+    }
+
+
 def _read_context_excerpt(path: str, max_chars: int = 3000):
     if not os.path.isfile(path):
         return ""
@@ -808,7 +844,7 @@ def extract_llm_content(payload: dict) -> str:
     raise ValueError('Response does not contain text content')
 
 
-def call_ollama_chat(system_prompt: str, user_prompt: str, timeout: int = 120):
+def call_ollama_chat(system_prompt: str, user_prompt: str, timeout: int = 90):
     base_url, model_name, _ = get_ollama_config()
     headers = get_ollama_headers()
     messages = [
@@ -862,6 +898,12 @@ def call_ollama_chat(system_prompt: str, user_prompt: str, timeout: int = 120):
             if response.status_code == 401:
                 raise RuntimeError(
                     f"Ollama unauthorized at {url}. Check OLLAMA_API_KEY or proxy auth."
+                )
+            body_excerpt = response.text[:600]
+            if 'requires more system memory' in body_excerpt.lower():
+                raise RuntimeError(
+                    f"Ollama model OOM at {url}: {body_excerpt}. "
+                    "Try a smaller model or free RAM/swap."
                 )
             raise RuntimeError(f"Ollama API error ({response.status_code}) at {url}: {response.text[:600]}")
 
@@ -1008,14 +1050,27 @@ def fetch_ollama_models():
     return {'ok': False, 'status': last_status or 500, 'error': 'Could not list Ollama models', 'base_url': base_url}
 
 
-def generate_with_image_required(prompt_content: str, user_instruction: str):
+def generate_with_image_required(
+    prompt_content: str,
+    user_instruction: str,
+    max_attempts: int = 2,
+    llm_timeout_sec: int = 90,
+    deadline_at: float = None
+):
     """
-    Run up to 3 LLM passes and require a valid matplotlib-rendered image.
+    Run up to N LLM passes and require a valid matplotlib-rendered image.
     Returns: raw_response, summary_text, materials_text, plot_code, stl_code, image_base64, stl_bytes, llm_meta
     """
-    max_attempts = 3
     last_reason = "No valid matplotlib output produced."
     for attempt_idx in range(1, max_attempts + 1):
+        if deadline_at is not None:
+            remaining = deadline_at - time.perf_counter()
+            if remaining <= 8:
+                raise RuntimeError(
+                    f"Generation deadline exceeded after {attempt_idx - 1} attempt(s). "
+                    f"Last reason: {last_reason}"
+                )
+
         if attempt_idx == 1:
             attempt_prompt = user_instruction
         else:
@@ -1028,11 +1083,19 @@ def generate_with_image_required(prompt_content: str, user_instruction: str):
                 + "\n- The trimesh block must define `mesh` as a non-empty trimesh.Trimesh."
                 + "\n- Do not include placeholder text or recovery notes."
             )
+        call_timeout = int(llm_timeout_sec)
+        if deadline_at is not None:
+            # Keep margin for code execution/parsing after LLM response.
+            remaining = max(1, int(deadline_at - time.perf_counter()))
+            call_timeout = max(12, min(call_timeout, max(12, remaining - 5)))
+
         try:
-            raw_response, llm_meta = call_ollama_chat(prompt_content, attempt_prompt, timeout=150)
+            raw_response, llm_meta = call_ollama_chat(prompt_content, attempt_prompt, timeout=call_timeout)
         except Exception as e:
             last_reason = f"LLM call failed: {e}"
             logging.error(last_reason)
+            if 'requires more system memory' in str(e).lower():
+                raise RuntimeError(last_reason)
             continue
         logging.info(
             f"LLM generate attempt={attempt_idx} endpoint={llm_meta.get('endpoint')} model={llm_meta.get('model')}"
@@ -1803,6 +1866,7 @@ def generate():
     if not prompt:
         return jsonify({'error': 'No prompt provided.'}), 400
     try:
+        limits = get_generation_limits()
         prompt_content = get_prompt_content()
         if "ERROR" in prompt_content:
             return jsonify({'error': prompt_content}), 500
@@ -1853,6 +1917,7 @@ def generate():
             + "\n\nDo not include any additional commentary after the code blocks."
         )
         request_start = time.perf_counter()
+        deadline_at = request_start + float(limits['deadline_sec'])
         try:
             (
                 raw_response,
@@ -1863,9 +1928,17 @@ def generate():
                 image_base64,
                 stl_bytes,
                 llm_meta
-            ) = generate_with_image_required(system_prompt, user_instruction)
+            ) = generate_with_image_required(
+                system_prompt,
+                user_instruction,
+                max_attempts=limits['max_attempts'],
+                llm_timeout_sec=limits['llm_timeout_sec'],
+                deadline_at=deadline_at
+            )
         except Exception as first_error:
-            if soopub_context:
+            can_retry_without_context = bool(soopub_context) and limits.get('retry_without_context', False)
+            has_time_budget = (deadline_at - time.perf_counter()) > 25
+            if can_retry_without_context and has_time_budget:
                 logging.error(
                     f"Primary generation with extended context failed: {first_error}. "
                     "Retrying once with prompt.txt only."
@@ -1884,7 +1957,13 @@ def generate():
                     image_base64,
                     stl_bytes,
                     llm_meta
-                ) = generate_with_image_required(prompt_content, retry_instruction)
+                ) = generate_with_image_required(
+                    prompt_content,
+                    retry_instruction,
+                    max_attempts=limits['max_attempts'],
+                    llm_timeout_sec=limits['llm_timeout_sec'],
+                    deadline_at=deadline_at
+                )
             else:
                 raise
         elapsed_ms = int((time.perf_counter() - request_start) * 1000)
