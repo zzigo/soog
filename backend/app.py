@@ -153,12 +153,13 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 def get_generation_limits():
     return {
-        # LLM HTTP request timeout per call.
-        'llm_timeout_sec': _env_int('OLLAMA_REQUEST_TIMEOUT_SEC', 90, min_value=15, max_value=600),
+        # LLM HTTP request timeout per call. Set to 0 to disable.
+        'llm_timeout_sec': _env_int('OLLAMA_REQUEST_TIMEOUT_SEC', 90, min_value=0, max_value=86400),
         # Internal correction loops inside one generation.
         'max_attempts': _env_int('SOOG_LLM_MAX_ATTEMPTS', 2, min_value=1, max_value=6),
         # Absolute wall-clock budget for /api/generate.
-        'deadline_sec': _env_int('SOOG_GENERATE_DEADLINE_SEC', 240, min_value=45, max_value=1800),
+        # Set to 0 to disable deadline (stress-testing mode).
+        'deadline_sec': _env_int('SOOG_GENERATE_DEADLINE_SEC', 240, min_value=0, max_value=86400),
         # Optional second pass without soopub context (disabled by default to avoid long waits).
         'retry_without_context': _env_bool('SOOG_RETRY_WITHOUT_CONTEXT', default=False)
     }
@@ -844,7 +845,7 @@ def extract_llm_content(payload: dict) -> str:
     raise ValueError('Response does not contain text content')
 
 
-def call_ollama_chat(system_prompt: str, user_prompt: str, timeout: int = 90):
+def call_ollama_chat(system_prompt: str, user_prompt: str, timeout=90):
     base_url, model_name, _ = get_ollama_config()
     headers = get_ollama_headers()
     messages = [
@@ -1083,11 +1084,15 @@ def generate_with_image_required(
                 + "\n- The trimesh block must define `mesh` as a non-empty trimesh.Trimesh."
                 + "\n- Do not include placeholder text or recovery notes."
             )
-        call_timeout = int(llm_timeout_sec)
+        call_timeout = int(llm_timeout_sec) if int(llm_timeout_sec) > 0 else None
         if deadline_at is not None:
             # Keep margin for code execution/parsing after LLM response.
             remaining = max(1, int(deadline_at - time.perf_counter()))
-            call_timeout = max(12, min(call_timeout, max(12, remaining - 5)))
+            deadline_timeout = max(12, remaining - 5)
+            if call_timeout is None:
+                call_timeout = deadline_timeout
+            else:
+                call_timeout = max(12, min(call_timeout, deadline_timeout))
 
         try:
             raw_response, llm_meta = call_ollama_chat(prompt_content, attempt_prompt, timeout=call_timeout)
@@ -1917,7 +1922,11 @@ def generate():
             + "\n\nDo not include any additional commentary after the code blocks."
         )
         request_start = time.perf_counter()
-        deadline_at = request_start + float(limits['deadline_sec'])
+        deadline_at = (
+            request_start + float(limits['deadline_sec'])
+            if float(limits['deadline_sec']) > 0
+            else None
+        )
         try:
             (
                 raw_response,
@@ -1937,7 +1946,7 @@ def generate():
             )
         except Exception as first_error:
             can_retry_without_context = bool(soopub_context) and limits.get('retry_without_context', False)
-            has_time_budget = (deadline_at - time.perf_counter()) > 25
+            has_time_budget = deadline_at is None or (deadline_at - time.perf_counter()) > 25
             if can_retry_without_context and has_time_budget:
                 logging.error(
                     f"Primary generation with extended context failed: {first_error}. "

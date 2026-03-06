@@ -1,6 +1,5 @@
 # on server
 
-
 use ./deploy/deploy.fish  
 or 
 dsoog
@@ -14,6 +13,11 @@ echo $PATH | grep .local/bin
 set -Ux fish_user_paths ~/.local/bin $fish_user_paths
 exec fish
 
+## to resetart ollama
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+ollama ps
+
 
 # on local
 
@@ -26,4 +30,3 @@ FLASK_DEBUG=1 FLASK_RELOAD=1 python app.py
 ## frontend
 pkill ollama
 ollama serve
-
