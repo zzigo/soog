@@ -1218,10 +1218,22 @@ def execute_matplotlib_code(code: str) -> str:
             # Some model outputs mix annotate-style kwargs that FancyArrowPatch does not accept.
             xy = kwargs.pop('xy', None)
             xytext = kwargs.pop('xytext', None)
+            arrowprops = kwargs.pop('arrowprops', None)
             if xytext is not None and 'posA' not in kwargs and len(args) < 1:
                 kwargs['posA'] = xytext
             if xy is not None and 'posB' not in kwargs and len(args) < 2:
                 kwargs['posB'] = xy
+            if isinstance(arrowprops, dict):
+                # Accept annotate-style arrowprops by mapping only known FancyArrowPatch kwargs.
+                for key in (
+                    'arrowstyle', 'connectionstyle', 'shrinkA', 'shrinkB',
+                    'mutation_scale', 'mutation_aspect', 'alpha', 'zorder',
+                    'linewidth', 'lw', 'linestyle', 'ls',
+                    'color', 'edgecolor', 'ec', 'facecolor', 'fc',
+                    'patchA', 'patchB', 'capstyle', 'joinstyle'
+                ):
+                    if key in arrowprops and key not in kwargs:
+                        kwargs[key] = arrowprops[key]
             kwargs.pop('xycoords', None)
             kwargs.pop('textcoords', None)
             kwargs.pop('annotation_clip', None)
