@@ -22,6 +22,7 @@ let aceEditorInstance;
 const commandHistory = ref([]);
 let historyIndex = -1;
 let currentCommand = "";
+let versionFetchWarned = false;
 
 const fetchVersion = async () => {
   try {
@@ -61,8 +62,12 @@ const fetchVersion = async () => {
         aceEditorInstance.clearSelection();
       }
     }
+    versionFetchWarned = false;
   } catch (error) {
-    console.error("Error fetching version:", error.message);
+    if (!versionFetchWarned) {
+      console.warn("Version polling unavailable:", error.message);
+      versionFetchWarned = true;
+    }
     version.value = "local-dev";
   }
 };

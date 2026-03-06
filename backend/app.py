@@ -155,6 +155,8 @@ def get_generation_limits():
     return {
         # LLM HTTP request timeout per call. Set to 0 to disable.
         'llm_timeout_sec': _env_int('OLLAMA_REQUEST_TIMEOUT_SEC', 90, min_value=0, max_value=86400),
+        # LLM max generated tokens per call (controls latency without wall-clock timeout).
+        'llm_max_tokens': _env_int('SOOG_LLM_MAX_TOKENS', 1000, min_value=64, max_value=4096),
         # Internal correction loops inside one generation.
         'max_attempts': _env_int('SOOG_LLM_MAX_ATTEMPTS', 2, min_value=1, max_value=6),
         # Absolute wall-clock budget for /api/generate.
@@ -845,7 +847,7 @@ def extract_llm_content(payload: dict) -> str:
     raise ValueError('Response does not contain text content')
 
 
-def call_ollama_chat(system_prompt: str, user_prompt: str, timeout=90):
+def call_ollama_chat(system_prompt: str, user_prompt: str, timeout=90, max_tokens: int = 1000):
     base_url, model_name, _ = get_ollama_config()
     headers = get_ollama_headers()
     messages = [
@@ -857,7 +859,7 @@ def call_ollama_chat(system_prompt: str, user_prompt: str, timeout=90):
         "model": model_name,
         "messages": messages,
         "temperature": 0.9,
-        "max_tokens": 1000
+        "max_tokens": int(max_tokens)
     }
     native_body = {
         "model": model_name,
@@ -865,7 +867,7 @@ def call_ollama_chat(system_prompt: str, user_prompt: str, timeout=90):
         "stream": False,
         "options": {
             "temperature": 0.9,
-            "num_predict": 1000
+            "num_predict": int(max_tokens)
         }
     }
     generate_body = {
@@ -874,7 +876,7 @@ def call_ollama_chat(system_prompt: str, user_prompt: str, timeout=90):
         "stream": False,
         "options": {
             "temperature": 0.9,
-            "num_predict": 1000
+            "num_predict": int(max_tokens)
         }
     }
 
@@ -1056,6 +1058,7 @@ def generate_with_image_required(
     user_instruction: str,
     max_attempts: int = 2,
     llm_timeout_sec: int = 90,
+    llm_max_tokens: int = 1000,
     deadline_at: float = None
 ):
     """
@@ -1095,7 +1098,12 @@ def generate_with_image_required(
                 call_timeout = max(12, min(call_timeout, deadline_timeout))
 
         try:
-            raw_response, llm_meta = call_ollama_chat(prompt_content, attempt_prompt, timeout=call_timeout)
+            raw_response, llm_meta = call_ollama_chat(
+                prompt_content,
+                attempt_prompt,
+                timeout=call_timeout,
+                max_tokens=llm_max_tokens
+            )
         except Exception as e:
             last_reason = f"LLM call failed: {e}"
             logging.error(last_reason)
@@ -1969,6 +1977,7 @@ def generate():
                 user_instruction,
                 max_attempts=limits['max_attempts'],
                 llm_timeout_sec=limits['llm_timeout_sec'],
+                llm_max_tokens=limits['llm_max_tokens'],
                 deadline_at=deadline_at
             )
         except Exception as first_error:
@@ -1998,6 +2007,7 @@ def generate():
                     retry_instruction,
                     max_attempts=limits['max_attempts'],
                     llm_timeout_sec=limits['llm_timeout_sec'],
+                    llm_max_tokens=limits['llm_max_tokens'],
                     deadline_at=deadline_at
                 )
             else:
