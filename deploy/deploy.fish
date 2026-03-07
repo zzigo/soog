@@ -36,6 +36,7 @@ end
 
 # 4) Backend dependencies (use venv pip directly)
 echo "→ Updating backend"
+set -gx PIP_DISABLE_PIP_VERSION_CHECK 1
 set -l BACKEND_PIP "$BACKEND_DIR/venv/bin/pip"
 if not test -x $BACKEND_PIP
     echo "✖ Missing backend virtualenv: $BACKEND_DIR/venv"

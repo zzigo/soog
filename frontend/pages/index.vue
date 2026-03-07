@@ -91,7 +91,7 @@
               <h3 class="section-title">ORGANOGRAM</h3>
               <img
                 v-if="plotImage"
-                :src="`data:image/png;base64,${plotImage}`"
+                :src="plotImage"
                 alt="Organogram"
                 @click="showLightbox = true"
                 class="plot-image"
@@ -142,7 +142,7 @@
           </svg>
         </button>
         <img 
-          :src="`data:image/png;base64,${plotImage}`" 
+          :src="plotImage" 
           alt="Plot"
           class="lightbox-image"
           @click.stop
@@ -515,28 +515,6 @@ async function downloadCurrentStl() {
   }
 }
 
-async function fetchImageBase64(url) {
-  const resolved = resolveAssetUrl(url);
-  if (!resolved || typeof window === 'undefined') return null;
-  try {
-    const response = await fetch(resolved);
-    if (!response.ok) return null;
-    const blob = await response.blob();
-    return await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const dataUrl = typeof reader.result === 'string' ? reader.result : '';
-        const parts = dataUrl.split(',');
-        resolve(parts.length > 1 ? parts[1] : null);
-      };
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-}
-
 function buildRefactorDraft(item) {
   if (!item || typeof item !== 'object') return '';
 
@@ -619,7 +597,7 @@ async function loadCodeFromGallery(item) {
     : 0;
 
   stlUrl.value = item.stl_url ? resolveAssetUrl(item.stl_url) : null;
-  plotImage.value = item.image_url ? await fetchImageBase64(item.image_url) : null;
+  plotImage.value = item.image_url ? resolveAssetUrl(item.image_url) : null;
   showGallery.value = false;
 }
 
@@ -787,10 +765,14 @@ const handleEvaluate = async (selectedText) => {
     responseModel.value = '';
     responseElapsedMs.value = 0;
 
-    if (!data.image) {
+    const imageUrl = data.image_url || data.gallery?.image_url || null;
+    if (data.image) {
+      plotImage.value = `data:image/png;base64,${data.image}`;
+    } else if (imageUrl) {
+      plotImage.value = resolveAssetUrl(imageUrl);
+    } else {
       throw new Error('Backend did not return an organogram image. Generation aborted.');
     }
-    plotImage.value = data.image;
 
     if (data.summary) summary.value = data.summary;
     responseModel.value = (data.llm_model || currentModel.value || '').trim();

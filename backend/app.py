@@ -163,7 +163,9 @@ def get_generation_limits():
         # Set to 0 to disable deadline (stress-testing mode).
         'deadline_sec': _env_int('SOOG_GENERATE_DEADLINE_SEC', 240, min_value=0, max_value=86400),
         # Optional second pass without soopub context (disabled by default to avoid long waits).
-        'retry_without_context': _env_bool('SOOG_RETRY_WITHOUT_CONTEXT', default=False)
+        'retry_without_context': _env_bool('SOOG_RETRY_WITHOUT_CONTEXT', default=False),
+        # Max PNG bytes to include inline in /api/generate JSON (0 disables inline image payload).
+        'max_inline_image_bytes': _env_int('SOOG_MAX_INLINE_IMAGE_BYTES', 600000, min_value=0, max_value=20000000)
     }
 
 
@@ -2125,12 +2127,21 @@ def generate():
         except Exception as e:
             logging.error(f"Error saving gallery item: {e}")
 
+        image_url = (meta or {}).get('image_url') if isinstance(meta, dict) else None
+        inline_image = image_base64
+        max_inline_image_bytes = int(limits.get('max_inline_image_bytes') or 0)
+        if max_inline_image_bytes <= 0:
+            inline_image = None
+        elif image_url and len(image_bytes) > max_inline_image_bytes:
+            inline_image = None
+
         return jsonify({
             "type": "plot",
             "content": (plot_code or '').strip(),
             "plot_code": (plot_code or '').strip(),
             "stl_code": (stl_code or '').strip(),
-            "image": image_base64,
+            "image": inline_image,
+            "image_url": image_url,
             "gallery": meta,
             "summary": summary_text,
             "materials": materials_text,
