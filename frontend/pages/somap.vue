@@ -92,6 +92,7 @@ let ForceGraph3D = null
 let resizeHandler = null
 let keyHandler = null
 let rotateRaf = null
+let restoreConsoleWarn = null
 
 const highlightNodes = new Set()
 const highlightLinks = new Set()
@@ -514,7 +515,28 @@ function handleShortcuts(event) {
   }
 }
 
+function installThreeWarningFilter() {
+  if (typeof window === 'undefined' || typeof console?.warn !== 'function') {
+    return () => {}
+  }
+  const originalWarn = console.warn.bind(console)
+  console.warn = (...args) => {
+    const msg = String(args?.[0] || '')
+    if (
+      msg.includes('Multiple instances of Three.js being imported') ||
+      msg.includes('THREE.THREE.Clock: This module has been deprecated')
+    ) {
+      return
+    }
+    originalWarn(...args)
+  }
+  return () => {
+    console.warn = originalWarn
+  }
+}
+
 onMounted(async () => {
+  restoreConsoleWarn = installThreeWarningFilter()
   const module = await import('3d-force-graph')
   ForceGraph3D = module.default
   initGraph()
@@ -529,6 +551,7 @@ onUnmounted(() => {
   stopAutoRotate()
   if (resizeHandler) window.removeEventListener('resize', resizeHandler)
   if (keyHandler) window.removeEventListener('keydown', keyHandler)
+  if (restoreConsoleWarn) restoreConsoleWarn()
   if (graphContainer.value) graphContainer.value.innerHTML = ''
   materialCache.clear()
 })

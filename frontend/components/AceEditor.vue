@@ -64,7 +64,7 @@ const fetchVersion = async () => {
     }
     versionFetchWarned = false;
   } catch (error) {
-    if (!versionFetchWarned) {
+    if (import.meta.dev && !versionFetchWarned) {
       console.warn("Version polling unavailable:", error.message);
       versionFetchWarned = true;
     }

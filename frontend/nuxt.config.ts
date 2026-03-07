@@ -43,6 +43,12 @@ export default defineNuxtConfig({
     },
   },
 
+  vite: {
+    resolve: {
+      dedupe: ["three"],
+    },
+  },
+
   nitro: {
     preset: "node-server", // Suitable for Render deployment as a dynamic app
   },
