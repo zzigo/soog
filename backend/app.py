@@ -1306,6 +1306,38 @@ def execute_matplotlib_code(code: str) -> str:
             except Exception:
                 pass
 
+        def _normalize_font_variant(value):
+            if isinstance(value, (list, tuple, set)):
+                if not value:
+                    return 'normal'
+                value = next(iter(value))
+            if value is None:
+                return 'normal'
+            text = str(value).strip().lower()
+            if text in ('normal', 'small-caps'):
+                return text
+            return 'normal'
+
+        try:
+            from matplotlib.font_manager import FontProperties as _FontProperties
+            from matplotlib.text import Text as _Text
+
+            _orig_set_variant = getattr(_FontProperties, 'set_variant', None)
+            if callable(_orig_set_variant) and not getattr(_orig_set_variant, '_soog_safe', False):
+                def _safe_set_variant(self, variant):
+                    return _orig_set_variant(self, _normalize_font_variant(variant))
+                _safe_set_variant._soog_safe = True
+                _FontProperties.set_variant = _safe_set_variant
+
+            _orig_text_set_fontvariant = getattr(_Text, 'set_fontvariant', None)
+            if callable(_orig_text_set_fontvariant) and not getattr(_orig_text_set_fontvariant, '_soog_safe', False):
+                def _safe_text_set_fontvariant(self, variant):
+                    return _orig_text_set_fontvariant(self, _normalize_font_variant(variant))
+                _safe_text_set_fontvariant._soog_safe = True
+                _Text.set_fontvariant = _safe_text_set_fontvariant
+        except Exception:
+            pass
+
         setattr(plt, 'Arc', Arc)
         setattr(plt, 'Ellipse', Ellipse)
         setattr(plt, 'Polygon', Polygon)
