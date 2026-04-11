@@ -1,0 +1,59 @@
+# Prompt
+
+Create the Biomorphic Cello: living strings that evolve new harmonic possibilities...
+
+# Summary
+
+This organogram represents a simple musical instrument with an idiophone (circle) and an aerophone (rectangle). The idiophone symbolizes the resonant body, while the aerophone indicates the air column or reed mechanism.
+
+# Materials
+
+1 High-density Spruce soundboard
+2 Carbon fiber reinforced polymers for structural frames
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 73282
+- sketch_model: OFA-Sys/small-stable-diffusion-v0
+- group_id: musical_organogram_represents_20260411-203158
+- version: v1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+import numpy as np
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.set_xlim(-2, 2)
+ax.set_ylim(-2, 2)
+ax.axis('off')
+
+# Idiophone (circle) - resonant body
+idiophone = plt.Circle((0.5, 0), radius=0.4, color='orange', fill=True)
+ax.add_patch(idiophone)
+
+# Aerophone (rectangle) - air column or reed mechanism
+aerophone = plt.Rectangle((-0.8, -1), width=2, height=0.6, color='grey', fill=True)
+ax.add_patch(aerophone)
+
+plt.show()
+
+# Geometry Code (trimesh)
+
+import numpy as np
+import trimesh
+
+# map: air-column -> cylinder, bell radiation -> cone, mouthpiece interface -> cylinder
+body = trimesh.creation.cylinder(radius=8.36, height=226.2, sections=59)
+bell = trimesh.creation.cone(radius=12.46, height=59.95, sections=59)
+bell.apply_translation((0, 0, -143.07))
+mouth = trimesh.creation.cylinder(radius=4.36, height=37.4, sections=59)
+mouth.apply_translation((0, 0, 131.8))
+spine = trimesh.creation.box(extents=(6.69, 9.2, 90.48))
+mesh = trimesh.util.concatenate([body, bell, mouth, spine])
+
+# Sketch Prompt
+
+hand-drawn speculative musical instrument concept sketch, industrial design notebook rendering, pencil and ink linework with restrained watercolor accents, three-quarter view, single instrument, dark neutral background, preserve the organogram geometry cues: circular resonators, rectilinear frames, preserve the organogram palette cues: grey, orange. Decode the organogram into a single speculative musical instrument object. Translate circles into aerophonic volumes, vertical rectangles into chordophonic bodies, horizontal rectangles into membranophonic spans, rhombuses into electronic modules, and arrows into playable flows or performer gestures. Keep Mantle Hood organogram color logic visible as subtle material accents: wood orange, bamboo yellow, water blue, earth brown, stone white, plastic grey, glass green. User brief: Create the Biomorphic Cello: living strings that evolve new harmonic possibilities.... Organological cues: This organogram represents a simple musical instrument with an idiophone (circle) and an aerophone (rectangle). The idiophone symbolizes the resonant body, wh...

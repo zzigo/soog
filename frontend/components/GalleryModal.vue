@@ -9,6 +9,15 @@
           <div v-if="current && !renaming" class="actions">
             <button @click="loadCode">Load Code</button>
             <button v-if="current.stl_url" @click="downloadCurrentStl">STL</button>
+            <button 
+              v-if="current" 
+              @click="remakeSketch" 
+              class="remake-header-btn" 
+              :disabled="remakingSketch"
+              title="Regenerate inferred sketch image"
+            >
+              GENERATE
+            </button>
             <button @click="toggleRename">Rename</button>
             <button @click="deleteItem" class="delete">Delete</button>
           </div>
@@ -64,15 +73,30 @@
 
         <div class="right">
           <div v-if="current" class="split-view">
-            <section class="viewer-panel">
-              <h4 class="viewer-title">Organogram</h4>
-              <div class="viewer">
-                <img v-if="current?.image_url" :src="imageSrc(current)" class="image" alt="organogram" />
-                <div v-else class="empty">No organogram image</div>
+            <div class="media-row">
+              <section class="viewer-panel">
+                <div class="viewer-title-row">
+                  <h4 class="viewer-title">Organogram</h4>
+                </div>
+                <div class="viewer">
+                  <img v-if="current?.image_url" :src="imageSrc(current)" class="image" alt="organogram" />
+                  <div v-else class="empty">No organogram image</div>
+                </div>
+              </section>
+              <section class="viewer-panel">
+                <div class="viewer-title-row">
+                  <h4 class="viewer-title">Sketch</h4>
+                </div>
+                <div class="viewer">
+                  <img v-if="current?.sketch_url" :src="sketchSrc(current)" class="image" :key="current?.sketch_url" alt="sketch render" />
+                  <div v-else class="empty">No sketch available</div>
+                </div>
+              </section>
+            </div>
+            <section class="viewer-panel viewer-panel--full">
+              <div class="viewer-title-row">
+                <h4 class="viewer-title">3D Model</h4>
               </div>
-            </section>
-            <section class="viewer-panel">
-              <h4 class="viewer-title">3D Model</h4>
               <div class="viewer">
                 <ClientOnly>
                   <StlViewer v-if="current?.stl_url" :url="fileHref(current.stl_url)" />
@@ -104,6 +128,7 @@ const selectedBasename = ref('')
 const renaming = ref(false)
 const newName = ref('')
 const galleryKey = ref(0)
+const remakingSketch = ref(false)
 
 const current = computed(() => items.value.find((item) => item.basename === selectedBasename.value) || null)
 const currentSummaryHtml = computed(() => {
@@ -216,7 +241,16 @@ function selectGroup(group) {
 
 function imageSrc(item) {
   if (!item) return ''
-  const url = item.image_url || ''
+  return assetHref(item.image_url || '') + (item.image_url?.includes('?') ? '&' : '?') + 't=' + Date.now()
+}
+
+function sketchSrc(item) {
+  if (!item) return ''
+  return assetHref(item.sketch_url || '') + (item.sketch_url?.includes('?') ? '&' : '?') + 't=' + Date.now()
+}
+
+function assetHref(url) {
+  if (!url) return ''
   if (url.startsWith('http')) return url
 
   const offloadApiBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase
@@ -226,13 +260,7 @@ function imageSrc(item) {
 }
 
 function fileHref(url) {
-  if (!url) return ''
-  if (url.startsWith('http')) return url
-
-  const offloadApiBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase
-  if (url.startsWith('/offload')) return offloadApiBase + url
-  if (apiBase.endsWith('/api') && url.startsWith('/api/')) return apiBase + url.substring(4)
-  return apiBase + url
+  return assetHref(url)
 }
 
 async function load(preferredBasename = '') {
@@ -330,6 +358,32 @@ async function renameItem() {
   galleryKey.value++
 }
 
+async function remakeSketch() {
+  if (!current.value || remakingSketch.value) return
+  remakingSketch.value = true
+  try {
+    const res = await fetch(`${apiBase}/gallery/item/${current.value.basename}/remake_sketch`, {
+      method: 'POST'
+    })
+    const payload = await res.json()
+    if (!res.ok) {
+      throw new Error(payload.error || 'Failed to remake sketch')
+    }
+    // Update local item
+    if (current.value) {
+      current.value.sketch_url = payload.sketch_url
+      current.value.sketch_prompt = payload.sketch_prompt
+      current.value.sketch_model = payload.sketch_model
+    }
+    // Reload full list to sync with disk metadata
+    await load(current.value?.basename)
+  } catch (e) {
+    alert(`Error remaking sketch: ${e.message}`)
+  } finally {
+    remakingSketch.value = false
+  }
+}
+
 function onKey(e) {
   if (!props.modelValue || renaming.value || !e.altKey) return
   if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
@@ -363,9 +417,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 .modal-body { display: flex; flex: 1; overflow: hidden; }
 .left { width: 45%; border-right: 1px solid #333; display: flex; flex-direction: column; }
 .right { flex: 1; display: flex; flex-direction: column; background: #000; }
-.split-view { flex: 1; display: grid; grid-template-rows: 1fr 1fr; min-height: 0; }
+.split-view { flex: 1; display: grid; grid-template-rows: minmax(220px, 1fr) minmax(260px, 1fr); min-height: 0; }
+.media-row { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
 .viewer-panel { display: flex; flex-direction: column; min-height: 0; }
 .viewer-panel + .viewer-panel { border-top: 1px solid #222; }
+.media-row .viewer-panel + .viewer-panel { border-top: none; border-left: 1px solid #222; }
+.viewer-panel--full { border-top: 1px solid #222; }
+.viewer-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-right: 10px;
+  border-bottom: 1px solid #1a1a1a;
+}
 .viewer-title {
   margin: 0;
   padding: 8px 10px;
@@ -373,8 +437,53 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(255,255,255,0.7);
-  border-bottom: 1px solid #1a1a1a;
+  border-bottom: none;
 }
+.remake-header-btn {
+  background: #333;
+  color: #fff;
+  border: 1px solid #444;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.05em;
+}
+.remake-header-btn:hover:not(:disabled) { 
+  background: #444;
+  border-color: #666;
+  box-shadow: 0 0 8px rgba(152, 255, 95, 0.2);
+}
+.remake-header-btn:disabled { 
+  opacity: 0.8; 
+  cursor: not-allowed; 
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { background: #333; }
+  50% { background: #555; }
+  100% { background: #333; }
+}
+.remake-btn {
+  background: #444;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.remake-btn:hover:not(:disabled) { 
+  background: #555;
+  border-color: #777;
+}
+.remake-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .viewer { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
 .image { max-width: 100%; max-height: 100%; object-fit: contain; }
 
@@ -472,4 +581,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 .rename-container button:hover { background: #1f1f1f; border-color: #666; }
 .empty { color: #777; }
 .full-empty { display: flex; align-items: center; justify-content: center; flex: 1; }
+
+@media (max-width: 900px) {
+  .modal-body { flex-direction: column; }
+  .left { width: 100%; height: 42%; border-right: none; border-bottom: 1px solid #333; }
+  .media-row { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .media-row .viewer-panel + .viewer-panel { border-left: none; border-top: 1px solid #222; }
+}
 </style>

@@ -26,6 +26,7 @@ import datetime
 import importlib
 import time
 import hashlib
+import threading
 
 try:
     import trimesh  # for STL mode
@@ -50,6 +51,7 @@ os.environ["HF_HOME"] = HF_CACHE_DIR
 # Gallery directory
 GALLERY_DIR = os.path.join(OFFLOAD_DIR, 'gallery')
 os.makedirs(GALLERY_DIR, exist_ok=True)
+GALLERY_FILE_SUFFIXES = ('.json', '.png', '.txt', '.stl', '.sketch.png')
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -62,11 +64,19 @@ logging.basicConfig(
 
 load_dotenv()
 
-# Runtime model override (changed via /api/ollama/model).
+# Default model for all generations.
+DEFAULT_OLLAMA_MODEL = 'deepseek-r1:8b'
+# Fallback model if the default one fails repeatedly.
+FALLBACK_OLLAMA_MODEL = 'qwen2.5:7b-instruct'
+
 OLLAMA_MODEL_OVERRIDE = None
 SOOPUB_CONTEXT_CACHE = {}
 SOOPUB_DOCS_CACHE = None
 SOOPUB_GRAPH_CACHE = {}
+SKETCH_PIPELINE = None
+SKETCH_PIPELINE_MODEL = None
+GENERATION_PROGRESS = {}
+GENERATION_PROGRESS_LOCK = threading.Lock()
 SOOPUB_SECTION_LABELS = {
     '1mat': 'materials',
     '2obj': 'objects',
@@ -78,6 +88,7 @@ SOOPUB_SECTION_LABELS = {
 }
 
 app = Flask(__name__)
+app.url_map.strict_slashes = False
 CORS(app, resources={
     r"/api/*": {"origins": "*"},
     r"/log": {"origins": "*"}
@@ -102,14 +113,32 @@ def get_prompt_content():
         return "ERROR: Unable to load prompt content."
 
 
+def get_specialized_prompt(name: str):
+    """
+    Load specialized prompt files for different generation stages.
+    Available: materials, digitalFab, inferred-image
+    """
+    filename = f"prompt_{name}.txt"
+    try:
+        path = os.path.join(os.path.dirname(__file__), filename)
+        if not os.path.isfile(path):
+            logging.warning(f"Specialized prompt {filename} not found, using generic prompt.txt")
+            return get_prompt_content()
+        with open(path, 'r') as file:
+            return file.read().strip()
+    except Exception as e:
+        logging.error(f"Error reading specialized prompt {filename}: {e}")
+        return get_prompt_content()
+
+
 def get_ollama_config():
     base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434').strip().rstrip('/')
     if not base_url:
         base_url = 'http://localhost:11434'
 
-    model_name = (OLLAMA_MODEL_OVERRIDE or os.getenv('OLLAMA_MODEL', 'qwen2.5:7b-instruct')).strip()
+    model_name = (OLLAMA_MODEL_OVERRIDE or os.getenv('OLLAMA_MODEL', DEFAULT_OLLAMA_MODEL)).strip()
     if not model_name:
-        model_name = 'qwen2.5:7b-instruct'
+        model_name = DEFAULT_OLLAMA_MODEL
 
     api_key = os.getenv('OLLAMA_API_KEY', '').strip()
     return base_url, model_name, api_key
@@ -128,6 +157,52 @@ def get_ollama_headers():
     return headers
 
 
+def get_progress_ttl_seconds():
+    return _env_int('SOOG_PROGRESS_TTL_SEC', 900, min_value=60, max_value=86400)
+
+
+def _trim_generation_progress_locked(now_ts=None):
+    now_ts = now_ts or time.time()
+    ttl = get_progress_ttl_seconds()
+    stale = [
+        key for key, value in GENERATION_PROGRESS.items()
+        if now_ts - float(value.get('updated_at') or 0) > ttl
+    ]
+    for key in stale:
+        GENERATION_PROGRESS.pop(key, None)
+
+
+def _short_reasoning_preview(text: str, max_chars: int = 280) -> str:
+    normalized = re.sub(r'\s+', ' ', (text or '')).strip()
+    if len(normalized) <= max_chars:
+        return normalized
+    return normalized[-max_chars:].lstrip()
+
+
+def update_generation_progress(request_id: str, **fields):
+    if not request_id:
+        return
+    now_ts = time.time()
+    with GENERATION_PROGRESS_LOCK:
+        _trim_generation_progress_locked(now_ts)
+        current = dict(GENERATION_PROGRESS.get(request_id) or {})
+        current.update(fields)
+        current['updated_at'] = now_ts
+        GENERATION_PROGRESS[request_id] = current
+
+
+def get_generation_progress(request_id: str):
+    if not request_id:
+        return None
+    now_ts = time.time()
+    with GENERATION_PROGRESS_LOCK:
+        _trim_generation_progress_locked(now_ts)
+        current = GENERATION_PROGRESS.get(request_id)
+        if not current:
+            return None
+        return dict(current)
+
+
 def _env_int(name: str, default: int, min_value: int = None, max_value: int = None) -> int:
     raw = os.getenv(name, '').strip()
     if not raw:
@@ -137,6 +212,22 @@ def _env_int(name: str, default: int, min_value: int = None, max_value: int = No
             value = int(raw)
         except ValueError:
             value = int(default)
+    if min_value is not None:
+        value = max(min_value, value)
+    if max_value is not None:
+        value = min(max_value, value)
+    return value
+
+
+def _env_float(name: str, default: float, min_value: float = None, max_value: float = None) -> float:
+    raw = os.getenv(name, '').strip()
+    if not raw:
+        value = float(default)
+    else:
+        try:
+            value = float(raw)
+        except ValueError:
+            value = float(default)
     if min_value is not None:
         value = max(min_value, value)
     if max_value is not None:
@@ -166,6 +257,27 @@ def get_generation_limits():
         'retry_without_context': _env_bool('SOOG_RETRY_WITHOUT_CONTEXT', default=False),
         # Max PNG bytes to include inline in /api/generate JSON (0 disables inline image payload).
         'max_inline_image_bytes': _env_int('SOOG_MAX_INLINE_IMAGE_BYTES', 600000, min_value=0, max_value=20000000)
+    }
+
+
+def ollama_thinking_enabled():
+    return _env_bool('SOOG_OLLAMA_THINKING', default=True)
+
+
+def get_sketch_config():
+    width = _env_int('SOOG_SKETCH_WIDTH', 384, min_value=128, max_value=1024)
+    height = _env_int('SOOG_SKETCH_HEIGHT', 384, min_value=128, max_value=1024)
+    width = max(128, (width // 8) * 8)
+    height = max(128, (height // 8) * 8)
+    return {
+        'enabled': _env_bool('SOOG_SKETCH_ENABLED', default=True),
+        'model_id': (os.getenv('SOOG_SKETCH_MODEL', 'OFA-Sys/small-stable-diffusion-v0') or '').strip() or 'OFA-Sys/small-stable-diffusion-v0',
+        'width': width,
+        'height': height,
+        'steps': _env_int('SOOG_SKETCH_STEPS', 12, min_value=4, max_value=60),
+        'strength': _env_float('SOOG_SKETCH_STRENGTH', 0.72, min_value=0.2, max_value=0.95),
+        'guidance_scale': _env_float('SOOG_SKETCH_GUIDANCE_SCALE', 6.5, min_value=1.0, max_value=20.0),
+        'cache_pipeline': _env_bool('SOOG_SKETCH_CACHE_PIPELINE', default=True)
     }
 
 
@@ -265,6 +377,213 @@ def get_soopub_context(query_text: str = "", max_docs: int = 4, max_chars: int =
 
 def _soopub_base_dir():
     return os.path.join(os.path.dirname(__file__), 'soopub')
+
+
+def _collapse_text(value: str, max_chars: int = None) -> str:
+    text = re.sub(r'\s+', ' ', (value or '')).strip()
+    if max_chars and len(text) > max_chars:
+        return text[:max_chars].rstrip() + '...'
+    return text
+
+
+def _extract_sketch_color_hints(plot_code: str):
+    color_bank = [
+        'beige', 'brown', 'pink', 'grey', 'gray', 'orange', 'yellow', 'lightgrey',
+        'green', 'white', 'blue', 'black', 'red', 'purple', 'cyan', 'magenta',
+        'teal', 'amber', 'gold', 'silver'
+    ]
+    lowered = (plot_code or '').lower()
+    colors = []
+    for color in color_bank:
+        if color in lowered and color not in colors:
+            colors.append(color)
+    for hex_match in re.findall(r'#[0-9a-fA-F]{6}', plot_code or ''):
+        if hex_match not in colors:
+            colors.append(hex_match)
+    return colors[:8]
+
+
+def _extract_sketch_shape_hints(plot_code: str):
+    lowered = (plot_code or '').lower()
+    shape_pairs = [
+        ('circle', 'circular resonators'),
+        ('rectangle', 'rectilinear frames'),
+        ('ellipse', 'elliptical chambers'),
+        ('polygon', 'faceted polygons'),
+        ('regularpolygon', 'polygonal nodes'),
+        ('fancyarrowpatch', 'directional arrows'),
+        ('annotate', 'gesture arrows'),
+        ('arc', 'semi-circular markers'),
+        ('linestring', 'tube-like paths')
+    ]
+    shapes = []
+    for token, label in shape_pairs:
+        if token in lowered and label not in shapes:
+            shapes.append(label)
+    return shapes[:6]
+
+
+def build_sketch_prompt(
+    prompt: str,
+    prompt_content: str = "",
+    summary_text: str = "",
+    materials_text: str = "",
+    plot_code: str = ""
+) -> str:
+    """
+    Constructs the image generation prompt by prioritizing style tokens,
+    then the specific instrument identity (from summary/prompt),
+    and finally the foundational logic.
+    """
+    shape_hints = _extract_sketch_shape_hints(plot_code)
+    color_hints = _extract_sketch_color_hints(plot_code)
+
+    # 1. STYLE: Critical for the "Dark Mode" look (Top priority for CLIP)
+    style_prefix = "realistic 3D object, solid black background, realistic reflections, dark mode, cinematic lighting."
+    
+    # 2. IDENTITY: What is this thing? (Extracted from summary/prompt)
+    # We take the start of the summary as it usually names the instrument.
+    identity_context = _collapse_text(summary_text, max_chars=180) if summary_text else ""
+    user_concept = _collapse_text(prompt, max_chars=120) if prompt else ""
+    
+    # 3. GEOMETRY & MATERIALS
+    geometry_clause = ", ".join(shape_hints) if shape_hints else "complex resonant volumes"
+    palette_clause = ", ".join(color_hints) if color_hints else "natural material accents"
+    mats_brief = _collapse_text(materials_text.replace('\n', '; '), max_chars=80) if materials_text else ""
+
+    # 4. BASE LOGIC: From prompt_inferred-image.txt
+    base_instructions = _collapse_text(prompt_content, max_chars=250) if prompt_content else "3D speculative instrument concept."
+
+    parts = [
+        style_prefix,
+        f"Instrument Identity: {identity_context}." if identity_context else "",
+        f"User Concept: {user_concept}." if user_concept else "",
+        f"Form: {geometry_clause}. Colors: {palette_clause}. Materials: {mats_brief}." if mats_brief else f"Form: {geometry_clause}. Colors: {palette_clause}.",
+        "System Logic: " + base_instructions,
+        "Photorealistic 3D rendering, high detail, 8k, obsidian background."
+    ]
+    
+    # Remove empty parts and join
+    full_prompt = " ".join([p for p in parts if p])
+    return _collapse_text(full_prompt, max_chars=1000)
+
+
+def _load_sketch_pipeline(model_id: str, cache_pipeline: bool = True):
+    global SKETCH_PIPELINE, SKETCH_PIPELINE_MODEL
+
+    if cache_pipeline and SKETCH_PIPELINE is not None and SKETCH_PIPELINE_MODEL == model_id:
+        return SKETCH_PIPELINE
+
+    from diffusers import AutoPipelineForImage2Image
+
+    torch_dtype = torch.float16 if device.type == 'cuda' else torch.float32
+    base_kwargs = {
+        'torch_dtype': torch_dtype,
+        'cache_dir': HF_CACHE_DIR
+    }
+    load_variants = [
+        {'safety_checker': None, 'requires_safety_checker': False, **base_kwargs},
+        {'safety_checker': None, **base_kwargs},
+        base_kwargs
+    ]
+
+    pipe = None
+    last_error = None
+    for kwargs in load_variants:
+        try:
+            pipe = AutoPipelineForImage2Image.from_pretrained(model_id, **kwargs)
+            break
+        except TypeError as e:
+            last_error = e
+            continue
+        except Exception as e:
+            last_error = e
+            break
+
+    if pipe is None:
+        raise RuntimeError(f"Could not load sketch pipeline {model_id}: {last_error}")
+
+    pipe = pipe.to(device)
+    if hasattr(pipe, 'enable_attention_slicing'):
+        pipe.enable_attention_slicing()
+    if hasattr(pipe, 'enable_vae_slicing'):
+        pipe.enable_vae_slicing()
+    if hasattr(pipe, 'set_progress_bar_config'):
+        pipe.set_progress_bar_config(disable=True)
+
+    if cache_pipeline:
+        SKETCH_PIPELINE = pipe
+        SKETCH_PIPELINE_MODEL = model_id
+
+    return pipe
+
+
+def generate_sketch_image(
+    organogram_bytes: bytes,
+    prompt: str,
+    prompt_content: str = "",
+    summary_text: str = "",
+    materials_text: str = "",
+    plot_code: str = ""
+):
+    config = get_sketch_config()
+    if not config.get('enabled'):
+        return None, None, None
+    if not organogram_bytes:
+        return None, None, None
+
+    sketch_prompt_content = get_specialized_prompt('inferred-image')
+    sketch_prompt = build_sketch_prompt(
+        prompt=prompt,
+        prompt_content=sketch_prompt_content,
+        summary_text=summary_text,
+        materials_text=materials_text,
+        plot_code=plot_code
+    )
+    negative_prompt = (
+        "text, typography, labels, caption, watermark, graph, chart, axes, legend, ui, "
+        "abstract infographic, collage, multiple instruments, photorealistic photo"
+    )
+
+    pipe = _load_sketch_pipeline(
+        model_id=config['model_id'],
+        cache_pipeline=bool(config.get('cache_pipeline'))
+    )
+
+    organogram_image = Image.open(BytesIO(organogram_bytes)).convert('RGB')
+    organogram_image = organogram_image.resize((config['width'], config['height']), Image.LANCZOS)
+
+    seed_value = int(hashlib.sha256(f"{prompt}|{summary_text}|{materials_text}".encode('utf-8')).hexdigest()[:8], 16)
+    generator_device = 'cuda' if device.type == 'cuda' else 'cpu'
+    generator = torch.Generator(device=generator_device).manual_seed(seed_value)
+
+    with torch.inference_mode():
+        result = pipe(
+            prompt=sketch_prompt,
+            negative_prompt=negative_prompt,
+            image=organogram_image,
+            strength=float(config['strength']),
+            guidance_scale=float(config['guidance_scale']),
+            num_inference_steps=int(config['steps']),
+            generator=generator
+        )
+
+    sketch_image = result.images[0].convert('RGB')
+    output = BytesIO()
+    sketch_image.save(output, format='PNG', optimize=True)
+
+    if not config.get('cache_pipeline'):
+        try:
+            pipe.to('cpu')
+            del pipe
+        except Exception:
+            pass
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        import gc
+        gc.collect()
+
+    return output.getvalue(), sketch_prompt, config['model_id']
 
 
 def _normalize_graph_token(value: str) -> str:
@@ -849,88 +1168,349 @@ def extract_llm_content(payload: dict) -> str:
     raise ValueError('Response does not contain text content')
 
 
-def call_ollama_chat(system_prompt: str, user_prompt: str, timeout=90, max_tokens: int = 1000):
+def extract_llm_thinking(payload: dict) -> str:
+    message = payload.get('message')
+    if isinstance(message, dict) and message.get('thinking') is not None:
+        return str(message.get('thinking') or '')
+    if payload.get('thinking') is not None:
+        return str(payload.get('thinking') or '')
+    return ''
+
+
+def stream_ollama_response(url: str, headers: dict, body: dict, timeout=90, progress_callback=None):
+    response = requests.post(url, headers=headers, json=body, timeout=timeout, stream=True)
+
+    if response.status_code >= 400:
+        response_text = response.text[:600]
+        if response.status_code in (400, 404, 405, 422):
+            raise RuntimeError(f"Endpoint {url} returned {response.status_code}: {response_text}")
+        if response.status_code == 401:
+            raise RuntimeError(f"Ollama unauthorized at {url}. Check OLLAMA_API_KEY or proxy auth.")
+        if 'requires more system memory' in response_text.lower():
+            raise RuntimeError(
+                f"Ollama model OOM at {url}: {response_text}. Try a smaller model or free RAM/swap."
+            )
+        raise RuntimeError(f"Ollama API error ({response.status_code}) at {url}: {response_text}")
+
+    content_parts = []
+    thinking_parts = []
+    final_payload = None
+
+    for raw_line in response.iter_lines(decode_unicode=True):
+        if not raw_line:
+            continue
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except Exception:
+            continue
+
+        final_payload = payload
+        thinking_piece = extract_llm_thinking(payload)
+        if thinking_piece:
+            thinking_parts.append(thinking_piece)
+            if progress_callback:
+                progress_callback(_short_reasoning_preview("".join(thinking_parts)))
+
+        message = payload.get('message')
+        if isinstance(message, dict) and message.get('content') is not None:
+            content_parts.append(str(message.get('content') or ''))
+        elif payload.get('response') is not None:
+            content_parts.append(str(payload.get('response') or ''))
+
+    content = ''.join(content_parts).strip()
+    thinking = ''.join(thinking_parts).strip()
+    if not content and final_payload is not None:
+        content = extract_llm_content(final_payload)
+    return content, thinking, final_payload or {}
+
+
+def _extract_json_object(text: str):
+    raw = (text or '').strip()
+    if not raw:
+        raise ValueError('Empty JSON content')
+    raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.IGNORECASE)
+    raw = re.sub(r'\s*```$', '', raw)
+    try:
+        return json.loads(raw)
+    except Exception:
+        match = re.search(r'(\{[\s\S]*\})', raw)
+        if match:
+            return json.loads(match.group(1))
+        raise
+
+
+def build_plot_generation_schema():
+    return {
+        "type": "object",
+        "properties": {
+            "summary": {"type": "string"},
+            "materials": {"type": "string"},
+            "plot_code": {"type": "string"}
+        },
+        "required": ["summary", "materials", "plot_code"]
+    }
+
+
+def build_stl_generation_schema():
+    return {
+        "type": "object",
+        "properties": {
+            "stl_code": {"type": "string"}
+        },
+        "required": ["stl_code"]
+    }
+
+
+def call_ollama_structured(
+    system_prompt: str,
+    user_prompt: str,
+    schema: dict,
+    model_name_override: str = None,
+    timeout=90,
+    max_tokens: int = 1000,
+    temperature: float = 0.2,
+    progress_callback=None
+):
     base_url, model_name, _ = get_ollama_config()
+    model_name = model_name_override or model_name
     headers = get_ollama_headers()
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt}
     ]
-
-    openai_body = {
-        "model": model_name,
-        "messages": messages,
-        "temperature": 0.9,
-        "max_tokens": int(max_tokens)
-    }
-    native_body = {
-        "model": model_name,
-        "messages": messages,
-        "stream": False,
-        "options": {
-            "temperature": 0.9,
-            "num_predict": int(max_tokens)
+    def build_attempts(think_enabled: bool):
+        native_body = {
+            "model": model_name,
+            "messages": messages,
+            "stream": True,
+            "format": schema,
+            "think": think_enabled,
+            "options": {
+                "temperature": float(temperature),
+                "num_predict": int(max_tokens)
+            }
         }
-    }
-    generate_body = {
-        "model": model_name,
-        "prompt": f"System:\n{system_prompt}\n\nUser:\n{user_prompt}",
-        "stream": False,
-        "options": {
-            "temperature": 0.9,
-            "num_predict": int(max_tokens)
+        openai_body = {
+            "model": model_name,
+            "messages": messages,
+            "temperature": float(temperature),
+            "max_tokens": int(max_tokens),
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "soog_generation",
+                    "schema": schema
+                }
+            }
         }
-    }
+        generate_body = {
+            "model": model_name,
+            "system": system_prompt,
+            "prompt": user_prompt,
+            "stream": True,
+            "format": schema,
+            "think": think_enabled,
+            "options": {
+                "temperature": float(temperature),
+                "num_predict": int(max_tokens)
+            }
+        }
+        return [
+            (f"{base_url}/api/chat", native_body),
+            (f"{base_url}/v1/chat/completions", openai_body),
+            (f"{base_url}/api/generate", generate_body),
+        ]
 
-    attempts = [
-        (f"{base_url}/api/chat", native_body),
-        (f"{base_url}/v1/chat/completions", openai_body),
-        (f"{base_url}/api/generate", generate_body),
-    ]
     last_error = None
+    support_modes = [ollama_thinking_enabled(), False]
+    seen_modes = set()
 
-    for url, body in attempts:
-        try:
-            response = requests.post(url, headers=headers, json=body, timeout=timeout)
-        except requests.exceptions.RequestException as req_err:
-            last_error = f"Request failed for {url}: {req_err}"
+    for think_enabled in support_modes:
+        if think_enabled in seen_modes:
             continue
+        seen_modes.add(think_enabled)
+        for url, body in build_attempts(think_enabled):
+            try:
+                if url.endswith('/api/chat') or url.endswith('/api/generate'):
+                    content, thinking, _ = stream_ollama_response(
+                        url,
+                        headers=headers,
+                        body=body,
+                        timeout=timeout,
+                        progress_callback=progress_callback
+                    )
+                    data = _extract_json_object(content)
+                    return data, {
+                        'endpoint': url,
+                        'base_url': base_url,
+                        'model': model_name,
+                        'thinking': thinking
+                    }
 
-        if response.status_code >= 400:
-            if response.status_code in (400, 404, 405, 422):
-                last_error = f"Endpoint {url} returned {response.status_code}: {response.text[:300]}"
+                response = requests.post(url, headers=headers, json=body, timeout=timeout)
+                if response.status_code >= 400:
+                    response_text = response.text[:600]
+                    if think_enabled and 'does not support thinking' in response_text.lower():
+                        last_error = response_text
+                        break
+                    if response.status_code in (400, 404, 405, 422):
+                        last_error = f"Endpoint {url} returned {response.status_code}: {response_text}"
+                        continue
+                    if response.status_code == 401:
+                        raise RuntimeError(
+                            f"Ollama unauthorized at {url}. Check OLLAMA_API_KEY or proxy auth."
+                        )
+                    if 'requires more system memory' in response_text.lower():
+                        raise RuntimeError(
+                            f"Ollama model OOM at {url}: {response_text}. "
+                            "Try a smaller model or free RAM/swap."
+                        )
+                    raise RuntimeError(f"Ollama API error ({response.status_code}) at {url}: {response_text}")
+
+                payload = response.json()
+                content = extract_llm_content(payload)
+                data = _extract_json_object(content)
+                return data, {
+                    'endpoint': url,
+                    'base_url': base_url,
+                    'model': model_name,
+                    'thinking': extract_llm_thinking(payload)
+                }
+            except requests.exceptions.RequestException as req_err:
+                last_error = f"Request failed for {url}: {req_err}"
                 continue
-            if response.status_code == 401:
-                raise RuntimeError(
-                    f"Ollama unauthorized at {url}. Check OLLAMA_API_KEY or proxy auth."
-                )
-            body_excerpt = response.text[:600]
-            if 'requires more system memory' in body_excerpt.lower():
-                raise RuntimeError(
-                    f"Ollama model OOM at {url}: {body_excerpt}. "
-                    "Try a smaller model or free RAM/swap."
-                )
-            raise RuntimeError(f"Ollama API error ({response.status_code}) at {url}: {response.text[:600]}")
+            except Exception as parse_err:
+                error_text = str(parse_err)
+                if think_enabled and 'does not support thinking' in error_text.lower():
+                    last_error = error_text
+                    break
+                last_error = f"Invalid structured response from {url}: {parse_err}"
+                continue
 
-        try:
-            payload = response.json()
-        except Exception as json_err:
-            last_error = f"Invalid JSON from {url}: {json_err}"
-            continue
+    raise RuntimeError(last_error or "Could not connect to Ollama structured endpoints")
 
-        try:
-            content = extract_llm_content(payload)
-        except Exception as extract_err:
-            last_error = f"Could not extract content from {url}: {extract_err}"
-            continue
-        if not content:
-            last_error = f"Empty model response from {url}"
-            continue
-        return content, {
-            'endpoint': url,
-            'base_url': base_url,
-            'model': model_name
+
+def call_ollama_chat(
+    system_prompt: str,
+    user_prompt: str,
+    model_name_override: str = None,
+    timeout=90,
+    max_tokens: int = 1000,
+    temperature: float = 0.7,
+    progress_callback=None
+):
+    base_url, model_name, _ = get_ollama_config()
+    model_name = model_name_override or model_name
+    headers = get_ollama_headers()
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ]
+    def build_attempts(think_enabled: bool):
+        openai_body = {
+            "model": model_name,
+            "messages": messages,
+            "temperature": float(temperature),
+            "max_tokens": int(max_tokens)
         }
+        native_body = {
+            "model": model_name,
+            "messages": messages,
+            "stream": True,
+            "think": think_enabled,
+            "options": {
+                "temperature": float(temperature),
+                "num_predict": int(max_tokens)
+            }
+        }
+        generate_body = {
+            "model": model_name,
+            "prompt": f"System:\n{system_prompt}\n\nUser:\n{user_prompt}",
+            "stream": True,
+            "think": think_enabled,
+            "options": {
+                "temperature": float(temperature),
+                "num_predict": int(max_tokens)
+            }
+        }
+        return [
+            (f"{base_url}/api/chat", native_body),
+            (f"{base_url}/v1/chat/completions", openai_body),
+            (f"{base_url}/api/generate", generate_body),
+        ]
+
+    last_error = None
+    support_modes = [ollama_thinking_enabled(), False]
+    seen_modes = set()
+
+    for think_enabled in support_modes:
+        if think_enabled in seen_modes:
+            continue
+        seen_modes.add(think_enabled)
+        for url, body in build_attempts(think_enabled):
+            try:
+                if url.endswith('/api/chat') or url.endswith('/api/generate'):
+                    content, thinking, _ = stream_ollama_response(
+                        url,
+                        headers=headers,
+                        body=body,
+                        timeout=timeout,
+                        progress_callback=progress_callback
+                    )
+                    if not content:
+                        last_error = f"Empty model response from {url}"
+                        continue
+                    return content, {
+                        'endpoint': url,
+                        'base_url': base_url,
+                        'model': model_name,
+                        'thinking': thinking
+                    }
+
+                response = requests.post(url, headers=headers, json=body, timeout=timeout)
+                if response.status_code >= 400:
+                    response_text = response.text[:600]
+                    if think_enabled and 'does not support thinking' in response_text.lower():
+                        last_error = response_text
+                        break
+                    if response.status_code in (400, 404, 405, 422):
+                        last_error = f"Endpoint {url} returned {response.status_code}: {response_text}"
+                        continue
+                    if response.status_code == 401:
+                        raise RuntimeError(
+                            f"Ollama unauthorized at {url}. Check OLLAMA_API_KEY or proxy auth."
+                        )
+                    if 'requires more system memory' in response_text.lower():
+                        raise RuntimeError(
+                            f"Ollama model OOM at {url}: {response_text}. "
+                            "Try a smaller model or free RAM/swap."
+                        )
+                    raise RuntimeError(f"Ollama API error ({response.status_code}) at {url}: {response_text}")
+
+                payload = response.json()
+                content = extract_llm_content(payload)
+                if not content:
+                    last_error = f"Empty model response from {url}"
+                    continue
+                return content, {
+                    'endpoint': url,
+                    'base_url': base_url,
+                    'model': model_name,
+                    'thinking': extract_llm_thinking(payload)
+                }
+            except requests.exceptions.RequestException as req_err:
+                last_error = f"Request failed for {url}: {req_err}"
+                continue
+            except Exception as err:
+                error_text = str(err)
+                if think_enabled and 'does not support thinking' in error_text.lower():
+                    last_error = error_text
+                    break
+                last_error = error_text
+                continue
 
     raise RuntimeError(last_error or "Could not connect to Ollama endpoints")
 
@@ -956,15 +1536,89 @@ def extract_python_code_blocks(raw_text: str):
     return [c.strip() for c in code_blocks if c and c.strip()]
 
 
+def _looks_like_plot_code(code: str) -> bool:
+    lowered = (code or '').lower()
+    plot_signals = [
+        'matplotlib',
+        'plt.',
+        'subplots(',
+        'fancyarrowpatch',
+        'circle(',
+        'rectangle(',
+        'polygon(',
+        'ellipse(',
+        'regularpolygon(',
+        'arc(',
+        'ax.annotate',
+        'line2d',
+        'ax.add_patch'
+    ]
+    return any(signal in lowered for signal in plot_signals)
+
+
+def _looks_like_stl_code(code: str) -> bool:
+    lowered = (code or '').lower()
+    stl_signals = [
+        'trimesh',
+        'import trimesh',
+        'mesh =',
+        'creation.cylinder',
+        'creation.box',
+        'creation.cone',
+        'trimesh.creation',
+        'trimesh.util.concatenate'
+    ]
+    return any(signal in lowered for signal in stl_signals)
+
+
 def split_plot_and_stl_code(code_blocks):
     plot_code = None
     stl_code = None
-    for code in code_blocks:
-        if plot_code is None and ('matplotlib' in code or 'plt.' in code):
+    for idx, code in enumerate(code_blocks):
+        if plot_code is None and _looks_like_plot_code(code) and not _looks_like_stl_code(code):
             plot_code = code
-        if stl_code is None and ('trimesh' in code or 'import trimesh' in code):
+        if stl_code is None and _looks_like_stl_code(code):
             stl_code = code
+
+    if plot_code is None:
+        non_stl_blocks = [code for code in code_blocks if code != stl_code]
+        if len(code_blocks) >= 2 and non_stl_blocks:
+            plot_code = non_stl_blocks[0]
+        elif len(code_blocks) == 1 and not _looks_like_stl_code(code_blocks[0]):
+            plot_code = code_blocks[0]
     return plot_code, stl_code
+
+
+def build_plot_output_template():
+    return (
+        "Return exactly in this order:\n"
+        "Conceptual Summary\n"
+        "<120-180 words>\n\n"
+        "Materials\n"
+        "1. <item>\n"
+        "2. <item>\n\n"
+        "```python\n"
+        "import matplotlib.pyplot as plt\n"
+        "import numpy as np\n"
+        "from matplotlib.patches import Circle, Rectangle, Polygon, FancyArrowPatch\n"
+        "plt.style.use('dark_background')\n"
+        "fig, ax = plt.subplots(figsize=(10, 6))\n"
+        "# organogram drawing here\n"
+        "ax.set_aspect('equal')\n"
+        "```"
+    )
+
+
+def build_stl_output_template():
+    return (
+        "Return exactly one JSON-compatible field:\n"
+        "stl_code\n\n"
+        "The code must be executable Python only and end with a valid `mesh = ...` assignment.\n"
+        "Example:\n"
+        "import trimesh\n"
+        "import numpy as np\n"
+        "mesh = trimesh.creation.box(extents=(40, 20, 10))"
+    )
 
 
 def split_summary_and_materials(text_no_code: str):
@@ -1057,38 +1711,97 @@ def fetch_ollama_models():
 
 def generate_with_image_required(
     prompt_content: str,
-    user_instruction: str,
+    prompt_text: str,
+    plot_instruction: str,
     max_attempts: int = 2,
     llm_timeout_sec: int = 90,
     llm_max_tokens: int = 1000,
-    deadline_at: float = None
+    deadline_at: float = None,
+    plot_output_template: str = "",
+    request_id: str = ""
 ):
     """
     Run up to N LLM passes and require a valid matplotlib-rendered image.
     Returns: raw_response, summary_text, materials_text, plot_code, stl_code, image_base64, stl_bytes, llm_meta
     """
-    last_reason = "No valid matplotlib output produced."
-    for attempt_idx in range(1, max_attempts + 1):
+    def build_plot_attempt_prompt(base_instruction: str, last_error: str = "", attempt_idx: int = 1):
+        if attempt_idx == 1:
+            return base_instruction, 0.55
+
+        correction_lines = [
+            base_instruction,
+            "",
+            "Correction required:",
+            f"- Previous attempt failed with: {last_error}",
+            "- Return summary, materials, and one executable matplotlib code block only.",
+            "- Do not return trimesh code in this call.",
+            "- The python code must start with `import matplotlib.pyplot as plt`.",
+            "- Prefer a simpler valid organogram over a complex invalid one.",
+            "- Do not include placeholder text or recovery notes."
+        ]
+        if plot_output_template:
+            correction_lines.extend([
+                "",
+                "Exact output template to follow:",
+                plot_output_template
+            ])
+        return "\n".join(correction_lines), 0.2
+
+    def build_stl_attempt_prompt(summary_text: str, materials_text: str, plot_code: str, last_error: str = "", attempt_idx: int = 1):
+        lines = [
+            f"Original prompt:\n{prompt_text}",
+            "",
+            "The matplotlib organogram is already accepted. Use it as the source of truth for geometry.",
+            "",
+            "Conceptual Summary:",
+            summary_text or "(no summary)",
+            "",
+            "Materials:",
+            materials_text or "(no materials)",
+            "",
+            "Accepted organogram code:",
+            "```python",
+            (plot_code or "").strip(),
+            "```",
+            "",
+            "Now generate only the trimesh geometry code.",
+            "Requirements for internal components (Mic/Speaker/Paths):",
+            "- If a 'cube out of it' or 'hollow' is requested, use a larger box and subtract a slightly smaller one, or use `trimesh.creation.box(extents=(W,H,D))`. ",
+            "- For 'mic and speaker inside', create small primitives (sphere/cone) and place them at internal coordinates.",
+            "- Use `trimesh.util.concatenate` to group the outer shell and the inner components.",
+            "- If the inner components should be visible, they must be part of the final mesh.",
+            "- For 'paths', use `trimesh.creation.cylinder` or `capsule` connecting two points.",
+            "",
+            "General STL Requirements:",
+            "- Return one JSON object only with field `stl_code`.",
+            "- `stl_code` must contain executable Python only, with no markdown fences.",
+            "- It must import trimesh.",
+            "- It must assign the final geometry to `mesh`.",
+            "- Add 3-6 comment lines with format: '# map: <organogram element> -> <geometry primitive> -> <acoustic function>'.",
+            "- Keep geometry printable and non-empty."
+        ]
+        if attempt_idx > 1:
+            lines.extend([
+                "",
+                "Correction required:",
+                f"- Previous attempt failed with: {last_error}",
+                "- Simplify the geometry if needed, but keep it explicitly tied to the organogram.",
+                "- Do not omit `mesh = ...`."
+            ])
+        lines.extend([
+            "",
+            "Exact output template to follow:",
+            build_stl_output_template()
+        ])
+        return "\n".join(lines), (0.3 if attempt_idx == 1 else 0.15)
+
+    def compute_call_timeout(stage: str = "plot"):
         if deadline_at is not None:
             remaining = deadline_at - time.perf_counter()
             if remaining <= 8:
-                raise RuntimeError(
-                    f"Generation deadline exceeded after {attempt_idx - 1} attempt(s). "
-                    f"Last reason: {last_reason}"
-                )
-
-        if attempt_idx == 1:
-            attempt_prompt = user_instruction
-        else:
-            attempt_prompt = (
-                user_instruction
-                + "\n\nCorrection required:"
-                + f"\n- Previous attempt failed with: {last_reason}"
-                + "\n- Fix both matplotlib and trimesh code so they execute without errors."
-                + "\n- Keep matplotlib code as the first Python block and trimesh code as the second block."
-                + "\n- The trimesh block must define `mesh` as a non-empty trimesh.Trimesh."
-                + "\n- Do not include placeholder text or recovery notes."
-            )
+                if stage == "stl":
+                    return None
+                raise RuntimeError("Generation deadline exceeded before a valid organogram could be produced.")
         call_timeout = int(llm_timeout_sec) if int(llm_timeout_sec) > 0 else None
         if deadline_at is not None:
             # Keep margin for code execution/parsing after LLM response.
@@ -1098,35 +1811,111 @@ def generate_with_image_required(
                 call_timeout = deadline_timeout
             else:
                 call_timeout = max(12, min(call_timeout, deadline_timeout))
+        return call_timeout
+
+    def make_reasoning_callback(stage_label: str):
+        if not request_id:
+            return None
+        def _callback(reasoning_preview: str):
+            update_generation_progress(
+                request_id,
+                stage=stage_label,
+                status='running',
+                reasoning_preview=reasoning_preview
+            )
+        return _callback
+
+    last_reason = "No valid matplotlib output produced."
+    plot_schema = build_plot_generation_schema()
+    summary_text = ""
+    materials_text = None
+    plot_code = ""
+    image_base64 = None
+    image_bytes = b""
+    raw_plot_response = ""
+    plot_llm_meta = None
+
+    materials_prompt = get_specialized_prompt('materials')
+    stl_prompt_content = get_specialized_prompt('digitalFab')
+
+    # We try max_attempts. If we are on the last attempt and still failing, 
+    # we switch to the fallback model to ensure we get a result.
+    for attempt_idx in range(1, max_attempts + 1):
+        is_last_attempt = (attempt_idx == max_attempts)
+        current_model_override = None
+        if is_last_attempt and max_attempts > 1:
+            current_model_override = FALLBACK_OLLAMA_MODEL
+            logging.warning(f"Using fallback model {FALLBACK_OLLAMA_MODEL} for the last attempt.")
+
+        attempt_prompt, attempt_temperature = build_plot_attempt_prompt(
+            plot_instruction,
+            last_error=last_reason,
+            attempt_idx=attempt_idx
+        )
+        call_timeout = compute_call_timeout(stage="plot")
+        update_generation_progress(request_id, stage='plot_llm', status='running')
 
         try:
-            raw_response, llm_meta = call_ollama_chat(
-                prompt_content,
-                attempt_prompt,
-                timeout=call_timeout,
-                max_tokens=llm_max_tokens
+            structured_instruction = (
+                attempt_prompt
+                + "\n\nReturn one JSON object only. No markdown fences."
+                + "\n- `summary`: conceptual summary text only."
+                + "\n- `materials`: materials list as plain text lines."
+                + "\n- `plot_code`: executable matplotlib code only, without fences."
             )
-        except Exception as e:
-            last_reason = f"LLM call failed: {e}"
-            logging.error(last_reason)
-            if 'requires more system memory' in str(e).lower():
-                raise RuntimeError(last_reason)
-            continue
-        logging.info(
-            f"LLM generate attempt={attempt_idx} endpoint={llm_meta.get('endpoint')} model={llm_meta.get('model')}"
-        )
+            structured_data, llm_meta = call_ollama_structured(
+                materials_prompt,
+                structured_instruction,
+                schema=plot_schema,
+                model_name_override=current_model_override,
+                timeout=call_timeout,
+                max_tokens=llm_max_tokens,
+                temperature=min(attempt_temperature, 0.35),
+                progress_callback=make_reasoning_callback('plot_llm')
+            )
+            summary_text = str(structured_data.get('summary') or '').strip()
+            materials_text = str(structured_data.get('materials') or '').strip() or None
+            plot_code = str(structured_data.get('plot_code') or '').strip()
+            raw_plot_response = json.dumps(structured_data, ensure_ascii=False, indent=2)
+            plot_llm_meta = llm_meta
+            logging.info(
+                f"LLM structured plot attempt={attempt_idx} endpoint={llm_meta.get('endpoint')} model={llm_meta.get('model')}"
+            )
+        except Exception as structured_err:
+            logging.warning(f"Structured plot generation failed on attempt {attempt_idx}: {structured_err}")
+            try:
+                raw_plot_response, llm_meta = call_ollama_chat(
+                    materials_prompt,
+                    attempt_prompt,
+                    model_name_override=current_model_override,
+                    timeout=call_timeout,
+                    max_tokens=llm_max_tokens,
+                    temperature=attempt_temperature,
+                    progress_callback=make_reasoning_callback('plot_llm')
+                )
+            except Exception as e:
+                last_reason = f"LLM call failed: {e}"
+                logging.error(last_reason)
+                if 'requires more system memory' in str(e).lower():
+                    raise RuntimeError(last_reason)
+                continue
+            plot_llm_meta = llm_meta
+            logging.info(
+                f"LLM freeform plot attempt={attempt_idx} endpoint={llm_meta.get('endpoint')} model={llm_meta.get('model')}"
+            )
 
-        text_no_code = re.sub(r"```[\s\S]*?```", "", raw_response).strip()
-        summary_text, materials_text = split_summary_and_materials(text_no_code)
+            text_no_code = re.sub(r"```[\s\S]*?```", "", raw_plot_response).strip()
+            summary_text, materials_text = split_summary_and_materials(text_no_code)
 
-        code_blocks = extract_python_code_blocks(raw_response)
-        plot_code, stl_code = split_plot_and_stl_code(code_blocks)
+            code_blocks = extract_python_code_blocks(raw_plot_response)
+            plot_code, _ = split_plot_and_stl_code(code_blocks)
 
         if not plot_code:
             last_reason = "Model response did not include matplotlib code."
             continue
 
         try:
+            update_generation_progress(request_id, stage='rendering_organogram', status='running')
             image_base64 = execute_matplotlib_code(plot_code)
             image_bytes = base64.b64decode(image_base64)
             if not image_bytes:
@@ -1136,34 +1925,117 @@ def generate_with_image_required(
             last_reason = f"Matplotlib execution failed: {e}"
             logging.error(last_reason)
             continue
+        break
+    else:
+        # Final fallback: if everything failed, try a very simple plot with fallback model
+        logging.error("All plot attempts failed. Trying emergency fallback with simplest possible plot.")
+        try:
+            emergency_prompt = "Create a simplest possible Mantle Hood organogram for a musical instrument: one circle and one rectangle."
+            structured_data, llm_meta = call_ollama_structured(
+                prompt_content,
+                emergency_prompt,
+                schema=plot_schema,
+                model_name_override=FALLBACK_OLLAMA_MODEL,
+                timeout=30,
+                max_tokens=512,
+                temperature=0.1
+            )
+            summary_text = str(structured_data.get('summary') or 'Emergency fallback summary.').strip()
+            plot_code = str(structured_data.get('plot_code') or '').strip()
+            image_base64 = execute_matplotlib_code(plot_code)
+            plot_llm_meta = llm_meta
+        except Exception as final_e:
+            raise RuntimeError(f"Complete generation failure including fallback: {last_reason} -> {final_e}")
 
-        stl_bytes = None
-        if stl_code:
-            try:
-                stl_bytes = execute_trimesh_code(stl_code)
-            except Exception as e:
-                last_reason = f"Trimesh execution failed: {e}"
-                logging.error(last_reason)
-                if attempt_idx < max_attempts:
-                    continue
-                stl_bytes = None
-        else:
-            last_reason = "Model response did not include trimesh code block."
-            if attempt_idx < max_attempts:
-                continue
+    stl_schema = build_stl_generation_schema()
+    stl_code = ""
+    stl_bytes = None
+    raw_stl_response = ""
+    llm_meta = plot_llm_meta or {}
+    stl_last_reason = "Model response did not include trimesh code block."
 
-        return (
-            raw_response,
-            summary_text,
-            materials_text,
-            plot_code,
-            stl_code,
-            image_base64,
-            stl_bytes,
-            llm_meta
+    for attempt_idx in range(1, max_attempts + 1):
+        stl_attempt_prompt, stl_temperature = build_stl_attempt_prompt(
+            summary_text=summary_text,
+            materials_text=materials_text or "",
+            plot_code=plot_code,
+            last_error=stl_last_reason,
+            attempt_idx=attempt_idx
         )
+        call_timeout = compute_call_timeout(stage="stl")
+        if call_timeout is None:
+            logging.warning("Skipping LLM STL generation because request deadline is nearly exhausted.")
+            break
+        update_generation_progress(request_id, stage='stl_llm', status='running')
 
-    raise RuntimeError(last_reason)
+        try:
+            structured_data, stl_meta = call_ollama_structured(
+                stl_prompt_content,
+                stl_attempt_prompt,
+                schema=stl_schema,
+                timeout=call_timeout,
+                max_tokens=max(256, min(llm_max_tokens, 900)),
+                temperature=stl_temperature,
+                progress_callback=make_reasoning_callback('stl_llm')
+            )
+            stl_code = str(structured_data.get('stl_code') or '').strip()
+            raw_stl_response = json.dumps(structured_data, ensure_ascii=False, indent=2)
+            llm_meta = stl_meta or llm_meta
+            logging.info(
+                f"LLM structured stl attempt={attempt_idx} endpoint={llm_meta.get('endpoint')} model={llm_meta.get('model')}"
+            )
+        except Exception as structured_err:
+            logging.warning(f"Structured STL generation failed on attempt {attempt_idx}: {structured_err}")
+            try:
+                raw_stl_response, stl_meta = call_ollama_chat(
+                    stl_prompt_content,
+                    stl_attempt_prompt,
+                    timeout=call_timeout,
+                    max_tokens=max(256, min(llm_max_tokens, 900)),
+                    temperature=stl_temperature,
+                    progress_callback=make_reasoning_callback('stl_llm')
+                )
+            except Exception as e:
+                stl_last_reason = f"LLM call failed: {e}"
+                logging.error(stl_last_reason)
+                if 'requires more system memory' in str(e).lower():
+                    break
+                continue
+            llm_meta = stl_meta or llm_meta
+            logging.info(
+                f"LLM freeform stl attempt={attempt_idx} endpoint={llm_meta.get('endpoint')} model={llm_meta.get('model')}"
+            )
+            stl_blocks = extract_python_code_blocks(raw_stl_response)
+            _, stl_code = split_plot_and_stl_code(stl_blocks)
+
+        if not stl_code:
+            stl_last_reason = "Model response did not include trimesh code block."
+            continue
+
+        try:
+            update_generation_progress(request_id, stage='building_geometry', status='running')
+            stl_bytes = execute_trimesh_code(stl_code)
+            break
+        except Exception as e:
+            stl_last_reason = f"Trimesh execution failed: {e}"
+            logging.error(stl_last_reason)
+            stl_bytes = None
+            continue
+
+    if stl_bytes is None and stl_last_reason:
+        logging.warning(f"STL generation will use fallback if available. Last reason: {stl_last_reason}")
+
+    raw_response = "\n\n".join(part for part in [raw_plot_response, raw_stl_response] if part).strip()
+    return (
+        raw_response,
+        summary_text,
+        materials_text,
+        plot_code,
+        stl_code,
+        image_base64,
+        stl_bytes,
+        llm_meta
+    )
 
 def execute_matplotlib_code(code: str) -> str:
     """Execute matplotlib code safely and return the PNG as base64.
@@ -1765,12 +2637,15 @@ def _save_gallery_item(
     code: str,
     image_bytes: bytes,
     stl_bytes: bytes = None,
+    sketch_bytes: bytes = None,
     llm_model: str = None,
     elapsed_ms: int = None,
     plot_code: str = None,
     stl_code: str = None,
     materials_text: str = None,
     summary_text: str = None,
+    sketch_prompt: str = None,
+    sketch_model: str = None,
     refact_meta: dict = None
 ) -> dict:
     refact_meta = refact_meta or {}
@@ -1809,6 +2684,7 @@ def _save_gallery_item(
     txt_path = os.path.join(GALLERY_DIR, f"{base}.txt")
     json_path = os.path.join(GALLERY_DIR, f"{base}.json")
     stl_path = os.path.join(GALLERY_DIR, f"{base}.stl") if stl_bytes else None
+    sketch_path = os.path.join(GALLERY_DIR, f"{base}.sketch.png") if sketch_bytes else None
 
     # Resolve collisions (rare but possible with concurrent writes on same second).
     suffix = 1
@@ -1818,6 +2694,7 @@ def _save_gallery_item(
         txt_path = os.path.join(GALLERY_DIR, f"{base}.txt")
         json_path = os.path.join(GALLERY_DIR, f"{base}.json")
         stl_path = os.path.join(GALLERY_DIR, f"{base}.stl") if stl_bytes else None
+        sketch_path = os.path.join(GALLERY_DIR, f"{base}.sketch.png") if sketch_bytes else None
         suffix += 1
 
     plot_code = (plot_code or code or '').strip()
@@ -1853,6 +2730,8 @@ def _save_gallery_item(
                     f.write(f"- model: {llm_model}\n")
                 if elapsed_ms is not None:
                     f.write(f"- elapsed_ms: {int(elapsed_ms)}\n")
+                if sketch_model:
+                    f.write(f"- sketch_model: {sketch_model}\n")
                 f.write(f"- group_id: {group_id}\n")
                 f.write(f"- version: {version}\n")
                 if source_basename:
@@ -1863,6 +2742,9 @@ def _save_gallery_item(
             if stl_code:
                 f.write("\n# Geometry Code (trimesh)\n\n")
                 f.write(stl_code + "\n")
+            if sketch_prompt:
+                f.write("\n# Sketch Prompt\n\n")
+                f.write(sketch_prompt.strip() + "\n")
     except Exception:
         pass
 
@@ -1874,6 +2756,15 @@ def _save_gallery_item(
         except Exception as e:
             logging.error(f"Error writing STL file: {e}")
             stl_path = None
+
+    has_sketch = bool(sketch_bytes) and len(sketch_bytes) > 0
+    if has_sketch:
+        try:
+            with open(sketch_path, 'wb') as f:
+                f.write(sketch_bytes)
+        except Exception as e:
+            logging.error(f"Error writing sketch PNG file: {e}")
+            has_sketch = False
 
     meta = {
         'basename': base,
@@ -1891,11 +2782,19 @@ def _save_gallery_item(
         'code': combined_code,
         'plot_code': plot_code,
         'stl_code': stl_code,
+        'sketch_prompt': (sketch_prompt or '').strip() or None,
+        'sketch_model': (sketch_model or '').strip() or None,
         'llm_model': llm_model,
         'elapsed_ms': int(elapsed_ms) if elapsed_ms is not None else None,
         'image_url': f"/api/gallery/image/{base}.png" if has_image else None,
         'stl_url': f"/api/gallery/file/{base}.stl" if stl_bytes and stl_path else None,
-        'modes': [m for m in (['plot'] if has_image else []) + (['stl'] if stl_bytes and stl_path else [])]
+        'sketch_url': f"/api/gallery/image/{base}.sketch.png" if has_sketch else None,
+        'modes': [
+            m for m in
+            (['plot'] if has_image else [])
+            + (['stl'] if stl_bytes and stl_path else [])
+            + (['sketch'] if has_sketch else [])
+        ]
     }
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(meta, f)
@@ -1968,16 +2867,32 @@ def view_logs():
         logging.error(f"Error viewing logs: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/generate/progress/<string:request_id>', methods=['GET'])
+def generate_progress(request_id):
+    current = get_generation_progress(request_id)
+    if not current:
+        return jsonify({'ok': False, 'status': 'missing'}), 404
+    return jsonify({'ok': True, **current})
+
 @app.route('/api/generate', methods=['POST'])
 @log_activity('generate')
 def generate():
     data = request.json
+    request_id = str((data or {}).get('request_id') or '').strip()
     prompt_input = data.get('prompt', '').strip()
     prompt, refact_meta = parse_refact_marker(prompt_input)
     if not prompt and prompt_input:
         prompt = prompt_input
     if not prompt:
         return jsonify({'error': 'No prompt provided.'}), 400
+    update_generation_progress(
+        request_id,
+        status='starting',
+        stage='received',
+        reasoning_preview='',
+        prompt=prompt[:160]
+    )
     try:
         limits = get_generation_limits()
         prompt_content = get_prompt_content()
@@ -2002,32 +2917,33 @@ def generate():
                 "\n- Reuse and modify provided matplotlib/trimesh code when available."
                 "\n- Return full updated code blocks (matplotlib first, trimesh second), not only patches/diffs."
             )
-        # Ask for a conceptual summary, then matplotlib code, then a trimesh STL code block
-        user_instruction = (
+        plot_output_template = build_plot_output_template()
+        # First call: summary + materials + matplotlib only.
+        plot_instruction = (
             prompt
             + "\n\nWrite first a concise 120-180 word conceptual summary describing the organogram's design decisions: shapes/schematics, arrows/flows, colors and their meanings, acoustical rationale, organological relations, and performative interactions."
             + "\n\nThen, add a section titled 'Materials' as an enumerated shopping list with quantities and dimensions for building the instrument (e.g., '1 PVC tube, 30 cm length, 2.5 cm diameter'). If part of the instrument is virtual or hybrid, include 'Virtual Materials' items for assets (e.g., textures, shaders, samples)."
             + "\n\nThen, provide the executable Python matplotlib code in a single fenced code block (```python ... ```)."
-            + "\n\nFinally, provide a second fenced Python code block that uses trimesh to build a simple, printable 3D representation of the instrument (units in millimeters), assigning the final geometry to a variable named 'mesh' (trimesh.Trimesh). Do not save files; do not display; just build the mesh object."
-            + "\n\nStrict generation contract:"
+            + "\n\nStrict generation contract for this first call:"
             + "\n- You are a Python and matplotlib assistant specialized in Mantle Hood organograms."
             + "\n- The first Python block must produce a valid matplotlib organogram figure (no placeholders, no pseudo-code, no blank figure)."
             + "\n- Always include all required imports in each code block."
             + "\n- For arrows and geometric patches use matplotlib.patches and ax.annotate/FancyArrowPatch; avoid plt.Arrow."
-            + "\n- The second Python block must define `mesh` as a valid trimesh.Trimesh with faces > 0."
-            + "\n- The second Python block must be explicitly related to the organogram: map each major organogram component to a corresponding 3D primitive."
-            + "\n- Add 3-6 comment lines in the trimesh block with format: '# map: <organogram element> -> <geometry primitive> -> <acoustic function>'."
-            + "\n- Vary topology and dimensions according to the prompt, materials, and acoustic target. Do not reuse a generic template."
-            + "\n- Prefer pure trimesh primitives (creation.cylinder/box/cone/extrude_polygon). Avoid shapely-dependent pipelines."
             + "\n- Never include the phrase '# Evaluate the text again to render...'."
             + "\n- Keep conceptual summary and materials outside code blocks."
+            + "\n- Never answer with prose only."
+            + "\n- If uncertain, simplify the organogram and keep the code valid."
+            + "\n- The first python block must literally begin with `import matplotlib.pyplot as plt`."
+            + "\n\nMandatory output template:"
+            + f"\n{plot_output_template}"
             + "\n\nOptional structured blueprint (use when dimensional pipe/component data is available):"
             + "\n- Define dataclass PipeElement with: name, length_mm, diameter_mm, wall_thickness_mm, material, category, acoustic_target."
             + "\n- Implement plot_geometry_vs_frequency(elements) with a 2x2 figure: length vs fundamental_frequency_hz (log-log), diameter vs fundamental_frequency_hz, histogram of wall_thickness_mm, scatter length vs diameter sized by wall_thickness_mm."
             + "\n- Use seaborn-like aesthetics with standard matplotlib only."
             + "\n- Include a __main__ example with 3-4 dummy elements and ensure plotting code is executed so the backend can render the image."
             + refactor_clause
-            + "\n\nDo not include any additional commentary after the code blocks."
+            + "\n\nDo not include any trimesh or STL code in this first call."
+            + "\nDo not include any additional commentary after the matplotlib code block."
         )
         request_start = time.perf_counter()
         deadline_at = (
@@ -2047,11 +2963,14 @@ def generate():
                 llm_meta
             ) = generate_with_image_required(
                 system_prompt,
-                user_instruction,
+                prompt,
+                plot_instruction,
                 max_attempts=limits['max_attempts'],
                 llm_timeout_sec=limits['llm_timeout_sec'],
                 llm_max_tokens=limits['llm_max_tokens'],
-                deadline_at=deadline_at
+                deadline_at=deadline_at,
+                plot_output_template=plot_output_template,
+                request_id=request_id
             )
         except Exception as first_error:
             can_retry_without_context = bool(soopub_context) and limits.get('retry_without_context', False)
@@ -2062,9 +2981,9 @@ def generate():
                     "Retrying once with prompt.txt only."
                 )
                 retry_instruction = (
-                    user_instruction
+                    plot_instruction
                     + f"\n\nPrevious generation failed with: {first_error}"
-                    + "\nRetry with shorter output, but keep full validity of matplotlib and trimesh code blocks."
+                    + "\nRetry with shorter output, but keep full validity of the matplotlib organogram block."
                 )
                 (
                     raw_response,
@@ -2077,11 +2996,14 @@ def generate():
                     llm_meta
                 ) = generate_with_image_required(
                     prompt_content,
+                    prompt,
                     retry_instruction,
                     max_attempts=limits['max_attempts'],
                     llm_timeout_sec=limits['llm_timeout_sec'],
                     llm_max_tokens=limits['llm_max_tokens'],
-                    deadline_at=deadline_at
+                    deadline_at=deadline_at,
+                    plot_output_template=plot_output_template,
+                    request_id=request_id
                 )
             else:
                 raise
@@ -2090,6 +3012,7 @@ def generate():
         stl_profile = None
         if not stl_bytes:
             try:
+                update_generation_progress(request_id, stage='fallback_geometry', status='running')
                 stl_bytes, fallback_code, stl_profile = build_fallback_stl_bytes(
                     prompt=prompt,
                     summary_text=summary_text or raw_response,
@@ -2104,6 +3027,22 @@ def generate():
                 logging.error(f"Fallback STL generation failed: {stl_fallback_error}")
 
         image_bytes = base64.b64decode(image_base64)
+        sketch_bytes = None
+        sketch_prompt = None
+        sketch_model = None
+        try:
+            update_generation_progress(request_id, stage='sketch', status='running')
+            sketch_bytes, sketch_prompt, sketch_model = generate_sketch_image(
+                organogram_bytes=image_bytes,
+                prompt=prompt,
+                prompt_content=prompt_content,
+                summary_text=summary_text or raw_response,
+                materials_text=materials_text or "",
+                plot_code=plot_code or ""
+            )
+        except Exception as sketch_error:
+            logging.error(f"Sketch generation failed: {sketch_error}")
+
         meta = None
         try:
             meta = _save_gallery_item(
@@ -2112,12 +3051,15 @@ def generate():
                 plot_code or stl_code or '',
                 image_bytes,
                 stl_bytes=stl_bytes,
+                sketch_bytes=sketch_bytes,
                 llm_model=llm_meta.get('model'),
                 elapsed_ms=elapsed_ms,
                 plot_code=plot_code,
                 stl_code=stl_code,
                 materials_text=materials_text,
                 summary_text=summary_text,
+                sketch_prompt=sketch_prompt,
+                sketch_model=sketch_model,
                 refact_meta=refact_meta
             )
             if summary_text:
@@ -2128,12 +3070,26 @@ def generate():
             logging.error(f"Error saving gallery item: {e}")
 
         image_url = (meta or {}).get('image_url') if isinstance(meta, dict) else None
+        sketch_url = (meta or {}).get('sketch_url') if isinstance(meta, dict) else None
         inline_image = image_base64
+        inline_sketch = None
         max_inline_image_bytes = int(limits.get('max_inline_image_bytes') or 0)
         if max_inline_image_bytes <= 0:
             inline_image = None
         elif image_url and len(image_bytes) > max_inline_image_bytes:
             inline_image = None
+        if sketch_bytes:
+            sketch_b64 = base64.b64encode(sketch_bytes).decode('utf-8')
+            if max_inline_image_bytes > 0 and len(sketch_bytes) <= max_inline_image_bytes:
+                inline_sketch = sketch_b64
+
+        update_generation_progress(
+            request_id,
+            status='completed',
+            stage='done',
+            elapsed_ms=elapsed_ms,
+            reasoning_preview=''
+        )
 
         return jsonify({
             "type": "plot",
@@ -2142,6 +3098,10 @@ def generate():
             "stl_code": (stl_code or '').strip(),
             "image": inline_image,
             "image_url": image_url,
+            "sketch": inline_sketch,
+            "sketch_url": sketch_url,
+            "sketch_prompt": sketch_prompt,
+            "sketch_model": sketch_model,
             "gallery": meta,
             "summary": summary_text,
             "materials": materials_text,
@@ -2152,6 +3112,12 @@ def generate():
         })
     except Exception as e:
         logging.error(f"Error in /api/generate: {e}")
+        update_generation_progress(
+            request_id,
+            status='error',
+            stage='failed',
+            error=str(e)
+        )
         return jsonify({
             'error': f'Failed to generate organogram image: {str(e)}. '
                      f'Ensure Ollama model outputs valid matplotlib code.'
@@ -2187,6 +3153,130 @@ def predict():
         cleanup_models()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/generate/sketch', methods=['POST'])
+@log_activity('generate_sketch')
+def generate_sketch():
+    """
+    Generate or regenerate a diffusion sketch based on provided organogram and text.
+    Used for instant regeneration from the main results panel.
+    """
+    data = request.json or {}
+    prompt = data.get('prompt', '').strip()
+    summary_text = data.get('summary', '').strip()
+    materials_text = data.get('materials', '').strip()
+    plot_code = data.get('plot_code', '').strip()
+    image_b64 = data.get('image', '')
+
+    if not image_b64:
+        return jsonify({'error': 'Original organogram image base64 is required'}), 400
+
+    try:
+        organogram_bytes = base64.b64decode(image_b64)
+        
+        sketch_prompt_content = get_specialized_prompt('inferred-image')
+        sketch_bytes, sketch_prompt, sketch_model = generate_sketch_image(
+            organogram_bytes=organogram_bytes,
+            prompt=prompt,
+            prompt_content=sketch_prompt_content,
+            summary_text=summary_text,
+            materials_text=materials_text,
+            plot_code=plot_code
+        )
+
+        if not sketch_bytes:
+            return jsonify({'error': 'Sketch generation failed'}), 500
+
+        sketch_b64 = base64.b64encode(sketch_bytes).decode('utf-8')
+        return jsonify({
+            'ok': True,
+            'sketch': sketch_b64,
+            'sketch_prompt': sketch_prompt,
+            'sketch_model': sketch_model
+        })
+    except Exception as e:
+        logging.error(f"Error in /api/generate/sketch: {e}")
+        return jsonify({'error': str(e)}), 500
+@app.route('/api/gallery/item/<basename>/remake_sketch', methods=['POST'])
+@log_activity('remake_sketch')
+def remake_sketch(basename: str):
+    """
+    Regenerate the diffusion sketch for an existing gallery item.
+    Uses prompt and summary from the JSON metadata.
+    """
+    if not basename:
+        return jsonify({'error': 'Missing basename'}), 400
+
+    meta_path = os.path.join(GALLERY_DIR, f"{basename}.json")
+    if not os.path.isfile(meta_path):
+        return jsonify({'error': 'Gallery item not found'}), 404
+
+    try:
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            meta = json.load(f)
+
+        prompt = meta.get('prompt', '') or ''
+        summary_text = meta.get('summary', '') or meta.get('answer', '') or ''
+        materials_text = meta.get('materials_text', '') or ''
+        plot_code = meta.get('plot_code', '') or ''
+        image_url = meta.get('image_url', '') or ''
+
+        if not image_url:
+            return jsonify({'error': 'Original organogram image not found in metadata'}), 400
+
+        # Load original image bytes
+        image_rel_path = image_url
+        if image_rel_path.startswith('/offload/'):
+             image_rel_path = image_rel_path[len('/offload/'):]
+        elif image_rel_path.startswith('/api/gallery/image/'):
+             image_rel_path = os.path.join('gallery', image_rel_path[len('/api/gallery/image/'):])
+        
+        full_image_path = os.path.join(OFFLOAD_DIR, image_rel_path)
+        if not os.path.isfile(full_image_path):
+            return jsonify({'error': f'Original organogram image file not found: {full_image_path}'}), 404
+
+        with open(full_image_path, 'rb') as f:
+            organogram_bytes = f.read()
+
+        # Generate new sketch
+        sketch_prompt_content = get_specialized_prompt('inferred-image')
+        sketch_bytes, sketch_prompt, sketch_model = generate_sketch_image(
+            organogram_bytes=organogram_bytes,
+            prompt=prompt,
+            prompt_content=sketch_prompt_content,
+            summary_text=summary_text,
+            materials_text=materials_text,
+            plot_code=plot_code
+        )
+
+        if not sketch_bytes:
+             return jsonify({'error': 'Sketch generation failed to produce output'}), 500
+
+        # Save new sketch file
+        sketch_filename = f"{basename}.sketch.png"
+        sketch_path = os.path.join(GALLERY_DIR, sketch_filename)
+        with open(sketch_path, 'wb') as f:
+            f.write(sketch_bytes)
+
+        # Update metadata
+        meta['sketch_url'] = f"/api/gallery/image/{sketch_filename}"
+        meta['sketch_prompt'] = sketch_prompt
+        meta['sketch_model'] = sketch_model
+        meta['updated_at'] = datetime.datetime.now().isoformat()
+
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+
+        return jsonify({
+            'ok': True,
+            'sketch_url': meta['sketch_url'],
+            'sketch_prompt': sketch_prompt,
+            'sketch_model': sketch_model,
+            'item': meta
+        })
+
+    except Exception as e:
+        logging.error(f"Error remaking sketch for {basename}: {e}")
+        return jsonify({'error': str(e)}), 500
 @app.route('/api/version', methods=['GET'])
 @log_activity('version')
 def version():
@@ -2394,7 +3484,7 @@ def gallery_delete_item(basename):
             return jsonify({'error': 'Invalid basename format'}), 400
 
         files_to_delete = []
-        for ext in ['.json', '.png', '.txt', '.stl']:
+        for ext in GALLERY_FILE_SUFFIXES:
             filename = f"{basename}{ext}"
             path = os.path.join(GALLERY_DIR, filename)
             if os.path.exists(path):
@@ -2439,7 +3529,7 @@ def gallery_rename_item(basename):
 
         # Rename files
         renamed_files = []
-        for ext in ['.json', '.png', '.txt', '.stl']:
+        for ext in GALLERY_FILE_SUFFIXES:
             old_path = os.path.join(GALLERY_DIR, f"{basename}{ext}")
             if os.path.exists(old_path):
                 new_path = os.path.join(GALLERY_DIR, f"{new_basename}{ext}")
@@ -2459,6 +3549,8 @@ def gallery_rename_item(basename):
                     meta['image_url'] = f"/api/gallery/image/{new_basename}.png"
                 if meta.get('stl_url'):
                     meta['stl_url'] = f"/api/gallery/file/{new_basename}.stl"
+                if meta.get('sketch_url'):
+                    meta['sketch_url'] = f"/api/gallery/image/{new_basename}.sketch.png"
                 
                 f.seek(0)
                 json.dump(meta, f)
@@ -2529,7 +3621,7 @@ def gallery_rename_group(group_id):
             used_basenames.add(new_base)
 
             # Rename physical files
-            for ext in ['.json', '.png', '.txt', '.stl']:
+            for ext in GALLERY_FILE_SUFFIXES:
                 old_path = os.path.join(GALLERY_DIR, f"{old_base}{ext}")
                 if not os.path.exists(old_path):
                     continue
@@ -2547,6 +3639,8 @@ def gallery_rename_group(group_id):
                         current['image_url'] = f"/api/gallery/image/{new_base}.png"
                     if current.get('stl_url'):
                         current['stl_url'] = f"/api/gallery/file/{new_base}.stl"
+                    if current.get('sketch_url'):
+                        current['sketch_url'] = f"/api/gallery/image/{new_base}.sketch.png"
                     f.seek(0)
                     json.dump(current, f)
                     f.truncate()
@@ -2608,6 +3702,11 @@ def dev_save():
         logging.error(f"Error in /api/dev/save: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+@app.errorhandler(404)
+def page_not_found(e):
+    logging.warning(f"404 Not Found: {request.method} {request.url}")
+    return jsonify(error="Not Found", url=request.url), 404
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 10000))

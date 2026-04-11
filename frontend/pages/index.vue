@@ -93,7 +93,7 @@
                 v-if="plotImage"
                 :src="plotImage"
                 alt="Organogram"
-                @click="showLightbox = true"
+                @click="openLightbox(plotImage, 'Organogram')"
                 class="plot-image"
               />
             </section>
@@ -111,19 +111,60 @@
               <pre class="materials-list">{{ materialsText }}</pre>
             </section>
 
-            <section class="panel panel-stl">
-              <div class="section-header">
-                <h3 class="section-title">GEOMETRY</h3>
-                <button v-if="stlUrl" @click="downloadCurrentStl" class="download-btn">
-                  Download STL
-                </button>
-              </div>
-              <ClientOnly>
-                <div v-if="stlUrl" class="stl-viewer-container">
-                  <StlViewer :url="stlUrl" />
+            <section class="panel panel-visualizer">
+              <div class="section-header tab-header">
+                <div class="tabs">
+                  <button 
+                    class="tab-btn" 
+                    :class="{ active: viewMode === 'stl' }" 
+                    @click="viewMode = 'stl'"
+                  >
+                    GEOMETRY (3D)
+                  </button>
+                  <button 
+                    class="tab-btn" 
+                    :class="{ active: viewMode === 'sketch' }" 
+                    @click="viewMode = 'sketch'"
+                  >
+                    SKETCH (INFERRED)
+                  </button>
                 </div>
-                <div v-else class="stl-placeholder">No STL geometry generated for this response.</div>
-              </ClientOnly>
+                <div class="section-meta-group">
+                  <button v-if="viewMode === 'stl' && stlUrl" @click="downloadCurrentStl" class="download-btn">
+                    Download STL
+                  </button>
+                  <span v-if="viewMode === 'sketch' && sketchModel" class="section-meta">{{ sketchModel }}</span>
+                  <button 
+                    v-if="viewMode === 'sketch' && hasResults" 
+                    @click="remakeSketch" 
+                    class="remake-btn-small" 
+                    :disabled="loading"
+                  >
+                    {{ loading ? '...' : 'GENERATE' }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="tab-content">
+                <div v-show="viewMode === 'stl'" class="tab-pane">
+                  <ClientOnly>
+                    <div v-if="stlUrl" class="stl-viewer-container">
+                      <StlViewer :url="stlUrl" />
+                    </div>
+                    <div v-else class="stl-placeholder">No STL geometry generated for this response.</div>
+                  </ClientOnly>
+                </div>
+                <div v-show="viewMode === 'sketch'" class="tab-pane">
+                  <img
+                    v-if="sketchImage"
+                    :src="sketchImage"
+                    alt="Sketch render"
+                    @click="openLightbox(sketchImage, 'Sketch')"
+                    class="plot-image"
+                  />
+                  <div v-else class="sketch-placeholder">No diffusion sketch generated for this response.</div>
+                </div>
+              </div>
             </section>
           </div>
         </div>
@@ -135,15 +176,15 @@
       leave-active-class="fadeOut"
       :duration="300"
     >
-      <div v-if="showLightbox" class="lightbox" @click="showLightbox = false">
-        <button class="close-button" @click.stop="showLightbox = false">
+      <div v-if="showLightbox" class="lightbox" @click="closeLightbox">
+        <button class="close-button" @click.stop="closeLightbox">
           <svg class="icon" viewBox="0 0 24 24">
             <path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" />
           </svg>
         </button>
         <img 
-          :src="plotImage" 
-          alt="Plot"
+          :src="lightboxImage || plotImage" 
+          :alt="lightboxAlt"
           class="lightbox-image"
           @click.stop
         />
@@ -151,7 +192,11 @@
     </Transition>
     <div class="footer">
       <div v-if="loading" class="loading">
-        {{ loadingStatus }}
+        <div class="loading-status">{{ loadingStatus }}</div>
+        <div v-if="progressStage" class="progress-stage">{{ formatProgressStage(progressStage) }}</div>
+        <div v-if="reasoningPreview" class="reasoning-preview" :title="progressStage || 'reasoning'">
+          {{ reasoningPreview }}
+        </div>
       </div>
       <button 
         v-if="isMobileOrTablet" 
@@ -202,6 +247,7 @@ const responseTimesMs = ref([]);
 const isReversioning = ref(false);
 const error = ref(null);
 const plotImage = ref(null);
+const sketchImage = ref(null);
 const summary = ref(null);
 const organogramCode = ref('');
 const geometryCode = ref('');
@@ -212,6 +258,14 @@ const currentModel = ref('');
 const modelSwitching = ref(false);
 const responseModel = ref('');
 const responseElapsedMs = ref(0);
+const sketchModel = ref('');
+const lightboxImage = ref(null);
+const lightboxAlt = ref('Preview');
+const generationRequestId = ref('');
+const reasoningPreview = ref('');
+const progressStage = ref('');
+const viewMode = ref('stl');
+let progressPollInterval = null;
 
 const summaryHtml = computed(() => {
   if (!summary.value) return '';
@@ -254,7 +308,7 @@ const responseMetaText = computed(() => {
   return parts.join(' | ');
 });
 
-const hasResults = computed(() => !!(plotImage.value || summary.value || materialsText.value || stlUrl.value));
+const hasResults = computed(() => !!(plotImage.value || sketchImage.value || summary.value || materialsText.value || stlUrl.value));
 
 const checkDevice = () => {
   isMobileOrTablet.value = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -262,9 +316,69 @@ const checkDevice = () => {
 
 const handleEscapeKey = (e) => {
   if (e.key === 'Escape' && showLightbox.value) {
-    showLightbox.value = false;
+    closeLightbox();
   }
 };
+
+function openLightbox(src, alt = 'Preview') {
+  if (!src) return;
+  lightboxImage.value = src;
+  lightboxAlt.value = alt;
+  showLightbox.value = true;
+}
+
+function closeLightbox() {
+  showLightbox.value = false;
+  lightboxImage.value = null;
+  lightboxAlt.value = 'Preview';
+}
+
+function createRequestId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `soog-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function stopReasoningPolling() {
+  if (progressPollInterval) {
+    clearInterval(progressPollInterval);
+    progressPollInterval = null;
+  }
+}
+
+async function fetchReasoningProgress() {
+  if (!generationRequestId.value) return;
+  try {
+    const response = await fetch(`${apiBase.value}/generate/progress/${generationRequestId.value}`, {
+      headers: { Accept: 'application/json' }
+    });
+    if (!response.ok) return;
+    const payload = await response.json();
+    if (!payload?.ok) return;
+    reasoningPreview.value = String(payload.reasoning_preview || '').trim();
+    progressStage.value = String(payload.stage || '').trim();
+    if (payload.status === 'completed' || payload.status === 'error') {
+      stopReasoningPolling();
+    }
+  } catch {
+    // keep progress polling quiet
+  }
+}
+
+function startReasoningPolling() {
+  stopReasoningPolling();
+  reasoningPreview.value = '';
+  progressStage.value = '';
+  progressPollInterval = setInterval(fetchReasoningProgress, 700);
+}
+
+function formatProgressStage(stage) {
+  return String(stage || '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
 
 onMounted(() => {
   loadResponseTimeHistory();
@@ -280,6 +394,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearInterval(progressInterval);
+  stopReasoningPolling();
   window.removeEventListener('resize', checkDevice);
   window.removeEventListener('keydown', handleEscapeKey);
   window.removeEventListener('mousemove', onDrag);
@@ -493,6 +608,44 @@ function stlFilenameFromUrl(url, fallback = 'model.stl') {
   }
 }
 
+async function remakeSketch() {
+  if (loading.value || !hasResults.value) return
+  loading.value = true
+  progressStage.value = 'regenerating sketch'
+  try {
+    const prompt = editorRef.value?.aceEditor()?.getValue() || ''
+    const summaryText = summary.value || ''
+    const materials_text = materialsText.value || ''
+    const plot_code = organogramCode.value || ''
+
+    const response = await fetch(`${apiBase.value}/generate/sketch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt,
+        summary: summaryText,
+        materials: materials_text,
+        plot_code,
+        image: plotImage.value?.split(',')[1] // send base64 if available
+      })
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error || 'Failed to remake sketch')
+    
+    if (data.sketch) {
+      sketchImage.value = `data:image/png;base64,${data.sketch}`
+    } else if (data.sketch_url) {
+      sketchImage.value = resolveAssetUrl(data.sketch_url)
+    }
+    sketchModel.value = data.sketch_model || ''
+  } catch (e) {
+    error.value = `Sketch remake failed: ${e.message}`
+  } finally {
+    loading.value = false
+    progressStage.value = ''
+  }
+}
+
 async function downloadCurrentStl() {
   if (!stlUrl.value) return;
   try {
@@ -592,12 +745,14 @@ async function loadCodeFromGallery(item) {
   organogramCode.value = (item.plot_code || item.code || '').trim();
   geometryCode.value = (item.stl_code || '').trim();
   responseModel.value = (item.llm_model || '').trim();
+  sketchModel.value = (item.sketch_model || '').trim();
   responseElapsedMs.value = Number.isFinite(Number(item.elapsed_ms))
     ? Number(item.elapsed_ms)
     : 0;
 
   stlUrl.value = item.stl_url ? resolveAssetUrl(item.stl_url) : null;
   plotImage.value = item.image_url ? resolveAssetUrl(item.image_url) : null;
+  sketchImage.value = item.sketch_url ? resolveAssetUrl(item.sketch_url) : null;
   showGallery.value = false;
 }
 
@@ -672,8 +827,12 @@ const handleEvaluate = async (selectedText) => {
   loading.value = true;
   isReversioning.value = isRefactorPrompt(selectedText);
   error.value = null;
+  generationRequestId.value = createRequestId();
+  reasoningPreview.value = '';
+  progressStage.value = '';
   startProgress();
   startProcessing();
+  startReasoningPolling();
 
     async function callOnce() {
       const timeoutMs = getGenerateFetchTimeoutMs();
@@ -687,7 +846,7 @@ const handleEvaluate = async (selectedText) => {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
-          body: JSON.stringify({ prompt: selectedText }),
+          body: JSON.stringify({ prompt: selectedText, request_id: generationRequestId.value }),
           signal: controller?.signal
         });
       } catch (fetchErr) {
@@ -757,6 +916,7 @@ const handleEvaluate = async (selectedText) => {
 
     // Reset results
     plotImage.value = null;
+    sketchImage.value = null;
     summary.value = null;
     organogramCode.value = '';
     geometryCode.value = '';
@@ -764,8 +924,10 @@ const handleEvaluate = async (selectedText) => {
     materialsText.value = '';
     responseModel.value = '';
     responseElapsedMs.value = 0;
+    sketchModel.value = '';
 
     const imageUrl = data.image_url || data.gallery?.image_url || null;
+    const sketchUrl = data.sketch_url || data.gallery?.sketch_url || null;
     if (data.image) {
       plotImage.value = `data:image/png;base64,${data.image}`;
     } else if (imageUrl) {
@@ -773,9 +935,15 @@ const handleEvaluate = async (selectedText) => {
     } else {
       throw new Error('Backend did not return an organogram image. Generation aborted.');
     }
+    if (data.sketch) {
+      sketchImage.value = `data:image/png;base64,${data.sketch}`;
+    } else if (sketchUrl) {
+      sketchImage.value = resolveAssetUrl(sketchUrl);
+    }
 
     if (data.summary) summary.value = data.summary;
     responseModel.value = (data.llm_model || currentModel.value || '').trim();
+    sketchModel.value = (data.sketch_model || data.gallery?.sketch_model || '').trim();
     const requestEndedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     const clientElapsed = Math.max(0, requestEndedAt - requestStartedAt);
     responseElapsedMs.value = Number.isFinite(Number(data.elapsed_ms))
@@ -807,6 +975,9 @@ const handleEvaluate = async (selectedText) => {
     console.error(err);
     error.value = err.message;
   } finally {
+    await fetchReasoningProgress();
+    stopReasoningPolling();
+    generationRequestId.value = '';
     completeProgress();
     loading.value = false;
     isReversioning.value = false;
@@ -1081,6 +1252,31 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   margin-right: auto;
 }
 
+.loading-status {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.progress-stage {
+  margin-top: 3px;
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.reasoning-preview {
+  margin-top: 4px;
+  max-width: min(62vw, 860px);
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .mobile-evaluate-btn {
   background: #4CAF50;
   color: white;
@@ -1129,7 +1325,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   overflow-x: hidden;
   background: transparent;
   display: grid;
-  grid-template-rows: minmax(260px, 1.1fr) minmax(260px, 0.95fr) minmax(260px, 1fr);
+  grid-template-rows: minmax(250px, 1fr) minmax(250px, 1fr) minmax(220px, 0.95fr) minmax(260px, 1fr);
   gap: 0;
   padding: 0 16px 88px 16px;
   box-sizing: border-box;
@@ -1175,6 +1371,82 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   justify-content: center;
 }
 
+.panel-visualizer {
+  min-height: 380px;
+}
+
+.tab-header {
+  margin-bottom: 12px;
+}
+
+.tabs {
+  display: flex;
+  gap: 16px;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  padding: 0 0 4px 0;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.tab-btn.active {
+  color: #4CAF50;
+  border-bottom-color: #4CAF50;
+}
+
+.remake-btn-small {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 8px;
+}
+
+.remake-btn-small:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.remake-btn-small:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.section-meta-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .panel-text {
   overflow: auto;
 }
@@ -1195,10 +1467,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   line-height: 1.5;
 }
 
-.panel-stl {
-  min-height: 280px;
-}
-
 .stl-viewer-container {
   width: 100%;
   flex: 1;
@@ -1206,6 +1474,17 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
 }
 
 .stl-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9e9e9e;
+  font-size: 13px;
+  border: none;
+  border-radius: 0;
+}
+
+.sketch-placeholder {
   flex: 1;
   display: flex;
   align-items: center;
@@ -1339,7 +1618,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   .left-column { height: 50vh; }
   .right-column { height: 50vh; }
   .results-split {
-    grid-template-rows: minmax(180px, 1fr) minmax(180px, 1fr) minmax(220px, 1fr);
+    grid-template-rows: minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 0.95fr) minmax(220px, 1fr);
     padding-bottom: 110px;
   }
 }
