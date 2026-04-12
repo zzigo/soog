@@ -10,7 +10,7 @@
     "plot"
   ],
   "sketch_url": "/api/gallery/image/20251217-170440_bezel-cylinder-sphere.sketch.png",
-  "sketch_prompt": "realistic 3D object, solid black background, realistic reflections, dark mode, cinematic lighting. Instrument Identity: **Conceptual Summary** This speculative instrument merges idiophonic, membranophonic, and aerophonic principles into a single resonant body. The organogram abstracts the main reson.... User Concept: make an instrument with a bezel a cylinder and a sphere in one of its point as resonant space , making another hol on th.... Form: complex resonant volumes. Colors: natural material accents. System Logic: You are a specialist in building prompts for Image-to-Image Stable Diffusion models, specifically for \"OFA-Sys/small-stable-diffusion-v0\". Your goal is to transform a technical Matplotlib organogram into a rich, speculative instrument sketch. INSTRUC... Photorealistic 3D rendering, high detail, 8k, obsidian background.",
+  "sketch_prompt": "A speculative instrument: **Conceptual Summary** This speculative instrument merges idiophonic, membranophonic, and aerophonic principles into a single resonant body..... Inspired by: make an instrument with a bezel a cylinder and a sphere in one of its point as r.... realistic 3D object, solid black background, highly imaginative, obsidian, cinematic lighting, dark mode. photo...",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-11T23:01:10.408510"
+  "updated_at": "2026-04-12T10:53:27.110443"
 }

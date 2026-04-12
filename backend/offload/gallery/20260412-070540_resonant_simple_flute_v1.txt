@@ -1,0 +1,63 @@
+# Prompt
+
+a simple flute
+
+# Summary
+
+The simple flute is designed to produce a clear and resonant sound with a focus on breath control and tonal purity. The body of the flute is made from high-density maple, providing a warm and rich acoustic quality. A single key mechanism allows for easy finger placement while maintaining a sleek, ergonomic shape. The instrument features a silver-plated mouthpiece to enhance projection and clarity. The overall design emphasizes simplicity and ease of play, making it ideal for both beginners and advanced players seeking a focused learning experience.
+
+# Materials
+
+1. High-density maple for the body
+2. Silver-plated brass for the key mechanism
+3. Acrylic for the mouthpiece
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 336598
+- sketch_model: OFA-Sys/small-stable-diffusion-v0
+- group_id: resonant_simple_flute_20260412-070540
+- version: v1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Circle, Rectangle, Polygon, FancyArrowPatch
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(10, 6))
+# Drawing a simple organogram for the flute
+ax.add_patch(Rectangle((2, 5), 3, 1, facecolor='orange', edgecolor='black')) # Body
+ax.add_patch(Circle((8.5, 4.5), 0.3, facecolor='lightgrey', edgecolor='black')) # Key mechanism
+ax.add_patch(Rectangle((9.5, 6.5), 1.2, 0.7, facecolor='pink', edgecolor='black')) # Mouthpiece
+# Arrows for connections
+arrow = FancyArrowPatch((4, 5.5), (8, 4.5), mutation_scale=20, arrowstyle='<|-|>', color='white')
+ax.add_patch(arrow)
+arrows = FancyArrowPatch((10.3, 6.5), (9.7, 4.5), mutation_scale=20, arrowstyle='-|>', color='white')
+ax.add_patch(arrows)
+# Labels
+plt.text(1, 5.8, 'High-density Maple', fontsize=10, ha='center')
+plt.text(9, 6.8, 'Acrylic', fontsize=10, ha='center')
+plt.text(7.5, 3.2, 'Silver-plated Brass', fontsize=10, ha='center')
+ax.set_xlim([0, 12])
+ax.set_ylim([0, 8])
+ax.set_aspect('equal')
+
+# Geometry Code (trimesh)
+
+import numpy as np
+import trimesh
+
+# map: air-column -> cylinder, bell radiation -> cone, mouthpiece interface -> cylinder
+body = trimesh.creation.cylinder(radius=8.27, height=183.04, sections=55)
+bell = trimesh.creation.cone(radius=11.94, height=46.4, sections=55)
+bell.apply_translation((0, 0, -114.72))
+mouth = trimesh.creation.cylinder(radius=4.2, height=29.14, sections=55)
+mouth.apply_translation((0, 0, 106.09))
+spine = trimesh.creation.box(extents=(6.62, 9.1, 73.22))
+mesh = trimesh.util.concatenate([body, bell, mouth, spine])
+
+# Sketch Prompt
+
+realistic 3D object, solid black background, realistic reflections, dark mode, cinematic lighting. Instrument Identity: The simple flute is designed to produce a clear and resonant sound with a focus on breath control and tonal purity. The body of the flute is made from high-density maple, providing.... User Concept: a simple flute. Form: circular resonators, rectilinear frames, faceted polygons, directional arrows. Colors: pink, grey, orange, lightgrey, white, black, silver. Materials: 1. High-density maple for the body; 2. Silver-plated brass for the key mechanism.... System Logic: You are a specialist in building prompts for Image-to-Image Stable Diffusion models, specifically for "OFA-Sys/small-stable-diffusion-v0". Your goal is to transform a technical Matplotlib organogram into a rich, speculative instrument sketch. INSTRUC... Photorealistic 3D rendering, high detail, 8k, obsidian background.

@@ -1,0 +1,103 @@
+# Prompt
+
+make a bioluminscent trombon, with double length bar , in fluorescent blue pla material. Include embedded computing and self amplification system also embedded inside the bell
+
+# Summary
+
+**Conceptual Summary**
+
+The organogram abstracts the bioluminescent trombone as a speculative hybrid of aerophone and electronophone. The acoustical body is represented by a blue fluorescent circle (aerophone) and a rhombus (electronophone), merged into a single polygon to signify embedded computing. A double-length slide is shown as two parallel blue lines extending from the circle, with arrows indicating bidirectional performer movement. The embedded amplification system is visualized as a small horizontal cone (speaker) inside the bell, colored grey for plastic, with signal flow arrows pointing outward. Performer interaction is marked by a white dotted circle and line connecting to the slide. Numbers in blue denote key components: 7 slide positions (extended range), 1 embedded speaker, and 1 microcontroller. The acoustical rationale combines the trombone’s cylindrical/conical bore resonance (circle) with digital wave shaping (rhombus), using PLA’s material properties to enhance high-frequency diffusion. The design merges acoustic projection with self-amplification, creating a closed-loop system where the performer’s slide manipulation directly modulates both acoustic output and embedded digital processing.
+
+**Materials**
+
+1. 1× PLA filament (fluorescent blue), 500 g, for printing main body and slide.
+2. 1× Microcontroller board (e.g., Teensy 4.0), 35 mm × 18 mm, for embedded computing.
+3. 1× Miniature speaker (8 Ω, 1 W), 30 mm diameter, for self-amplification.
+4. 1× Piezo contact microphone, 20 mm diameter, for pickup.
+5. 2× Slide rails (stainless steel), 600 mm length, 5 mm diameter, for double-length extension.
+6. 1× Power bank (5V, 2000 mAh), 80 mm × 60 mm × 10 mm.
+7. Wiring (stranded copper), 1 m, 24 AWG.
+8. Solder, flux, heat-shrink tubing.
+
+**Virtual Materials**
+
+1. 1× Wavetable synthesis patch (digital asset) for embedded sound generation.
+2. 1× Fluorescent blue PBR shader (texture asset) for 3D model rendering.
+3. 1× Sample library of trombone multiphonics (audio asset) for hybrid processing.
+
+```python
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.patches import Polygon, FancyArrow, Circle, Arc
+import numpy as np
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(12, 8))
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 8)
+ax.set_aspect('equal')
+ax.axis('off')
+fig.patch.set_alpha(0.0)
+
+# Main acoustical shape: merged circle (aerophone) and rhombus (electronophone)
+circle = patches.Circle((4, 4), 1.5, fill=False, edgecolor='cyan', linewidth=2.5, linestyle='-')
+ax.add_patch(circle)
+
+rhombus = Polygon([[3, 4.5], [4, 5.5], [5, 4.5], [4, 3.5]], closed=True, 
+                  fill=False, edgecolor='cyan', linewidth=2.5, linestyle='-')
+ax.add_patch(rhombus)
+
+# Double-length slide (parallel lines)
+ax.plot([1.5, 1.5], [3, 5], color='cyan', linewidth=3)
+ax.plot([2, 2], [3, 5], color='cyan', linewidth=3)
+# Slide movement arrows
+ax.add_patch(FancyArrow(1.75, 4, -0.5, 0, width=0.05, head_width=0.2, 
+                        head_length=0.2, color='white', alpha=0.7))
+ax.add_patch(FancyArrow(1.75, 4, 0.5, 0, width=0.05, head_width=0.2, 
+                        head_length=0.2, color='white', alpha=0.7))
+
+# Embedded speaker inside bell (horizontal cone)
+speaker = Polygon([[5.5, 4], [6.5, 4.3], [6.5, 3.7]], closed=True, 
+                  fill=True, facecolor='grey', edgecolor='white', linewidth=1.5)
+ax.add_patch(speaker)
+# Amplification signal arrow
+ax.add_patch(FancyArrow(6.5, 4, 1, 0
+
+# Code
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.patches import Polygon, FancyArrow, Circle, Arc
+import numpy as np
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(12, 8))
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 8)
+ax.set_aspect('equal')
+ax.axis('off')
+fig.patch.set_alpha(0.0)
+
+# Main acoustical shape: merged circle (aerophone) and rhombus (electronophone)
+circle = patches.Circle((4, 4), 1.5, fill=False, edgecolor='cyan', linewidth=2.5, linestyle='-')
+ax.add_patch(circle)
+
+rhombus = Polygon([[3, 4.5], [4, 5.5], [5, 4.5], [4, 3.5]], closed=True, 
+                  fill=False, edgecolor='cyan', linewidth=2.5, linestyle='-')
+ax.add_patch(rhombus)
+
+# Double-length slide (parallel lines)
+ax.plot([1.5, 1.5], [3, 5], color='cyan', linewidth=3)
+ax.plot([2, 2], [3, 5], color='cyan', linewidth=3)
+# Slide movement arrows
+ax.add_patch(FancyArrow(1.75, 4, -0.5, 0, width=0.05, head_width=0.2, 
+                        head_length=0.2, color='white', alpha=0.7))
+ax.add_patch(FancyArrow(1.75, 4, 0.5, 0, width=0.05, head_width=0.2, 
+                        head_length=0.2, color='white', alpha=0.7))
+
+# Embedded speaker inside bell (horizontal cone)
+speaker = Polygon([[5.5, 4], [6.5, 4.3], [6.5, 3.7]], closed=True, 
+                  fill=True, facecolor='grey', edgecolor='white', linewidth=1.5)
+ax.add_patch(speaker)
+# Amplification signal arrow
+ax.add_patch(FancyArrow(6.5, 4, 1, 0

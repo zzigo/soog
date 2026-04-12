@@ -1,0 +1,116 @@
+# Prompt
+
+Envision a sound generator powered by photosynthesis...
+
+# Summary
+
+**Conceptual Summary**
+
+The organogram visualizes a photosynthesis-powered sound generator as a hybrid electro-acoustic instrument. The primary acoustical shape is a **green circle** (aerophone genus) representing the plant's leaf as a resonant membrane, with **yellow radiating lines** symbolizing light absorption. Attached is a **small rhombus** (microphone) in orange, detecting leaf vibrations, connected via a **blue arrow** (data flow) to a **grey rhombus** (processor) that modulates the signal. This processor links to a **horizontal red cone** (speaker) projecting synthesized sound. A **white dotted circle** indicates the performer's position for interactive light manipulation. The **acoustical rationale** merges biological resonance (leaf oscillations from photosynthetic gas exchange) with electronic synthesis, creating an organological relation between aerophones (plant) and electronophones (circuitry). Performative interaction involves varying light intensity and direction to alter photosynthetic rate, thereby changing the vibration profile and resulting timbre.
+
+**Materials**
+
+1.  1 large Monstera deliciosa leaf (or similar broad, sturdy leaf), approx. 30 cm length.
+2.  1 contact microphone (piezo transducer), 20 mm diameter.
+3.  1 microcontroller board (e.g., Arduino Nano) with ADC.
+4.  1 audio amplifier module (e.g., LM386 based), 5V.
+5.  1 small speaker (8 Ohm, 1W), 50 mm diameter.
+6.  Wires, soldering kit, and 9V battery.
+7.  1 adjustable LED grow light (for controlled performance input).
+
+**Virtual Materials**
+1.  A granular synthesis patch (e.g., in Pure Data or Max/MSP) to process the microphone signal.
+2.  A library of photosynthetic parameter presets (light intensity to filter frequency mappings).
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Circle, Polygon, Arc, FancyArrowPatch
+from matplotlib.collections import PatchCollection
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.set_xlim(-1.5, 1.5)
+ax.set_ylim(-1, 2)
+ax.set_aspect('equal')
+ax.axis('off')
+fig.patch.set_alpha(0.0)
+
+# Acoustical shape: Leaf as green circle (aerophone)
+leaf = Circle((0, 0.8), radius=0.5, color='green', alpha=0.7, linewidth=2.5)
+ax.add_patch(leaf)
+
+# Light absorption lines (yellow)
+for angle in np.linspace(0, 2*np.pi, 12, endpoint=False):
+    x_end = 0.8 * np.cos(angle)
+    y_end = 0.8 + 0.8 * np.sin(angle)
+    ax.plot([0, x_end], [0.8, y_end], color='yellow', linewidth=1.5, alpha=0.6)
+
+# Microphone (orange rhombus) on leaf
+mic = Polygon([[0.1, 1.1], [0.4, 0.8], [0.1, 0.5], [-0.2, 0.8]], closed=True, color='orange')
+ax.add_patch(mic)
+
+# Processor (grey rhombus)
+processor = Polygon([[-0.7, 0.2], [-0.4, -0.1], [-0.7, -0.4], [-1.0, -0.1]], closed=True, color='grey')
+ax.add_patch(processor)
+
+# Speaker (red horizontal cone)
+speaker = Polygon([[-0.3, -0.8], [0.5, -0.8], [0.1, -1.2]], closed=True, color='red')
+ax.add_patch(speaker)
+
+# Data flow arrows (blue)
+arrow1 = FancyArrowPatch((0.1, 0.65), (-0.7, 0.05), arrowstyle='->', color='blue', linewidth=2, mutation_scale=20)
+arrow2 = FancyArrowPatch((-0.7, -0.25), (0.1, -0.8), arrowstyle='->', color='blue', linewidth=2, mutation_scale=20)
+ax.add_patch(arrow1)
+ax.add_patch(arrow2)
+
+# Performer position (white dotted circle)
+performer = Circle((0.8, -0.2), radius=0.15, fill=False, edgecolor='white', linestyle='dotted', linewidth=2)
+ax
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Circle, Polygon, Arc, FancyArrowPatch
+from matplotlib.collections import PatchCollection
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.set_xlim(-1.5, 1.5)
+ax.set_ylim(-1, 2)
+ax.set_aspect('equal')
+ax.axis('off')
+fig.patch.set_alpha(0.0)
+
+# Acoustical shape: Leaf as green circle (aerophone)
+leaf = Circle((0, 0.8), radius=0.5, color='green', alpha=0.7, linewidth=2.5)
+ax.add_patch(leaf)
+
+# Light absorption lines (yellow)
+for angle in np.linspace(0, 2*np.pi, 12, endpoint=False):
+    x_end = 0.8 * np.cos(angle)
+    y_end = 0.8 + 0.8 * np.sin(angle)
+    ax.plot([0, x_end], [0.8, y_end], color='yellow', linewidth=1.5, alpha=0.6)
+
+# Microphone (orange rhombus) on leaf
+mic = Polygon([[0.1, 1.1], [0.4, 0.8], [0.1, 0.5], [-0.2, 0.8]], closed=True, color='orange')
+ax.add_patch(mic)
+
+# Processor (grey rhombus)
+processor = Polygon([[-0.7, 0.2], [-0.4, -0.1], [-0.7, -0.4], [-1.0, -0.1]], closed=True, color='grey')
+ax.add_patch(processor)
+
+# Speaker (red horizontal cone)
+speaker = Polygon([[-0.3, -0.8], [0.5, -0.8], [0.1, -1.2]], closed=True, color='red')
+ax.add_patch(speaker)
+
+# Data flow arrows (blue)
+arrow1 = FancyArrowPatch((0.1, 0.65), (-0.7, 0.05), arrowstyle='->', color='blue', linewidth=2, mutation_scale=20)
+arrow2 = FancyArrowPatch((-0.7, -0.25), (0.1, -0.8), arrowstyle='->', color='blue', linewidth=2, mutation_scale=20)
+ax.add_patch(arrow1)
+ax.add_patch(arrow2)
+
+# Performer position (white dotted circle)
+performer = Circle((0.8, -0.2), radius=0.15, fill=False, edgecolor='white', linestyle='dotted', linewidth=2)
+ax

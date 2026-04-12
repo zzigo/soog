@@ -13,7 +13,7 @@
     "stl"
   ],
   "sketch_url": "/api/gallery/image/20260306-090826_phononic_imagine_crystal.sketch.png",
-  "sketch_prompt": "realistic 3D object, solid black background, realistic reflections, dark mode, cinematic lighting. Instrument Identity: ### Conceptual Summary The Phononic Crystal Viola is designed as a hybrid instrument combining traditional viola acoustics with advanced acoustic crystal topology. Its organogram f.... User Concept: Imagine the Phononic Crystal Viola: body structured with acoustic higher-order topology.... Form: complex resonant volumes. Colors: natural material accents. System Logic: You are a specialist in building prompts for Image-to-Image Stable Diffusion models, specifically for \"OFA-Sys/small-stable-diffusion-v0\". Your goal is to transform a technical Matplotlib organogram into a rich, speculative instrument sketch. INSTRUC... Photorealistic 3D rendering, high detail, 8k, obsidian background.",
+  "sketch_prompt": "realistic 3D object, solid black background, cinematic lighting, dark mode. Concept: ### Conceptual Summary The Phononic Crystal Viola is designed as a hybrid instru... Imagine the Phononic Crystal Viola: body structured with aco.... photorealistic, highly detailed, 8k, obsidian background.",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-11T23:00:46.133524"
+  "updated_at": "2026-04-12T09:48:35.897410"
 }

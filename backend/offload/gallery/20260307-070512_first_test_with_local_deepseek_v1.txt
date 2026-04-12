@@ -1,0 +1,91 @@
+# Prompt
+
+# Welcome to SOOG [The Speculative Organology Organogram Generator 0.0.60]
+# Write your invented instrument, select text and press Alt+Enter to evaluate
+
+ Envision a timpani with metamaterial membranes that focus sound through transformation optics...
+
+# Summary
+
+**Conceptual Summary**:  
+The Electronophone is a hybrid aerophone-violin inspired by the organogram system. It features an inner hollow cylindrical body (radius 20cm, height 40cm) with a transversely oriented H-shaped membrane (16cm x 8cm), embedded within a circular feedback loop (radius 3cm). The performance holes are arranged in a radial pattern of 8 holes around the circumference. The design integrates real materials for construction and virtual components for sound manipulation.
+
+**Materials List**:  
+- **Real Materials**:  
+  - Hollow cylinder: 20cm radius, 40cm height, 1mm thickness, laminated wood (orange).  
+  - H-shaped membrane: 16cm x 8cm, 2mm thick, beamed metal.  
+  - Circular feedback loop: radius 3cm, 1mm diameter, thin copper plate (red).  
+  - 8-inch diameter holes with acetone (blue).  
+
+- **Virtual Materials**:  
+  - Digital sound manipulation unit: embedded circuit board (polyester substrate) with integrated H-shape visualization.  
+
+**Code Block 1: Matplotlib Organogram**
+
+```python
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, Rectangle, Polygon, Arrow
+from matplotlib.ticker import NullLocator
+
+# Create a figure
+fig = plt.figure(figsize=(10, 10))
+ax = fig.add_subplot(1, 1, 1)
+
+# Main shapes - Aerophone (Circle)
+electronophone = Circle((0.5, 0.5), 0.3, color='green', alpha=0.7)
+feedback_loop = Rectangle((0.4, 0.2), 0.6, 0.2, angle=-90, color='red', alpha=0.8)
+
+# Membrane - H-shape
+membrane = [Rectangle((0.3, 0.15), 0.2, 0.1, color='orange', alpha=0.8),
+            Rectangle((0.3, 0.35), 0.2, 0.1, color='orange', alpha=0.8)]
+
+# Performance holes
+holes = [Circle((i*0.2+0.2, 0.4), 0.1, color='blue', alpha=0.7) for i in range(8)]
+
+# Asymptote connections (simplified)
+ax.add_patch(Arrow(0.5, 0.35, 0.1, -0.0
+
+# Generation Metadata
+
+- model: deepseek-r1:7b
+- elapsed_ms: 1060510
+- group_id: speculative_welcome_soog_20260307-070512
+- version: v1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, Rectangle, Polygon, Arrow
+from matplotlib.ticker import NullLocator
+
+# Create a figure
+fig = plt.figure(figsize=(10, 10))
+ax = fig.add_subplot(1, 1, 1)
+
+# Main shapes - Aerophone (Circle)
+electronophone = Circle((0.5, 0.5), 0.3, color='green', alpha=0.7)
+feedback_loop = Rectangle((0.4, 0.2), 0.6, 0.2, angle=-90, color='red', alpha=0.8)
+
+# Membrane - H-shape
+membrane = [Rectangle((0.3, 0.15), 0.2, 0.1, color='orange', alpha=0.8),
+            Rectangle((0.3, 0.35), 0.2, 0.1, color='orange', alpha=0.8)]
+
+# Performance holes
+holes = [Circle((i*0.2+0.2, 0.4), 0.1, color='blue', alpha=0.7) for i in range(8)]
+
+# Asymptote connections (simplified)
+ax.add_patch(Arrow(0.5, 0.35, 0.1, -0.0
+
+# Geometry Code (trimesh)
+
+import numpy as np
+import trimesh
+
+# map: air-column -> cylinder, bell radiation -> cone, mouthpiece interface -> cylinder
+body = trimesh.creation.cylinder(radius=9.09, height=268.81, sections=49)
+bell = trimesh.creation.cone(radius=13.41, height=70.24, sections=49)
+bell.apply_translation((0, 0, -169.53))
+mouth = trimesh.creation.cylinder(radius=4.7, height=43.91, sections=49)
+mouth.apply_translation((0, 0, 156.36))
+spine = trimesh.creation.box(extents=(7.27, 10.0, 107.52))
+mesh = trimesh.util.concatenate([body, bell, mouth, spine])

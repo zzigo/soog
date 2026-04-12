@@ -1,0 +1,88 @@
+# Prompt
+
+make a cube with a membrane and a beater
+
+# Summary
+
+### Conceptual Summary
+
+The organogram depicts a cube (representing a Chordophone) that incorporates a membrane and a beater for excitation. The base geometry of the cube symbolizes the structural integrity and sound chamber of a stringed instrument. A horizontal rectangle is inscribed within the cube, indicating the presence of a membranophonic component, highlighting its role in producing high-frequency transients. Arrows indicate the movement from the membranophone to the chordophone, representing how both components contribute to the overall timbral richness. The beater is represented as an external element connected by a dotted line, signifying its interaction with the cube's surface. Blue numbers will denote the number of strings on the cube.
+
+# Materials
+
+### Materials
+
+1. 1 wooden block, 20 cm length, 5 cm width, 5 cm height
+2. 1 membrane (skin), 18 cm diameter
+3. 1 PVC tube, 30 cm length, 2 cm diameter
+4. 1 hardwood beater, 5 cm length, 1 cm diameter
+
+### Python Code for Matplotlib Organogram
+
+
+
+### Python Code for Trimesh 3D Representation
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 879143
+- group_id: hybrid_make_cube_20260307-081201
+- version: v1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon, Circle, Rectangle, ArrowStyle, FancyArrowPatch
+import numpy as np
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Cube (Chordophone)
+cube = Polygon([(2, 3), (8, 3), (8, 7), (2, 7)], fill=False, edgecolor='orange')
+ax.add_patch(cube)
+
+# Membrane
+membrane = Rectangle((4.5, 1), width=0.6, height=1.5, facecolor='#FF9900', edgecolor='brown')
+ax.add_patch(membrane)
+
+# Beater
+beater = Circle((8, 2), radius=0.2, fill=True, color='white')
+ax.add_patch(beater)
+arrow_style = ArrowStyle('->', head_length=10, head_width=6)
+arrow = FancyArrowPatch((7.5, 2), (8, 2.5), arrowstyle=arrow_style, mutation_scale=20)
+ax.add_patch(arrow)
+
+# Connection
+dotted_line = plt.Line2D([4, 6], [5.5, 5.5], color='white', linestyle=(0, (5, 5)))
+ax.add_line(dotted_line)
+
+plt.text(1, 3.5, 'Strings: 6', fontsize=12, color='blue')
+plt.text(7, 1.5, 'Skin Membrane', fontsize=10, color='#FF9900')
+
+# Adjustments
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].spine_color = 'white'
+ax.spines['bottom'].spine_color = 'white'
+ax.grid(True, color='grey', alpha=0.3)
+
+plt.axis('equal')
+plt.show()
+
+# Geometry Code (trimesh)
+
+import numpy as np
+import trimesh
+
+# map: resonator plate -> box, neck interface -> box, bridge coupling -> bar
+resonator = trimesh.creation.box(extents=(142.53, 81.9, 20.1))
+neck = trimesh.creation.box(extents=(118.78, 18.61, 12.66))
+neck.apply_translation((88.37, 0, 9.05))
+bridge = trimesh.creation.box(extents=(25.66, 13.1, 8.44))
+bridge.apply_translation((-14.25, 0, 14.47))
+peg = trimesh.creation.cylinder(radius=3.28, height=61.43, sections=56)
+peg.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2, [1, 0, 0]))
+peg.apply_translation((133.98, 0, 12.06))
+mesh = trimesh.util.concatenate([resonator, neck, bridge, peg])

@@ -23,7 +23,7 @@
     "stl"
   ],
   "sketch_url": "/api/gallery/image/20260306-100857_collective_python_create_v1.sketch.png",
-  "sketch_prompt": "realistic 3D industrial design object rendering, high-fidelity product photography, solid black background, cinematic lighting, polished surfaces with realistic reflections, three-quarter view, single instrument, obsidian studio background, preserve the organogram geometry cues: circular resonators, faceted polygons, directional arrows, semi-circular markers, preserve the organogram palette cues: grey, orange, lightgrey, green, blue, cyan. Decode the organogram into a single speculative musical instrument object. Translate circles into aerophonic volumes, vertical rectangles into chordophonic bodies, horizontal rectangles into membranophonic spans, rhombuses into electronic modules, and arrows into playable flows or performer gestures. Keep Mantle Hood organogram color logic visible as subtle material accents: wood orange, bamboo yellow, water blue, earth brown, stone white, plastic grey, glass green. User brief: Create the Neuromancer's Flute: keys that tap into the collective unconscious for microtonal divisions.... Organological cues: ```python import matplotlib.pyplot as plt impo...",
+  "sketch_prompt": "realistic 3D object, solid black background, cinematic lighting, dark mode. Concept: ```python import matplotlib.pyplot as plt import matplotlib.patches as mpatches... Create the Neuromancer's Flute: keys that tap into the colle.... Form: circular resonators, faceted polygons, directional arrows, semi-circular markers....",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-11T22:51:06.938360"
+  "updated_at": "2026-04-12T09:45:29.499108"
 }

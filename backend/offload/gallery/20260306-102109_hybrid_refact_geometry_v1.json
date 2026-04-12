@@ -23,7 +23,7 @@
     "stl"
   ],
   "sketch_url": "/api/gallery/image/20260306-102109_hybrid_refact_geometry_v1.sketch.png",
-  "sketch_prompt": "realistic 3D object, solid black background, realistic reflections, dark mode, cinematic lighting. Instrument Identity: ### Conceptual Summary The organogram design for this speculative instrument integrates traditional organological principles with innovative geometrical and acoustic enhancements..... User Concept: refact the geometry based on organogram. Form: rectilinear frames, gesture arrows. Colors: pink, grey, orange, white, blue, black. Materials: ### Materials; 1. 1 PVC tube, 30 cm length, 2.5 cm diameter; 2. 0.5 cm wood, 15.... System Logic: You are a specialist in building prompts for Image-to-Image Stable Diffusion models, specifically for \"OFA-Sys/small-stable-diffusion-v0\". Your goal is to transform a technical Matplotlib organogram into a rich, speculative instrument sketch. INSTRUC... Photorealistic 3D rendering, high detail, 8k, obsidian background.",
+  "sketch_prompt": "realistic 3D object, solid black background, cinematic lighting, dark mode. Concept: ### Conceptual Summary The organogram design for this speculative instrument int... refact the geometry based on organogram. Form: rectilinear frames, gesture arrows. Colors: pink, grey, orange, white, blue, black. photorealistic, high...",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-11T23:00:04.496067"
+  "updated_at": "2026-04-12T09:45:10.821266"
 }

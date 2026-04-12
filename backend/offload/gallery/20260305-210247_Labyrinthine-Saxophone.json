@@ -10,7 +10,7 @@
     "plot"
   ],
   "sketch_url": "/api/gallery/image/20260305-210247_Labyrinthine-Saxophone.sketch.png",
-  "sketch_prompt": "realistic 3D industrial design object rendering, high-fidelity product photography, solid black background, cinematic lighting, polished surfaces with realistic reflections, three-quarter view, single instrument, obsidian studio background, preserve the organogram geometry cues: resonant chambers, performer interfaces, and directional pathways, preserve the organogram palette cues: orange, blue, white, beige, brown, grey, and green accents. Decode the organogram into a single speculative musical instrument object. Translate circles into aerophonic volumes, vertical rectangles into chordophonic bodies, horizontal rectangles into membranophonic spans, rhombuses into electronic modules, and arrows into playable flows or performer gestures. Keep Mantle Hood organogram color logic visible as subtle material accents: wood orange, bamboo yellow, water blue, earth brown, stone white, plastic grey, glass green. User brief: Design the Labyrinthine Saxophone: body constructed from space-coiling acoustic metamaterials.... Organological cues: **Conceptual Summary: Labyrinthine Saxophone** The org...",
+  "sketch_prompt": "realistic 3D object, solid black background, cinematic lighting, dark mode. Concept: **Conceptual Summary: Labyrinthine Saxophone** The organogram of the Labyrinthin... Design the Labyrinthine Saxophone: body constructed from spa.... photorealistic, highly detailed, 8k, obsidian background.",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-11T22:51:37.803887"
+  "updated_at": "2026-04-12T10:11:54.050764"
 }

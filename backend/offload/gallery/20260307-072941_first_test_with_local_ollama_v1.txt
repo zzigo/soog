@@ -1,0 +1,95 @@
+# Prompt
+
+make a sphere membrane with a speaker in the center, and two tubes with 3 holes each blowing air inside the membrane, each tube have bessels and microphones on the points. Give a creative name to the instrument
+
+# Summary
+
+**Conceptual Summary**
+
+The organogram design for this instrument combines aerophones, membranophones, and idiophones to create a unique sound-producing device. The sphere-shaped membrane with a central speaker is surrounded by two tubes with three holes each, blowing air inside the membrane. Each tube has bells and microphones at the ends. The colors used are:
+- Blue: Membrane
+- Red: Tubes
+- Green: Holes
+- Yellow: Speakers
+
+The shapes and schematics of the instrument reflect its acoustic properties. The membrane's shape determines its resonant frequency, while the tubes and holes control airflow patterns inside the membrane.
+
+Arrows flow from the central speaker to each hole, indicating that air is blown into the membrane through these openings. Arrows also connect each tube to the membrane, showing the relationship between the instrument's structure and sound production. The green color represents airflow, and the blue color indicates the membrane itself.
+
+Acoustically, this instrument aims to produce a dynamic, resonant sound with strong emphasis on mid-range frequencies.
+
+Organologically, the instrument is categorized as an aerophone, which makes it suitable for players who require precise control over air flow.
+
+Performative interactions include manipulating airflow patterns by adjusting the holes or using hand gestures to influence air pressure.
+
+# Materials
+
+**Materials**
+
+1. 1 PVC tube, 30 cm length, 2.5 cm diameter
+2. 2 PVC tubes, 25 cm length, 1.8 cm diameter (for handles)
+3. 12 Small bells
+4. 6 Microphones (dynamic type)
+5. Speaker, medium power rating
+6. Membrane material: silicone or similar flexible material
+7. Adhesives for assembling components
+8. Paint or varnish for colorizing
+9. Textures and shaders for virtual visualization
+
+**Matplotlib Code**
+
+
+**Trimesh Code**
+
+# Generation Metadata
+
+- model: llama3.2:latest
+- elapsed_ms: 1388346
+- group_id: give_make_sphere_20260307-072941
+- version: v1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, Rectangle, FancyArrowPatch
+
+fig, ax = plt.subplots()
+
+# Circle: Membrane
+membrane = Circle((0, 0), 0.2, edgecolor='blue', facecolor='white')
+ax.add_patch(membrane)
+
+# Rectangles: Tubes
+tube1 = Rectangle((0.15, -0.25), 0.1, 0.3, edgecolor='red', facecolor='white')
+tube2 = Rectangle((-0.05, -0.25), 0.1, 0.3, edgecolor='red', facecolor='white')
+
+ax.add_patch(tube1)
+ax.add_patch(tube2)
+
+# Arrows: Airflow
+arrow1 = FancyArrowPatch((0.15, -0.45), (0.15, -0.25), head_length=0.05, width=0.02, color='green')
+ax.add_patch(arrow1)
+arrow2 = FancyArrowPatch((-0.05, -0.45), (-0.05, -0.25), head_length=0.05, width=0.02, color='green')
+
+ax.add_patch(arrow2)
+
+# Arrow: Speaker
+speaker = FancyArrowPatch((0, 0), (0.1, 0.1), head_length=0.05, width=0.02, color='yellow')
+ax.add_patch(speaker)
+
+plt.axis('equal')
+plt.show()
+
+# Geometry Code (trimesh)
+
+import numpy as np
+import trimesh
+
+# map: air-column -> cylinder, bell radiation -> cone, mouthpiece interface -> cylinder
+body = trimesh.creation.cylinder(radius=13.06, height=228.48, sections=61)
+bell = trimesh.creation.cone(radius=18.74, height=57.41, sections=61)
+bell.apply_translation((0, 0, -142.94))
+mouth = trimesh.creation.cylinder(radius=6.6, height=36.1, sections=61)
+mouth.apply_translation((0, 0, 132.29))
+spine = trimesh.creation.box(extents=(10.45, 14.37, 91.39))
+mesh = trimesh.util.concatenate([body, bell, mouth, spine])

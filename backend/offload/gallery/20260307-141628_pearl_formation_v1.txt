@@ -1,0 +1,127 @@
+# Prompt
+
+add strings
+Imagine a sound generator that translates the formation of pearls
+## organogram (matplotlib)
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.set_facecolor('k')
+plt.style.use('dark_background')
+
+# Central chamber (Pearl Formation) - rectangle with orange color
+rect_center = plt.Rectangle((2, 3), 5, 2, edgecolor='white', facecolor='#FFA500', linewidth=2.5)
+ax.add_patch(rect_center)
+
+# Surrounding chambers - three beige rectangles
+beige_color = '#D2B48C'
+for i in range(3):
+    rect_surround = plt.Rectangle((1.5 + 6 * i, 1), 4, 1, edgecolor='white', facecolor=beige_color, linewidth=2.5)
+    ax.add_patch(rect_surround)
+
+# Arrows indicating the flow of secretion
+for i in range(3):
+    start = (1.5 + 6 * i + 2, 0.8)
+    end = (1.5 + 6 * i + 4 - 0.5, 0.8)
+    ax.annotate('', xy=end, xytext=start,
+                arrowprops=dict(facecolor='white', edgecolor='black', 
+                                width=3, headwidth=7, headlength=7))
+
+# Numbers representing nacre layers
+ax.text(2.5, 4.1, '0.5 mm', fontsize=12, ha='center')
+
+plt.axis('equal')
+plt.title('Organogram of Pearl Formation Sound Generator')
+plt.show()
+```
+
+## geometry (trimesh)
+```python
+import numpy as np
+import trimesh
+
+# map: air-column -> cylinder, bell radiation -> cone, mouthpiece interface -> cylinder
+body = trimesh.creation.cylinder(radius=23.94, height=234.47, sections=34)
+bell = trimesh.creation.cone(radius=35.99, height=62.92, sections=34)
+bell.apply_translation((0, 0, -148.69))
+mouth = trimesh.creation.cylinder(radius=12.59, height=39.18, sections=34)
+mouth.apply_translation((0, 0, 136.82))
+spine = trimesh.creation.box(extents=(19.15, 26.33, 93.79))
+mesh = trimesh.util.concatenate([body, bell, mouth, spine])
+```
+
+# Summary
+
+### Conceptual Summary
+
+The organogram represents a sound generator inspired by pearl formation. The central chamber is an orange rectangle symbolizing the formation of pearls, indicating the acoustic source. Surrounding this are three beige rectangles representing nacre layers that build up over time. Arrows flow from the center to the periphery, suggesting the continuous process of secretion and growth. This design maps organologically to a complex sound generator where each layer's thickness influences the final acoustics. The performative interactions involve the varying density and structure of layers affecting sound resonance and diffusion.
+
+# Materials
+
+### Materials
+1. 3 Beige rectangles (20 cm x 4 cm, representing nacre layers)
+2. Orange rectangle (5 cm x 2 cm, central chamber)
+3. Clear PVC tubes (various lengths and diameters for air columns)
+
+### Executable Python Code
+
+
+
+### 3D Geometry (trimesh)
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 1034027
+- group_id: central_add_strings
+- version: v1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.set_facecolor('k')
+plt.style.use('dark_background')
+
+# Central chamber (Pearl Formation) - rectangle with orange color
+rect_center = plt.Rectangle((2, 3), 5, 2, edgecolor='white', facecolor='#FFA500', linewidth=2.5)
+ax.add_patch(rect_center)
+
+# Surrounding chambers - three beige rectangles
+beige_color = '#D2B48C'
+for i in range(3):
+    rect_surround = plt.Rectangle((1.5 + 6 * i, 1), 4, 1, edgecolor='white', facecolor=beige_color, linewidth=2.5)
+    ax.add_patch(rect_surround)
+
+# Arrows indicating the flow of secretion
+for i in range(3):
+    start = (1.5 + 6 * i + 2, 0.8)
+    end = (1.5 + 6 * i + 4 - 0.5, 0.8)
+    ax.annotate('', xy=end, xytext=start,
+                arrowprops=dict(facecolor='white', edgecolor='black', 
+                                width=3, headwidth=7, headlength=7))
+
+# Numbers representing nacre layers
+ax.text(2.5, 4.1, '0.5 mm', fontsize=12, ha='center')
+
+plt.axis('equal')
+plt.title('Organogram of Pearl Formation Sound Generator')
+plt.show()
+
+# Geometry Code (trimesh)
+
+import numpy as np
+import trimesh
+
+# map: air-column -> cylinder, bell radiation -> cone, mouthpiece interface -> cylinder
+body = trimesh.creation.cylinder(radius=19.66, height=276.01, sections=51)
+bell = trimesh.creation.cone(radius=30.45, height=77.21, sections=51)
+bell.apply_translation((0, 0, -176.61))
+mouth = trimesh.creation.cylinder(radius=10.61, height=47.8, sections=51)
+mouth.apply_translation((0, 0, 161.91))
+spine = trimesh.creation.box(extents=(15.73, 21.63, 110.4))
+mesh = trimesh.util.concatenate([body, bell, mouth, spine])

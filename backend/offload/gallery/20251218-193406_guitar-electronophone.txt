@@ -1,0 +1,156 @@
+# Prompt
+
+create a guitar with a camera inside to make a fractal environment within the performer, using also bearing balls and neodymium, output also a 3D stl file
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Rectangle, Polygon, Circle, FancyArrow
+import matplotlib.path as mpath
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 10)
+ax.set_aspect('equal')
+ax.axis('off')
+
+# Guitar body (chordophone - vertical rectangle)
+guitar_body = Rectangle((3, 2), 4, 6, linewidth=2.5, edgecolor='orange', facecolor='none')
+ax.add_patch(guitar_body)
+
+# Neck and headstock
+ax.plot([5, 5], [8, 9.5], color='orange', linewidth=2.5)
+headstock = Polygon([[4.8, 9.5], [5.2, 9.5], [5.2, 9.8], [4.8, 9.8]], closed=True, fill=False, edgecolor='orange', linewidth=2.5)
+ax.add_patch(headstock)
+
+# Strings (6 strings)
+for i in range(6):
+    x = 3.5 + i * 0.7
+    ax.plot([x, x], [2.2, 9.3], color='silver', linewidth=1, alpha=0.7)
+    ax.text(x, 1.8, str(i+1), color='blue', ha='center', va='center', fontsize=10, fontweight='bold')
+
+# Camera (electronophone - rhombus) inside body
+camera = Polygon([[4.5, 5], [6, 5.5], [5.5, 4], [4, 4.5]], closed=True, linewidth=2, edgecolor='grey', facecolor='darkgrey', alpha=0.7)
+ax.add_patch(camera)
+ax.text(5, 5.8, 'CAM', color='white', ha='center', va='center', fontsize=8, fontweight='bold')
+
+# Fractal environment (recursive polygon)
+fractal_verts = []
+num_verts = 7
+for i in range(num_verts):
+    angle = 2 * np.pi * i / num_verts
+    radius = 1.2 + 0.3 * np.sin(3 * angle)
+    fractal_verts.append((5 + radius * np.cos(angle), 5 + radius * np.sin(angle)))
+fractal = Polygon(fractal_verts, closed=True, linewidth=2, edgecolor='lime', facecolor='none', linestyle='--', alpha=0.9)
+ax.add_patch(fractal)
+
+# Bearing balls (small circles)
+ball_positions = [(4.2, 3.5), (5.8, 3), (4.5, 6.5)]
+for pos in ball_positions
+
+# Summary
+
+**Conceptual Summary**
+
+This organogram visualizes a speculative hybrid instrument merging a classical guitar (chordophone) with digital and kinetic elements. The guitar is abstracted as a vertical orange rectangle, its six strings numbered in blue, adhering to Hood's organological classification. A grey rhombus inside the body represents the integrated camera (electronophone), symbolizing digital capture. The lime-green fractal polygon signifies the algorithmically generated, immersive sonic environment projected *within* the performer, indicated by a white dotted-line circle. Orange arrows show the flow: camera input → fractal processor → haptic/audio output. Small silver circles denote neodymium-bearing balls, introducing chaotic, resonant percussion via magnetic interaction (shown with attraction/repulsion arrows). The design rationale is an embodied feedback loop: the performer's physical interaction with the guitar (strings, kinetic balls) is captured, transformed into a complex fractal soundscape, and fed back as a visceral, internalized auditory experience, blurring the interface between player, instrument, and sonic space.
+
+**Materials**
+
+1.  1 Acoustic guitar body (or build from orange wood), standard dimensions.
+2.  6 Steel guitar strings (various gauges).
+3.  1 Miniature USB endoscope camera, 5mm diameter.
+4.  3 Neodymium magnet balls, 6mm diameter, nickel-plated.
+5.  Raspberry Pi 4 (or similar) with audio HAT, for fractal audio synthesis.
+6.  Piezo contact microphone for body resonance pickup.
+7.  Solder, wiring, mounting hardware.
+8.  Small, thin non-magnetic plate (e.g., acrylic) to mount balls inside body.
+
+**Virtual Materials**
+1.  Fractal noise synthesis patch (e.g., in Pure Data or Max/MSP).
+2.  Real-time video-to-audio FFT processing shader.
+3.  Impulse response library of metallic ball bearings on wood/glass.
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Rectangle, Polygon, Circle, FancyArrow, FancyArrowPatch
+import matplotlib.path as mpath
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 10)
+ax.set_aspect('equal')
+ax.axis('off')
+
+# Guitar body (chordophone - vertical rectangle)
+guitar_body = Rectangle((3, 2), 4, 6, linewidth=2.5, edgecolor='orange', facecolor='none')
+ax.add_patch(guitar_body)
+
+# Neck and headstock
+ax.plot([5, 5], [8, 9.5], color='orange', linewidth=2.5)
+headstock = Polygon([[4.8, 9.5], [5.2, 9.5], [5.2, 9.8], [4.8, 9.8]], closed=True, fill=False, edgecolor='orange', linewidth=2.5)
+ax.add_patch(headstock)
+
+# Strings (6 strings)
+for i in range(6):
+    x = 3.5 + i * 0.7
+    ax.plot([x, x], [2.2, 9.3], color='silver', linewidth=1, alpha=0.7)
+    ax.text(x, 1.8, str(i+1), color='blue', ha='center', va='center', fontsize=10, fontweight='bold')
+
+# Camera (electronophone - rhombus) inside body
+camera = Polygon([[4.5, 5], [6, 5.5], [5.5, 4], [4, 4.5]], closed=True, linewidth=2, edgecolor='grey', facecolor='darkgrey', alpha=0.7)
+ax.add_patch(camera)
+ax.text(5, 5.8, 'CAM', color='white', ha='center', va='center', fontsize=8, fontweight='bold')
+
+# Fractal environment (recursive polygon)
+fractal_verts = []
+num_verts = 7
+for i in range(num_verts):
+    angle = 2 * np.pi * i / num_verts
+    radius = 1.2 + 0.3 * np.sin(3 * angle)
+    fractal_verts.append((5 + radius * np.cos(angle), 5 + radius * np.sin(angle)))
+fractal = Polygon(fractal_verts, closed=True, linewidth=2, edgecolor='lime', facecolor='none', linestyle='--', alpha=0.
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Rectangle, Polygon, Circle, FancyArrow, FancyArrowPatch
+import matplotlib.path as mpath
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 10)
+ax.set_aspect('equal')
+ax.axis('off')
+
+# Guitar body (chordophone - vertical rectangle)
+guitar_body = Rectangle((3, 2), 4, 6, linewidth=2.5, edgecolor='orange', facecolor='none')
+ax.add_patch(guitar_body)
+
+# Neck and headstock
+ax.plot([5, 5], [8, 9.5], color='orange', linewidth=2.5)
+headstock = Polygon([[4.8, 9.5], [5.2, 9.5], [5.2, 9.8], [4.8, 9.8]], closed=True, fill=False, edgecolor='orange', linewidth=2.5)
+ax.add_patch(headstock)
+
+# Strings (6 strings)
+for i in range(6):
+    x = 3.5 + i * 0.7
+    ax.plot([x, x], [2.2, 9.3], color='silver', linewidth=1, alpha=0.7)
+    ax.text(x, 1.8, str(i+1), color='blue', ha='center', va='center', fontsize=10, fontweight='bold')
+
+# Camera (electronophone - rhombus) inside body
+camera = Polygon([[4.5, 5], [6, 5.5], [5.5, 4], [4, 4.5]], closed=True, linewidth=2, edgecolor='grey', facecolor='darkgrey', alpha=0.7)
+ax.add_patch(camera)
+ax.text(5, 5.8, 'CAM', color='white', ha='center', va='center', fontsize=8, fontweight='bold')
+
+# Fractal environment (recursive polygon)
+fractal_verts = []
+num_verts = 7
+for i in range(num_verts):
+    angle = 2 * np.pi * i / num_verts
+    radius = 1.2 + 0.3 * np.sin(3 * angle)
+    fractal_verts.append((5 + radius * np.cos(angle), 5 + radius * np.sin(angle)))
+fractal = Polygon(fractal_verts, closed=True, linewidth=2, edgecolor='lime', facecolor='none', linestyle='--', alpha=0.

@@ -1,0 +1,121 @@
+# Prompt
+
+make a sphere membrane with a speaker in the center, and two tubes with 3 holes each blowing air inside the membrane, each tube have bessels and microphones on the points. Give a creative name to the instrument
+
+# Summary
+
+### Conceptual Summary
+
+The instrument is named "Aural Sphere Harmonizer." It features a spherical membrane as its idiophone core, with a speaker at its center for electronic augmentation. Two aerophones (tubes) extend from opposite sides of the sphere, each containing three holes and bessels. Microphones are placed at the points where the tubes meet the sphere to capture internal sound. The spheres represent isotropic resonance, while the tubes enhance air flow and provide additional acoustical feedback through their multiple openings.
+
+The organogram will have:
+- A central sphere (idiophone) with a speaker in the center.
+- Two aerophones extending from opposite sides of the sphere, each with three holes.
+- Microphones at the points where the tubes meet the sphere.
+- Arrows indicating air flow and signal paths from microphones to speakers.
+
+# Materials
+
+### Materials
+1. 1 PVC tube, 30 cm length, 2.5 cm diameter (x2)
+2. 6 wood bessel pieces, 5 cm length, 1 cm diameter
+3. 2 foam spheres, 10 cm diameter
+4. Speaker, small and circular
+5. Microphones, 3 small cylindrical microphones
+6. Wood for attaching bessels to tubes (quantity depends on diameter)
+7. Holes drilled into PVC and wood
+
+### Virtual Materials
+1. Texture map for the foam spheres (white with slight texture)
+2. Shader for the PVC tubes (smooth plastic finish)
+3. Sample of the speaker sound output
+4. Model of microphones in 3D space
+
+
+
+```python
+from trimesh import create, extrude_polygon
+
+# Map: Sphere -> Extruded Circle -> Isotropic Resonance
+sphere_mesh = create.extrude_circle((50, 45), 5, height=1
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 920975
+- group_id: give_make_sphere_20260307-092502
+- version: v1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Circle, Rectangle, Polygon, FancyArrowPatch
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.set_aspect('equal')
+ax.axis('off')
+
+# Spheres (idiophones)
+sphere_center = np.array([50, 45])
+radius_sphere = 5
+circle_idiophone = Circle(sphere_center, radius_sphere, color='orange', alpha=0.7)
+ax.add_patch(circle_idiophone)
+
+speaker_pos = sphere_center + [2.5, -1]
+circle_speaker = Circle(speaker_pos, 0.5, color='lightgreen')
+ax.add_patch(circle_speaker)
+
+# Tubes (aerophones)
+tube_length = 30
+tube_diameter = 2.5
+
+left_tube_base = np.array([sphere_center[0] - tube_length / 2, sphere_center[1]])
+right_tube_base = np.array([sphere_center[0] + tube_length / 2, sphere_center[1]])
+
+left_tube_top = left_tube_base + [tube_diameter / 4, 5]
+right_tube_top = right_tube_base + [-tube_diameter / 4, 5]
+
+for base, top in [(left_tube_base, left_tube_top), (right_tube_base, right_tube_top)]:
+    ax.plot([base[0], top[0]], [base[1], top[1]], color='black', linewidth=2.5)
+    
+# Holes and bessels
+hole_positions = np.array([[35, 47], [65, 47]])
+for pos in hole_positions:
+    circle_hole = Circle(pos, tube_diameter / 8, color='lightblue')
+    ax.add_patch(circle_hole)
+
+bessel_position_left = np.array([25, 50])
+bessel_position_right = np.array([75, 50])
+
+# Microphones
+mic_positions = [left_tube_top + [-1.5, 2], left_tube_top + [1.5, 2], right_tube_top - [1.5, 2], right_tube_top + [1.5, 2]]
+for pos in mic_positions:
+    circle_mic = Circle(pos, tube_diameter / 8, color='red')
+    ax.add_patch(circle_mic)
+
+# Arrows
+left_arrow = FancyArrowPatch((43, 47), (38, 40), arrowstyle='-|>', mutation_scale=20)
+right_arrow = FancyArrowPatch((65, 47), (71, 40), arrowstyle='-|>', mutation_scale=20)
+
+ax.add_patch(left_arrow)
+ax.add_patch(right_arrow)
+
+plt.show()
+
+# Geometry Code (trimesh)
+
+import numpy as np
+import trimesh
+
+# map: air-column -> cylinder, bell radiation -> cone, mouthpiece interface -> cylinder
+body = trimesh.creation.cylinder(radius=8.42, height=132.25, sections=31)
+bell = trimesh.creation.cone(radius=13.14, height=37.37, sections=31)
+bell.apply_translation((0, 0, -84.81))
+mouth = trimesh.creation.cylinder(radius=4.57, height=23.11, sections=31)
+mouth.apply_translation((0, 0, 77.68))
+spine = trimesh.creation.box(extents=(6.74, 9.26, 52.9))
+mesh = trimesh.util.concatenate([body, bell, mouth, spine])

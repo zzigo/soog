@@ -23,7 +23,7 @@
     "stl"
   ],
   "sketch_url": "/api/gallery/image/20260306-093053_hybrid_add_holes_v1.sketch.png",
-  "sketch_prompt": "realistic 3D object, solid black background, realistic reflections, dark mode, cinematic lighting. Instrument Identity: ### Conceptual Summary This organogram represents a speculative idiophone inspired by the conceptual blending of a traditional wooden marimba and a modern digital synthesizer. The.... User Concept: add holes. Form: circular resonators, faceted polygons, directional arrows, gesture arrows. Colors: grey, orange, yellow, white, blue. Materials: ### Materials; 1. 4 wooden bars, 300 mm length, 50 mm width, 20 mm thickness; 2..... System Logic: You are a specialist in building prompts for Image-to-Image Stable Diffusion models, specifically for \"OFA-Sys/small-stable-diffusion-v0\". Your goal is to transform a technical Matplotlib organogram into a rich, speculative instrument sketch. INSTRUC... Photorealistic 3D rendering, high detail, 8k, obsidian background.",
+  "sketch_prompt": "realistic 3D object, solid black background, cinematic lighting, dark mode. Concept: ### Conceptual Summary This organogram represents a speculative idiophone inspir... add holes. Form: circular resonators, faceted polygons, directional arrows, gesture arrows. Colors: grey, orange, yellow, white, blue. photorealistic,...",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-11T23:00:32.318841"
+  "updated_at": "2026-04-12T09:46:50.443879"
 }

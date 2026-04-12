@@ -1,0 +1,133 @@
+# Prompt
+
+make a sounding hammer ready to print in PLA, include the design of the model on .STL file
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Rectangle, Circle, Polygon, FancyArrow
+import matplotlib.patches as mpatches
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.set_xlim(-2, 12)
+ax.set_ylim(-2, 10)
+ax.set_aspect('equal')
+ax.axis('off')
+
+# Acoustical shapes: square (idiophone) + horizontal rectangle (membranophone)
+square = Rectangle((3, 4), 4, 4, linewidth=2.5, edgecolor='orange', facecolor='orange', alpha=0.6)
+rect = Rectangle((2, 3.5), 6, 1, linewidth=2.5, edgecolor='pink', facecolor='pink', alpha=0.6)
+ax.add_patch(square)
+ax.add_patch(rect)
+
+# Handle (interface, orange PLA)
+handle = Rectangle((5, 0), 0.8, 4, linewidth=2, edgecolor='orange', facecolor='orange', alpha=0.8)
+ax.add_patch(handle)
+
+# Performer position (grip)
+grip = Circle((5.4, 2), 0.3, linewidth=1.5, edgecolor='white', facecolor='none', linestyle='dotted')
+ax.add_patch(grip)
+
+# Striking motion arrow
+arrow = FancyArrow(7, 6, 2, 2, width=0.15, head_width=0.5, head_length=0.7, 
+                   edgecolor='blue', facecolor='blue', alpha=0.8)
+ax.add_patch(arrow)
+
+# Measurement numbers (blue)
+ax.text(5, 6, '1', fontsize=12, color='blue', ha='center', va='center')  # striking surface
+ax.text(5, 3.8, '2', fontsize=12, color='blue', ha='center', va='center')  # internal chambers
+ax.text(4.5, 1, '3', fontsize=12, color='blue', ha='center', va='center')  # tension points
+
+# Material symbols
+ax.text(1, 8, 'PLA', fontsize=10, color='orange', ha='left')
+ax.text(1, 7.5, 'TPU membrane', fontsize=10, color='pink', ha='left')
+ax.text(8, 8, 'H', fontsize=12, color='orange', ha='center')  # hammer symbol
+
+# Title
+ax.text(5, 9.5, 'Sounding Hammer Organogram', fontsize=14, color='white', ha='center')
+
+fig.patch.set_alpha(0.0)
+ax.spines['top'].set_visible(
+
+# Summary
+
+**Conceptual Summary**
+
+The organogram visualizes a PLA-printed sounding hammer as a hybrid idiophone-membranophone. The orange square (idiophone) represents the rigid, resonant PLA body, while the pink horizontal rectangle (membranophone) symbolizes a flexible TPU striking surface, creating a dual acoustical system. The orange handle indicates the performer's interface, with a dotted white circle marking the grip point. A blue arrow shows the striking motion from hammer to target. Blue numbers (1, 2, 3) quantify key components: the striking surface, internal air chambers, and tension points. The 'H' symbol in orange denotes the hammer's function. This design merges percussive impact (square) with membrane vibration (rectangle), allowing for both bright attack and sustained, damped tones, suitable for experimental percussion.
+
+**Materials**
+
+1.  PLA filament, 50 grams, for printing the main hammer body and handle.
+2.  TPU filament, 10 grams, for printing the flexible membrane/striking surface.
+3.  (Optional) 1 rubber O-ring, 3 cm diameter, for tensioning the membrane.
+
+**Virtual Materials**
+1.  Impulse response sample library of the hammer striking various surfaces.
+2.  Procedural texture simulating layered PLA print lines.
+
+
+
+```python
+import trimesh
+import numpy as np
+
+# Define core dimensions (in mm)
+head_width = 40.0
+head_height = 40.0
+head_depth = 40.0
+handle_width = 8.0
+handle_height = 40.0
+handle_depth = 20.0
+membrane_thickness = 2.0
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Rectangle, Circle, Polygon, FancyArrow
+import matplotlib.patches as mpatches
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.set_xlim(-2, 12)
+ax.set_ylim(-2, 10)
+ax.set_aspect('equal')
+ax.axis('off')
+
+# Acoustical shapes: square (idiophone) + horizontal rectangle (membranophone)
+square = Rectangle((3, 4), 4, 4, linewidth=2.5, edgecolor='orange', facecolor='orange', alpha=0.6)
+rect = Rectangle((2, 3.5), 6, 1, linewidth=2.5, edgecolor='pink', facecolor='pink', alpha=0.6)
+ax.add_patch(square)
+ax.add_patch(rect)
+
+# Handle (interface, orange PLA)
+handle = Rectangle((5, 0), 0.8, 4, linewidth=2, edgecolor='orange', facecolor='orange', alpha=0.8)
+ax.add_patch(handle)
+
+# Performer position (grip)
+grip = Circle((5.4, 2), 0.3, linewidth=1.5, edgecolor='white', facecolor='none', linestyle='dotted')
+ax.add_patch(grip)
+
+# Striking motion arrow
+arrow = FancyArrow(7, 6, 2, 2, width=0.15, head_width=0.5, head_length=0.7,
+                   edgecolor='blue', facecolor='blue', alpha=0.8)
+ax.add_patch(arrow)
+
+# Measurement numbers (blue)
+ax.text(5, 6, '1', fontsize=12, color='blue', ha='center', va='center')
+ax.text(5, 3.8, '2', fontsize=12, color='blue', ha='center', va='center')
+ax.text(4.5, 1, '3', fontsize=12, color='blue', ha='center', va='center')
+
+# Material symbols
+ax.text(1, 8, 'PLA', fontsize=10, color='orange', ha='left')
+ax.text(1, 7.5, 'TPU membrane', fontsize=10, color='pink', ha='left')
+ax.text(8, 8, 'H', fontsize=12, color='orange', ha='center')
+
+# Title
+ax.text(5, 9.5, 'Sounding Hammer Organogram', fontsize=14, color='white', ha='center')
+
+fig.patch.set_alpha(0.0)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_visible(False)
+ax.spines['bottom'].set_visible(False)

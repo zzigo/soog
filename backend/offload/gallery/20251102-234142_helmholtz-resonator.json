@@ -10,7 +10,7 @@
     "plot"
   ],
   "sketch_url": "/api/gallery/image/20251102-234142_helmholtz-resonator.sketch.png",
-  "sketch_prompt": "realistic 3D object, solid black background, realistic reflections, dark mode, cinematic lighting. Instrument Identity: The Helmholtz resonator organogram abstracts the spherical resonant cavity as a large blue circle, representing its air volume and fundamental resonance properties. A central small.... User Concept: make a helmothz resonator made of a sphere, with a microphone in the middle and a movable speakers on an horizontal axis.... Form: complex resonant volumes. Colors: natural material accents. System Logic: You are a specialist in building prompts for Image-to-Image Stable Diffusion models, specifically for \"OFA-Sys/small-stable-diffusion-v0\". Your goal is to transform a technical Matplotlib organogram into a rich, speculative instrument sketch. INSTRUC... Photorealistic 3D rendering, high detail, 8k, obsidian background.",
+  "sketch_prompt": "A speculative instrument: The Helmholtz resonator organogram abstracts the spherical resonant cavity as a large blue circle, representing its air volume and fundament.... Inspired by: make a helmothz resonator made of a sphere, with a microphone in the middle and.... realistic 3D object, solid black background, highly imaginative, obsidian, cinematic lighting, dark mode. photor...",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-11T23:01:36.511177"
+  "updated_at": "2026-04-12T10:52:21.461438"
 }

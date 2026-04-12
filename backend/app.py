@@ -274,9 +274,9 @@ def get_sketch_config():
         'model_id': (os.getenv('SOOG_SKETCH_MODEL', 'OFA-Sys/small-stable-diffusion-v0') or '').strip() or 'OFA-Sys/small-stable-diffusion-v0',
         'width': width,
         'height': height,
-        'steps': _env_int('SOOG_SKETCH_STEPS', 12, min_value=4, max_value=60),
-        'strength': _env_float('SOOG_SKETCH_STRENGTH', 0.72, min_value=0.2, max_value=0.95),
-        'guidance_scale': _env_float('SOOG_SKETCH_GUIDANCE_SCALE', 6.5, min_value=1.0, max_value=20.0),
+        'steps': _env_int('SOOG_SKETCH_STEPS', 8, min_value=4, max_value=60),
+        'strength': _env_float('SOOG_SKETCH_STRENGTH', 0.85, min_value=0.2, max_value=0.98),
+        'guidance_scale': _env_float('SOOG_SKETCH_GUIDANCE_SCALE', 8.5, min_value=1.0, max_value=20.0),
         'cache_pipeline': _env_bool('SOOG_SKETCH_CACHE_PIPELINE', default=True)
     }
 
@@ -431,41 +431,40 @@ def build_sketch_prompt(
     plot_code: str = ""
 ) -> str:
     """
-    Constructs the image generation prompt by prioritizing style tokens,
-    then the specific instrument identity (from summary/prompt),
-    and finally the foundational logic.
+    Constructs a concise image generation prompt optimized for CLIP (77 token limit).
+    Prioritizes black background and the first lines of the summary.
     """
     shape_hints = _extract_sketch_shape_hints(plot_code)
     color_hints = _extract_sketch_color_hints(plot_code)
 
-    # 1. STYLE: Critical for the "Dark Mode" look (Top priority for CLIP)
-    style_prefix = "realistic 3D object, solid black background, realistic reflections, dark mode, cinematic lighting."
-    
-    # 2. IDENTITY: What is this thing? (Extracted from summary/prompt)
-    # We take the start of the summary as it usually names the instrument.
-    identity_context = _collapse_text(summary_text, max_chars=180) if summary_text else ""
-    user_concept = _collapse_text(prompt, max_chars=120) if prompt else ""
-    
-    # 3. GEOMETRY & MATERIALS
-    geometry_clause = ", ".join(shape_hints) if shape_hints else "complex resonant volumes"
-    palette_clause = ", ".join(color_hints) if color_hints else "natural material accents"
-    mats_brief = _collapse_text(materials_text.replace('\n', '; '), max_chars=80) if materials_text else ""
+    # 1. PRIMARY IDENTITY (Highest priority: first sentence of summary)
+    summary_start = ""
+    if summary_text:
+        # Extract first two meaningful sentences or first 140 chars
+        sentences = [s.strip() for s in re.split(r'[.!?]+', summary_text) if s.strip()]
+        summary_start = ". ".join(sentences[:2]).strip()
+        summary_start = _collapse_text(summary_start, max_chars=140)
 
-    # 4. BASE LOGIC: From prompt_inferred-image.txt
-    base_instructions = _collapse_text(prompt_content, max_chars=250) if prompt_content else "3D speculative instrument concept."
+    # 2. USER CONCEPT (Secondary priority)
+    user_concept = _collapse_text(prompt, max_chars=80) if prompt else ""
+    
+    # 3. GEOMETRY (Limited tokens to avoid overriding summary)
+    geom = ", ".join(shape_hints[:3]) if shape_hints else ""
+    colors = ", ".join(color_hints[:4]) if color_hints else ""
 
+    # 4. BUILD CONCISE PROMPT
+    # Structure: [Background] [Identity] [Context] [Style] [Form/Color]
     parts = [
-        style_prefix,
-        f"Instrument Identity: {identity_context}." if identity_context else "",
-        f"User Concept: {user_concept}." if user_concept else "",
-        f"Form: {geometry_clause}. Colors: {palette_clause}. Materials: {mats_brief}." if mats_brief else f"Form: {geometry_clause}. Colors: {palette_clause}.",
-        "System Logic: " + base_instructions,
-        "Photorealistic 3D rendering, high detail, 8k, obsidian background."
+        "solid black background, obsidian backdrop.",
+        f"A speculative instrument: {summary_start}." if summary_start else "A futuristic musical instrument.",
+        f"Inspired by: {user_concept}." if user_concept else "",
+        "realistic 3D object, highly imaginative, cinematic lighting, dark mode.",
+        f"Form: {geom}. Colors: {colors}." if geom or colors else "",
+        "photorealistic rendering, hyper-detailed, 8k resolution, black background."
     ]
     
-    # Remove empty parts and join
     full_prompt = " ".join([p for p in parts if p])
-    return _collapse_text(full_prompt, max_chars=1000)
+    return _collapse_text(full_prompt, max_chars=400)
 
 
 def _load_sketch_pipeline(model_id: str, cache_pipeline: bool = True):
@@ -506,8 +505,13 @@ def _load_sketch_pipeline(model_id: str, cache_pipeline: bool = True):
     pipe = pipe.to(device)
     if hasattr(pipe, 'enable_attention_slicing'):
         pipe.enable_attention_slicing()
-    if hasattr(pipe, 'enable_vae_slicing'):
+    
+    # Updated to non-deprecated VAE slicing call
+    if hasattr(pipe, 'vae') and hasattr(pipe.vae, 'enable_slicing'):
+        pipe.vae.enable_slicing()
+    elif hasattr(pipe, 'enable_vae_slicing'):
         pipe.enable_vae_slicing()
+
     if hasattr(pipe, 'set_progress_bar_config'):
         pipe.set_progress_bar_config(disable=True)
 
@@ -541,6 +545,7 @@ def generate_sketch_image(
         plot_code=plot_code
     )
     negative_prompt = (
+        "white background, light background, bright background, grey background, "
         "text, typography, labels, caption, watermark, graph, chart, axes, legend, ui, "
         "abstract infographic, collage, multiple instruments, photorealistic photo"
     )
@@ -1936,7 +1941,7 @@ def generate_with_image_required(
                 emergency_prompt,
                 schema=plot_schema,
                 model_name_override=FALLBACK_OLLAMA_MODEL,
-                timeout=30,
+                timeout=90,
                 max_tokens=512,
                 temperature=0.1
             )

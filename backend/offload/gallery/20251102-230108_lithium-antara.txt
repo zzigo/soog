@@ -1,0 +1,144 @@
+# Prompt
+
+Generate a speculative organogram for a hybrid musical instrument that fuses the principles of the precolumbian *antara lítica* of Humahuaca (700–1650 CE) with contemporary multi-agency, multi-family instrument design.
+
+Inputs:
+- Archaeological model: *Antara lítica* (stone panpipe) from Quebrada de Humahuaca.
+- Material ontology: lithic resonance, natural harmonic ratios determined by irregular cavity geometry, non-tempered scale intervals.
+- Cultural affordance: communal use in ritual contexts, linkage between breath, lithic memory, and collective identity.
+- Transformation parameters: introduce multi-material resonators (ceramic–silicone–graphene), adaptive channels for airflow modulated by micro-actuators, and distributed AI sensing enabling response to non-human agents (e.g., airflows, insects, robotic manipulators).
+- Agency architecture: define co-performance between human breath, autonomous vibration feedback, and environmental stochastic inputs (wind, temperature).
+- Instrumental morphology: fractal panpipe array capable of reconfiguring spacing between tubes; lithic-inspired tessellation patterns integrated into synthetic metamaterials.
+- Aesthetic/performative intent: reactivation of Andean sonic cosmotechnics through hybrid ecologies of sound, where lithic memory becomes algorithmic feedback.
+
+Goal:
+Produce a neo-organogram that describes (1) the flow of agency between human/non-human performers, (2) the acoustic circuit linking lithic affordances and AI-modulated material morphologies, and (3) a symbolic map that integrates ancestral resonance with contemporary distributed cognition.
+
+# Summary
+
+This speculative organogram hybridizes the lithic antara's ancestral geometry with distributed multi-agency systems. The core acoustic resonator retains the circular aerophone form (blue) but is tessellated into fractal sub-units representing the panpipe array. Material layers are color-coded: stone-grey for lithic memory, ceramic-orange for traditional craft, silicone-pink for adaptive interfaces, and graphene-green for smart material properties. Human agency flows via white breath arrows into the interface layer, while environmental inputs (wind, insects) enter as yellow stochastic vectors. AI modulation appears as purple feedback loops between resonator subunits. The acoustic circuit shows lithic resonance (brown waveforms) transforming through algorithmic filters (cyan polygons) into emergent sonic patterns. Performance interactions are mapped via dotted connection lines between human/non-human nodes, with co-performance zones marked by overlapping agency fields. The organogram integrates Hood's classification with speculative material ontologies, showing how ancestral harmonic ratios interface with real-time morphological reconfiguration.
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Circle, Rectangle, Polygon, FancyArrow, Ellipse
+from matplotlib.collections import PatchCollection
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(14, 10))
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 8)
+ax.set_aspect('equal')
+
+# Core fractal aerophone array (blue circles with tessellation)
+aerophones = []
+for i in range(3):
+    for j in range(3):
+        center_x, center_y = 3 + i * 1.5, 5 + j * 1.2
+        circle = Circle((center_x, center_y), 0.5, fill=False, color='cyan', linewidth=2)
+        ax.add_patch(circle)
+        # Fractal sub-units
+        for k in range(4):
+            angle = k * np.pi/2
+            sub_x = center_x + 0.2 * np.cos(angle)
+            sub_y = center_y + 0.2 * np.sin(angle)
+            sub_circle = Circle((sub_x, sub_y), 0.1, fill=False, color='lightblue', linewidth=1)
+            ax.add_patch(sub_circle)
+        aerophones.append((center_x, center_y))
+
+# Material layers (concentric rings around central aerophone)
+materials = [
+    (4.5, 5.8, 1.2, 'grey', 'lithic'),
+    (4.5, 5.8, 1.5, 'orange', 'ceramic'),
+    (4.5, 5.8, 1.8, 'pink', 'silicone'),
+    (4.5, 5.8, 2.1, 'green', 'graphene')
+]
+for x, y, radius, color, label in materials:
+    circle = Circle((x, y), radius, fill=False, color=color, linewidth=3, linestyle='--')
+    ax.add_patch(circle)
+
+# Human performer (white circle with breath arrows)
+human = Circle((2, 3), 0.3, color='white', alpha=0.7)
+ax.add_patch(human)
+breath_arrow = FancyArrow(2.3, 3, 1.5, 1.5, width=0.05, color='white', alpha=0.8)
+ax.add_patch(breath_arrow)
+
+# Environmental agents (yellow stochastic inputs)
+env_sources = [(7, 2), (8, 1), (6, 1)]
+for x, y in env_sources:
+    star = Ellipse((x, y), 0.3, 0.3, color='yellow', alpha=0.6)
+    ax.add_patch(star)
+    env_arrow = FancyArrow(x, y+0.2, -1, 1, width=0.03, color='yellow', alpha=0.6)
+    ax.add_patch(env_arrow)
+
+# AI feedback loops (purple between aerophones)
+for i in range(len(aerophones)-1):
+    x1, y1 = aerophones[i]
+    x2, y2 = aerophones[i+1]
+    ax.plot([x1, x2], [y1, y2], 'purple', linewidth=2, alpha=0.7)
+
+# Acoustic circuit elements
+lithic_wave = Ellipse((4.5, 3.5), 1.5, 0.4, color='brown', alpha=0.5)
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Circle, Rectangle, Polygon, FancyArrow, Ellipse
+from matplotlib.collections import PatchCollection
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(14, 10))
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 8)
+ax.set_aspect('equal')
+
+# Core fractal aerophone array (blue circles with tessellation)
+aerophones = []
+for i in range(3):
+    for j in range(3):
+        center_x, center_y = 3 + i * 1.5, 5 + j * 1.2
+        circle = Circle((center_x, center_y), 0.5, fill=False, color='cyan', linewidth=2)
+        ax.add_patch(circle)
+        # Fractal sub-units
+        for k in range(4):
+            angle = k * np.pi/2
+            sub_x = center_x + 0.2 * np.cos(angle)
+            sub_y = center_y + 0.2 * np.sin(angle)
+            sub_circle = Circle((sub_x, sub_y), 0.1, fill=False, color='lightblue', linewidth=1)
+            ax.add_patch(sub_circle)
+        aerophones.append((center_x, center_y))
+
+# Material layers (concentric rings around central aerophone)
+materials = [
+    (4.5, 5.8, 1.2, 'grey', 'lithic'),
+    (4.5, 5.8, 1.5, 'orange', 'ceramic'),
+    (4.5, 5.8, 1.8, 'pink', 'silicone'),
+    (4.5, 5.8, 2.1, 'green', 'graphene')
+]
+for x, y, radius, color, label in materials:
+    circle = Circle((x, y), radius, fill=False, color=color, linewidth=3, linestyle='--')
+    ax.add_patch(circle)
+
+# Human performer (white circle with breath arrows)
+human = Circle((2, 3), 0.3, color='white', alpha=0.7)
+ax.add_patch(human)
+breath_arrow = FancyArrow(2.3, 3, 1.5, 1.5, width=0.05, color='white', alpha=0.8)
+ax.add_patch(breath_arrow)
+
+# Environmental agents (yellow stochastic inputs)
+env_sources = [(7, 2), (8, 1), (6, 1)]
+for x, y in env_sources:
+    star = Ellipse((x, y), 0.3, 0.3, color='yellow', alpha=0.6)
+    ax.add_patch(star)
+    env_arrow = FancyArrow(x, y+0.2, -1, 1, width=0.03, color='yellow', alpha=0.6)
+    ax.add_patch(env_arrow)
+
+# AI feedback loops (purple between aerophones)
+for i in range(len(aerophones)-1):
+    x1, y1 = aerophones[i]
+    x2, y2 = aerophones[i+1]
+    ax.plot([x1, x2], [y1, y2], 'purple', linewidth=2, alpha=0.7)
+
+# Acoustic circuit elements
+lithic_wave = Ellipse((4.5, 3.5), 1.5, 0.4, color='brown', alpha=0.5)

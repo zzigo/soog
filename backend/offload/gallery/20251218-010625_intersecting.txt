@@ -1,0 +1,104 @@
+# Prompt
+
+create an instrument made of a 3d cube, a 3d sphere, and a 3d cone intersecting together, 1 shape is the spaker, 1 shape is the microphone and the other is the interface. Make the .STL model for digital fabrication
+
+# Summary
+
+**Conceptual Summary**
+
+The organogram abstracts a speculative hybrid instrument merging three 3D primitives: a cube (resonant body, orange for wood), a sphere (microphone, green rhombus for glass), and a cone (speaker, grey horizontal cone for plastic). These intersect to form a unified acoustic-electronic system. The cube’s orthogonal planes reflect idiophonic resonance, the sphere’s curvature captures omnidirectional input (microphone), and the cone’s geometry directs amplified output (speaker). Arrows show signal flow: microphone → cube (processing) → cone (projection). A white dotted circle marks the performer’s position, interacting via gestures (orange arrows) that modulate the cube’s virtual strings (6 blue lines). The design embodies an electronophone (rhombus genus) with chordophonic elements, using geometric intersection to blend acoustic resonance with digital transduction, enabling spatial sound manipulation through embodied interaction.
+
+**Materials**
+
+1.  **Physical Components**
+    *   1 wooden cube, 150 mm side length, solid oak (resonant body)
+    *   1 glass sphere, 100 mm diameter, hollow (microphone housing)
+    *   1 plastic cone, 200 mm height, 120 mm base diameter (speaker horn)
+    *   1 condenser microphone capsule, 20 mm diameter
+    *   1 full-range speaker driver, 80 mm diameter
+    *   6 piezoelectric transducers, 27 mm diameter (string simulation)
+    *   Audio amplifier circuit, 20W
+    *   Microcontroller board (e.g., Arduino) with 6 analog inputs
+
+2.  **Virtual Materials**
+    *   Convolution reverb impulse response (cube resonance model)
+    *   Granular synthesis patch (sphere input processing)
+    *   Waveguide physical model (6 virtual strings)
+    *   Diffuse orange texture (wood)
+    *   Clear refractive shader (glass)
+    *   Matte grey texture (plastic)
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Polygon, Circle, FancyArrow
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.set_xlim(-2, 2)
+ax.set_ylim(-2, 2)
+ax.set_aspect('equal')
+ax.axis('off')
+fig.patch.set_alpha(0.0)
+
+# Acoustical shapes (resonant body - cube as square)
+cube = plt.Rectangle((-0.5, -0.5), 1, 1, linewidth=2.5, edgecolor='orange', facecolor='orange', alpha=0.4, label='Resonant Body (Cube/Wood)')
+ax.add_patch(cube)
+
+# Interface shapes (microphone - sphere as circle, speaker - cone as triangle)
+mic = Circle((0.7, 0.7), radius=0.3, linewidth=2.5, edgecolor='green', facecolor='green', alpha=0.6, label='Microphone (Sphere/Glass)')
+ax.add_patch(mic)
+
+speaker_points = np.array([[1.2, -0.5], [1.6, -0.2], [1.6, 0.2], [1.2, 0.5]])
+speaker = Polygon(speaker_points, closed=True, linewidth=2.5, edgecolor='grey', facecolor='grey', alpha=0.6, label='Speaker (Cone/Plastic)')
+ax.add_patch(speaker)
+
+# Electronic symbols (small shapes on main shapes)
+mic_symbol = Polygon([[0.55, 0.85], [0.85, 0.55], [0.55, 0.25], [0.25, 0.55]], closed=True, linewidth=1.5, edgecolor='darkgreen', facecolor='lime')
+ax.add_patch(mic_symbol)
+
+speaker_symbol = Polygon([[1.25, -0.45], [1.55, -0.15], [1.25, 0.15]], closed=True, linewidth=1.5, edgecolor='black', facecolor='white')
+ax.add_patch(speaker_symbol)
+
+# Virtual strings on cube (6 blue lines)
+for i in np.linspace(-0.4, 0.4, 6):
+    ax.plot([-0.5, 0.5], [i, i], color='blue', linewidth=1.5, alpha=0.7)
+    ax.text(0.52, i, '6', color='blue', fontsize=9, va='center')
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Polygon, Circle, FancyArrow
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(10, 8))
+ax.set_xlim(-2, 2)
+ax.set_ylim(-2, 2)
+ax.set_aspect('equal')
+ax.axis('off')
+fig.patch.set_alpha(0.0)
+
+# Acoustical shapes (resonant body - cube as square)
+cube = plt.Rectangle((-0.5, -0.5), 1, 1, linewidth=2.5, edgecolor='orange', facecolor='orange', alpha=0.4, label='Resonant Body (Cube/Wood)')
+ax.add_patch(cube)
+
+# Interface shapes (microphone - sphere as circle, speaker - cone as triangle)
+mic = Circle((0.7, 0.7), radius=0.3, linewidth=2.5, edgecolor='green', facecolor='green', alpha=0.6, label='Microphone (Sphere/Glass)')
+ax.add_patch(mic)
+
+speaker_points = np.array([[1.2, -0.5], [1.6, -0.2], [1.6, 0.2], [1.2, 0.5]])
+speaker = Polygon(speaker_points, closed=True, linewidth=2.5, edgecolor='grey', facecolor='grey', alpha=0.6, label='Speaker (Cone/Plastic)')
+ax.add_patch(speaker)
+
+# Electronic symbols (small shapes on main shapes)
+mic_symbol = Polygon([[0.55, 0.85], [0.85, 0.55], [0.55, 0.25], [0.25, 0.55]], closed=True, linewidth=1.5, edgecolor='darkgreen', facecolor='lime')
+ax.add_patch(mic_symbol)
+
+speaker_symbol = Polygon([[1.25, -0.45], [1.55, -0.15], [1.25, 0.15]], closed=True, linewidth=1.5, edgecolor='black', facecolor='white')
+ax.add_patch(speaker_symbol)
+
+# Virtual strings on cube (6 blue lines)
+for i in np.linspace(-0.4, 0.4, 6):
+    ax.plot([-0.5, 0.5], [i, i], color='blue', linewidth=1.5, alpha=0.7)
+    ax.text(0.52, i, '6', color='blue', fontsize=9, va='center')

@@ -1,0 +1,264 @@
+# Prompt
+
+working on this prompt instrument "pearl formation featured" based on this prompt: 
+  
+  "Imagine a sound generator that translates the formation of pearls"
+  
+  
+  Implement these ideas in a trimesh python on this level: 
+    
+    
+    import numpy as np
+import trimesh
+
+meshes = []
+
+# ---------------------------------------------------
+# central air column (instrument body)
+# ---------------------------------------------------
+
+body = trimesh.creation.cylinder(
+    radius=24,
+    height=220,
+    sections=64
+)
+
+meshes.append(body)
+
+# ---------------------------------------------------
+# bell radiation (acoustic flare)
+# ---------------------------------------------------
+
+bell = trimesh.creation.cone(
+    radius=48,
+    height=80,
+    sections=64
+)
+
+bell.apply_translation((0, 0, -150))
+meshes.append(bell)
+
+# ---------------------------------------------------
+# mouthpiece interface
+# ---------------------------------------------------
+
+mouthpiece = trimesh.creation.cylinder(
+    radius=14,
+    height=50,
+    sections=64
+)
+
+mouthpiece.apply_translation((0, 0, 140))
+meshes.append(mouthpiece)
+
+# ---------------------------------------------------
+# nacre layers (pearl-like acoustic shells)
+# ---------------------------------------------------
+
+layer_count = 5
+layer_spacing = 8
+layer_height = 28
+
+for i in range(layer_count):
+
+    r = 36 + i * layer_spacing
+
+    layer = trimesh.creation.cylinder(
+        radius=r,
+        height=layer_height,
+        sections=64
+    )
+
+    z = -20 + i * 30
+    layer.apply_translation((0, 0, z))
+
+    layer.visual.face_colors = [255, 230, 180, 180]
+
+    meshes.append(layer)
+
+# ---------------------------------------------------
+# tension strings
+# ---------------------------------------------------
+
+string_count = 8
+string_radius = 1
+string_height = 210
+string_circle = 42
+
+angles = np.linspace(0, 2*np.pi, string_count, endpoint=False)
+
+for a in angles:
+
+    x = np.cos(a) * string_circle
+    y = np.sin(a) * string_circle
+
+    string = trimesh.creation.cylinder(
+        radius=string_radius,
+        height=string_height,
+        sections=24
+    )
+
+    string.apply_translation((x, y, 0))
+    meshes.append(string)
+
+# ---------------------------------------------------
+# top and bottom rings (string anchors)
+# ---------------------------------------------------
+
+top_ring = trimesh.creation.torus(
+    major_radius=42,
+    minor_radius=2
+)
+
+top_ring.apply_translation((0, 0, 105))
+meshes.append(top_ring)
+
+bottom_ring = trimesh.creation.torus(
+    major_radius=42,
+    minor_radius=2
+)
+
+bottom_ring.apply_translation((0, 0, -105))
+meshes.append(bottom_ring)
+
+# ---------------------------------------------------
+# merge geometry
+# ---------------------------------------------------
+
+instrument = trimesh.util.concatenate(meshes)
+
+# preview
+instrument.show()
+
+# ---------------------------------------------------
+# optional export
+# ---------------------------------------------------
+
+instrument.export("pearl_sound_generator.glb")
+
+# Summary
+
+### Conceptual Summary
+
+The organogram for this speculative instrument, "Pearl Formation Featured," combines elements of an aerophone (cylindrical body) with features inspired by pearl formation. The central air column acts as a modified cylindrical tube that simulates the growth layers of pearls through concentric cylinders. A bell radiation element enhances the acoustic projection, while tension strings add to the complex sound generation. The instrument's form mimics the spherical and layered structure typical of pearls, with each layer representing a different aspect of its acoustic behavior: resonant chambers, interfaces, and tension elements.
+
+# Materials
+
+### Materials
+
+1. 1 PVC tube, 30 cm length, 2.5 cm diameter
+2. 4 cylindrical layers (each with an increasing radius) - lengths vary from 28 mm to 76 mm, radii increase by 12 mm each layer
+3. 1 bell radiation cone, 80 mm height, base radius 48 mm
+4. 8 tension strings, 210 mm length, 1 cm diameter
+5. 2 top and bottom rings (torus), major_radius 42 mm, minor_radius 2 mm
+
+### Python Code for Matplotlib Organogram
+
+
+
+### Python Code for trimesh Representation
+
+```python
+import trimesh
+
+# ---------------------------------------------------
+# central air column (pearl formation layers)
+# ---------------------------------------------------
+
+layers = []
+for i in range(5):
+    r = 36 + i * 12
+    z = -20 + i * 30
+    layer = trimesh.creation.cylinder(
+        radius=r,
+        height=layer_height,
+        sections=64
+    )
+    layer.apply_translation((r, z, 0))
+    layers.append(layer)
+
+# ---------------------------------------------------
+# bell radiation (acoustic flare)
+# ---------------------------------------------------
+
+bell = trimesh.creation.cone(
+    radius=48,
+    height=80,
+    sections=64
+)
+bell.apply_translation((0, 0, -150))
+
+# ------------------------------------------------
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 2041170
+- group_id: instrument_working_prompt_20260307-143328
+- version: v1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.transforms import Affine2D
+
+# Define the figure and axes
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# Draw central air column (pearl formation layers)
+for i in range(5):
+    r = 36 + i * 12  # Radius increases by 12 mm for each layer
+    z = -20 + i * 30  # Z position for each layer
+    ax.add_patch(
+        patches.Circle((r, z), radius=r, fill=False, edgecolor='blue', linestyle='solid')
+    )
+ax.annotate('', xy=(48, -150), xytext=(24, -150), arrowprops=dict(arrowstyle='<->', color='blue'))
+
+# Draw bell radiation
+ax.add_patch(
+    patches.Circle((0, -30), radius=48, fill=False, edgecolor='purple', linestyle='dashed')
+)
+ax.annotate('', xy=(0, 60), xytext=(0, -150), arrowprops=dict(arrowstyle='<->', color='purple'))
+
+# Draw mouthpiece interface
+ax.add_patch(
+    patches.Circle((0, 140), radius=14, fill=False, edgecolor='orange', linestyle='solid')
+)
+ax.annotate('', xy=(0, 220), xytext=(0, -35), arrowprops=dict(arrowstyle='<->', color='orange'))
+
+# Draw tension strings
+angles = np.linspace(0, 2 * np.pi, 8, endpoint=False)
+for a in angles:
+    x = np.cos(a) * 42
+    y = np.sin(a) * 42
+    ax.plot([x, -16], [y, 157.5], color='red', linestyle='solid')
+ax.annotate('', xy=(0, 0), xytext=(-30, 80), arrowprops=dict(arrowstyle='<->', color='red'))
+
+# Draw top and bottom rings
+top_ring = patches.Circle((0, 105), radius=42, fill=False, edgecolor='green', linestyle='solid')
+bottom_ring = patches.Circle((0, -105), radius=42, fill=False, edgecolor='green', linestyle='solid')
+ax.add_patch(top_ring)
+ax.add_patch(bottom_ring)
+
+# Set plot limits and labels
+ax.set_xlim(-60, 60)
+ax.set_ylim(-300, 220)
+plt.xlabel('X-axis (mm)')
+plt.ylabel('Y-axis (mm)')
+plt.title('Organogram for Pearl Formation Featured')
+plt.show()
+
+# Geometry Code (trimesh)
+
+import numpy as np
+import trimesh
+
+# map: air-column -> cylinder, bell radiation -> cone, mouthpiece interface -> cylinder
+body = trimesh.creation.cylinder(radius=11.69, height=156.78, sections=44)
+bell = trimesh.creation.cone(radius=18.68, height=45.79, sections=44)
+bell.apply_translation((0, 0, -101.28))
+mouth = trimesh.creation.cylinder(radius=6.48, height=28.18, sections=44)
+mouth.apply_translation((0, 0, 92.48))
+spine = trimesh.creation.box(extents=(9.35, 12.86, 62.71))
+mesh = trimesh.util.concatenate([body, bell, mouth, spine])

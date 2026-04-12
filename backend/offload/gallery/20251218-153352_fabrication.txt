@@ -1,0 +1,108 @@
+# Prompt
+
+construct a flute with microtonal scale, that makes a 3D printable version ready for digital fabrication. Fundamental pitch will be 200Hz.
+
+# Summary
+
+**Conceptual Summary**
+
+The organogram abstracts this microtonal flute as an aerophone (blue circle) with a conical bore (orange trapezoid) representing its 3D-printed, gradually flaring body for harmonic enrichment. A square interface (green) at the top symbolizes the embouchure hole, with a downward arrow indicating breath input. Along the bore, 18 precision finger holes (small orange circles, numbered in blue) are positioned according to a microtonal scale derived from 31-EDO (equal divisions of the octave), allowing for 31 distinct pitches per octave around the 200 Hz fundamental. A small rhombus (grey) represents an optional embedded contact microphone for hybrid amplification. The performer position (white circle with dotted line) shows the instrument held horizontally. The acoustical rationale uses a conical bore to strengthen even harmonics, while the hole spacing follows calculated acoustic lengths for precise microtonal intervals. The design bridges traditional flute organology with digital fabrication, enabling exact, reproducible microtonal acoustics.
+
+**Materials**
+
+1.  1 spool of PLA or ABS filament, 1.75 mm diameter, for 3D printing the body.
+2.  1 set of 18 silicone or rubber grommets, 6 mm outer diameter, 4 mm inner diameter, for finger hole seals (optional, for airtight seal).
+3.  1 contact microphone element, 10 mm diameter (optional, for hybrid output).
+4.  1 length of heat-set insert, M3, for optional microphone mounting (if used).
+5.  Virtual Materials: 31-EDO tuning table (text file), STL file of the flute body, G-code for fabrication.
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Circle, Polygon, Rectangle, FancyArrow
+from matplotlib.text import Annotation
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(12, 8))
+ax.set_xlim(-1, 12)
+ax.set_ylim(-1, 8)
+ax.set_aspect('equal')
+ax.axis('off')
+
+# Main acoustical body: Aerophone (circle) + Conical bore (trapezoid)
+aerophone = Circle((2, 4), radius=1.5, color='blue', alpha=0.3, linewidth=2)
+bore = Polygon([[2.5, 2.5], [3, 7.5], [9, 7], [8.5, 3]], closed=True, color='orange', alpha=0.4, linewidth=2)
+ax.add_patch(aerophone)
+ax.add_patch(bore)
+
+# Interface: Embouchure (square) and breath arrow
+embouchure = Rectangle((1.8, 4.8), 0.4, 0.4, color='green', alpha=0.7, linewidth=2)
+ax.add_patch(embouchure)
+arrow = FancyArrow(1.5, 5.5, 0.5, -0.5, width=0.05, head_width=0.2, head_length=0.2, color='white', alpha=0.8)
+ax.add_patch(arrow)
+
+# Finger holes (18) with blue numbers
+hole_positions_x = np.linspace(3.5, 8.5, 18)
+hole_positions_y = np.linspace(3.2, 6.8, 18)
+for i, (x, y) in enumerate(zip(hole_positions_x, hole_positions_y)):
+    hole = Circle((x, y), radius=0.08, color='orange', alpha=0.9)
+    ax.add_patch(hole)
+    ax.text(x, y-0.25, str(i+1), color='blue', ha='center', va='center', fontsize=8)
+
+# Optional microphone (rhombus)
+mic = Polygon([[0.3, 1], [1, 0.3], [0.3, 0], [0, 0.3]], color='grey', alpha=0.7)
+mic.set_transform(plt.matplotlib.transforms.Affine2D().translate(7, 4) + ax.transData)
+ax.add_patch(mic)
+
+# Performer position
+performer = Circle((0.5, 2), radius=0.2, color='white', fill=False, linestyle='dotted', linewidth=2)
+ax.add_patch(performer)
+ax.plot([0.5, 2], [2, 3.5], color='white', linestyle='dotted', linewidth=1)
+
+#
+
+# Code
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Circle, Polygon, Rectangle, FancyArrow
+from matplotlib.text import Annotation
+
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(12, 8))
+ax.set_xlim(-1, 12)
+ax.set_ylim(-1, 8)
+ax.set_aspect('equal')
+ax.axis('off')
+
+# Main acoustical body: Aerophone (circle) + Conical bore (trapezoid)
+aerophone = Circle((2, 4), radius=1.5, color='blue', alpha=0.3, linewidth=2)
+bore = Polygon([[2.5, 2.5], [3, 7.5], [9, 7], [8.5, 3]], closed=True, color='orange', alpha=0.4, linewidth=2)
+ax.add_patch(aerophone)
+ax.add_patch(bore)
+
+# Interface: Embouchure (square) and breath arrow
+embouchure = Rectangle((1.8, 4.8), 0.4, 0.4, color='green', alpha=0.7, linewidth=2)
+ax.add_patch(embouchure)
+arrow = FancyArrow(1.5, 5.5, 0.5, -0.5, width=0.05, head_width=0.2, head_length=0.2, color='white', alpha=0.8)
+ax.add_patch(arrow)
+
+# Finger holes (18) with blue numbers
+hole_positions_x = np.linspace(3.5, 8.5, 18)
+hole_positions_y = np.linspace(3.2, 6.8, 18)
+for i, (x, y) in enumerate(zip(hole_positions_x, hole_positions_y)):
+    hole = Circle((x, y), radius=0.08, color='orange', alpha=0.9)
+    ax.add_patch(hole)
+    ax.text(x, y-0.25, str(i+1), color='blue', ha='center', va='center', fontsize=8)
+
+# Optional microphone (rhombus)
+mic = Polygon([[0.3, 1], [1, 0.3], [0.3, 0], [0, 0.3]], color='grey', alpha=0.7)
+mic.set_transform(plt.matplotlib.transforms.Affine2D().translate(7, 4) + ax.transData)
+ax.add_patch(mic)
+
+# Performer position
+performer = Circle((0.5, 2), radius=0.2, color='white', fill=False, linestyle='dotted', linewidth=2)
+ax.add_patch(performer)
+ax.plot([0.5, 2], [2, 3.5], color='white', linestyle='dotted', linewidth=1)
+
+#

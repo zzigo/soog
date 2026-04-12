@@ -10,7 +10,7 @@
     "plot"
   ],
   "sketch_url": "/api/gallery/image/20251214-234257_metamaterial-violin_v2.sketch.png",
-  "sketch_prompt": "realistic 3D object, solid black background, realistic reflections, dark mode, cinematic lighting. Instrument Identity: # Conceptual Summary The organogram for the Metamaterial Violin abstracts its core innovation: a resonant body shaped from acoustic metamaterials that redirect and sculpt sound wav.... User Concept: # Welcome to SOOG [The Speculative Organology Organogram Generator 0.0.60] # Write your invented instrument, select text.... Form: complex resonant volumes. Colors: natural material accents. System Logic: You are a specialist in building prompts for Image-to-Image Stable Diffusion models, specifically for \"OFA-Sys/small-stable-diffusion-v0\". Your goal is to transform a technical Matplotlib organogram into a rich, speculative instrument sketch. INSTRUC... Photorealistic 3D rendering, high detail, 8k, obsidian background.",
+  "sketch_prompt": "A speculative instrument: # Conceptual Summary The organogram for the Metamaterial Violin abstracts its core innovation: a resonant body shaped from acoustic metamate.... Inspired by: # Welcome to SOOG [The Speculative Organology Organogram Generator 0.0.60] # Wri.... realistic 3D object, solid black background, highly imaginative, obsidian, cinematic lighting, dark mode. photo...",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-11T23:01:24.343881"
+  "updated_at": "2026-04-12T10:51:26.825716"
 }
