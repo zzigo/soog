@@ -4,8 +4,12 @@ import logging
 from diffusers import AutoPipelineForImage2Image, StableAudioPipeline
 from dotenv import load_dotenv
 
+# Get the absolute path to the backend directory
+BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+ENV_PATH = os.path.join(BACKEND_DIR, ".env")
+
 # Set cache directory to the project's local .cache folder
-HF_CACHE_DIR = os.path.join(os.getcwd(), ".cache", "huggingface")
+HF_CACHE_DIR = os.path.join(BACKEND_DIR, ".cache", "huggingface")
 os.makedirs(HF_CACHE_DIR, exist_ok=True)
 os.environ["HF_HOME"] = HF_CACHE_DIR
 
@@ -13,12 +17,9 @@ os.environ["HF_HOME"] = HF_CACHE_DIR
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("download_models")
 
-# Load environment variables from .env
-# Assuming we are running from the backend directory or the root
-load_dotenv()
-if not os.path.exists('.env'):
-    # Try looking one level up if running from scripts/
-    load_dotenv('../.env')
+# Load environment variables from the specific .env path
+logger.info(f"Loading environment from: {ENV_PATH}")
+load_dotenv(ENV_PATH)
 
 def download():
     logger.info("--- SOOG Model Pre-download Script ---")
