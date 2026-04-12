@@ -17,6 +17,7 @@ import re
 import sys
 import torch
 import scipy
+import scipy.io.wavfile
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel, AutoTokenizer, AutoModel
 from torch import nn
@@ -51,7 +52,7 @@ os.environ["HF_HOME"] = HF_CACHE_DIR
 # Gallery directory
 GALLERY_DIR = os.path.join(OFFLOAD_DIR, 'gallery')
 os.makedirs(GALLERY_DIR, exist_ok=True)
-GALLERY_FILE_SUFFIXES = ('.json', '.png', '.txt', '.stl', '.sketch.png')
+GALLERY_FILE_SUFFIXES = ('.json', '.png', '.txt', '.stl', '.sketch.png', '.wav', '.ogg')
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -75,6 +76,8 @@ SOOPUB_DOCS_CACHE = None
 SOOPUB_GRAPH_CACHE = {}
 SKETCH_PIPELINE = None
 SKETCH_PIPELINE_MODEL = None
+SOUND_PIPELINE = None
+SOUND_PIPELINE_MODEL = None
 GENERATION_PROGRESS = {}
 GENERATION_PROGRESS_LOCK = threading.Lock()
 SOOPUB_SECTION_LABELS = {
@@ -94,7 +97,7 @@ CORS(app, resources={
     r"/log": {"origins": "*"}
 })
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu"))
 
 def get_version():
     try:
@@ -589,6 +592,204 @@ def generate_sketch_image(
         gc.collect()
 
     return output.getvalue(), sketch_prompt, config['model_id']
+
+
+def _load_sound_pipeline(model_id: str, cache_pipeline: bool = True):
+    global SOUND_PIPELINE, SOUND_PIPELINE_MODEL
+
+    if cache_pipeline and SOUND_PIPELINE is not None and SOUND_PIPELINE_MODEL == model_id:
+        return SOUND_PIPELINE
+
+    from diffusers import StableAudioPipeline
+
+    token = os.getenv('HF_TOKEN') or os.getenv('STABLE_AUDIO_OPEN_TOKEN')
+    logging.info(f"Loading Stable Audio pipeline: {model_id} (Token: {'provided' if token else 'NOT provided'})")
+    
+    torch_dtype = torch.float16 if device.type in ('cuda', 'mps') else torch.float32
+    logging.info(f"Using torch_dtype: {torch_dtype} on device: {device.type}")
+    
+    try:
+        logging.info("Starting from_pretrained...")
+        pipe = StableAudioPipeline.from_pretrained(
+            model_id,
+            torch_dtype=torch_dtype,
+            token=token,
+            cache_dir=HF_CACHE_DIR,
+            trust_remote_code=True
+        )
+        logging.info("Pipeline loaded successfully into RAM. Moving to device...")
+        pipe = pipe.to(device)
+        logging.info(f"Pipeline ready on {device.type}.")
+    except Exception as e:
+        logging.error(f"Failed to load Stable Audio pipeline: {e}")
+        raise
+
+    if cache_pipeline:
+        SOUND_PIPELINE = pipe
+        SOUND_PIPELINE_MODEL = model_id
+
+    return pipe
+
+
+def get_audio_config():
+    return {
+        'model_id': (os.getenv('SOOG_SOUND_MODEL', 'stabilityai/stable-audio-open-1.0') or '').strip() or 'stabilityai/stable-audio-open-1.0',
+        'duration_sec': _env_int('SOOG_SOUND_DURATION_SEC', 15, min_value=1, max_value=47),
+        'steps': _env_int('SOOG_SOUND_STEPS', 100, min_value=10, max_value=500),
+        'cache_pipeline': _env_bool('SOOG_SOUND_CACHE_PIPELINE', default=True)
+    }
+
+
+def build_audio_prompts(prompt: str, summary_text: str, materials_text: str, request_id: str = None):
+    """
+    Use an LLM to generate rich audio prompts based on organogram data and prompt_sound.txt instructions.
+    Returns a list of 3-5 strings.
+    """
+    sound_instructions = get_specialized_prompt('sound')
+    
+    system_prompt = (
+        "You are an expert sound designer specializing in timbre and isolated sound objects. "
+        "Your task is to transform a conceptual instrument description into highly precise "
+        "audio generation prompts for Stable Audio Open."
+    )
+    
+    user_prompt = (
+        f"Following these instructions:\n\n{sound_instructions}\n\n"
+        f"Design 3 unique and varied audio prompts that capture different timbral possibilities of this instrument:\n"
+        f"User Concept: {prompt}\n"
+        f"Conceptual Summary: {summary_text}\n"
+        f"Materials: {materials_text}\n\n"
+        "Return exactly 3 lines, one for each prompt. No numbering, no extra text. Each line should be a self-contained prompt."
+    )
+    
+    update_generation_progress(request_id, stage='sound_prompt_design', status='running')
+    
+    def progress_cb(preview):
+        update_generation_progress(request_id, stage='sound_prompt_design', status='running', reasoning_preview=preview)
+        
+    try:
+        content, meta = call_ollama_chat(
+            system_prompt,
+            user_prompt,
+            timeout=60,
+            max_tokens=600,
+            temperature=0.8,
+            progress_callback=progress_cb if request_id else None
+        )
+        prompts = [p.strip() for p in content.splitlines() if p.strip()]
+        # Clean up any leading markers like "1. ", "- ", etc.
+        prompts = [re.sub(r'^[\d\.\-\s\*]+', '', p) for p in prompts]
+        return prompts[:3]
+    except Exception as e:
+        logging.error(f"Error generating audio prompts: {e}")
+        # Simple fallback
+        return [f"isolated sound object, {summary_text[:120]}, high quality"] * 3
+
+
+def convert_to_ogg(wav_path: str):
+    """
+    Convert a wav file to ogg for web performance.
+    """
+    ogg_path = wav_path.replace('.wav', '.ogg')
+    try:
+        import subprocess
+        # -y to overwrite, -acodec libopus or just default ogg
+        # using libopus for better quality/size if available, but -acodec libvorbis is more standard for .ogg
+        cmd = ['ffmpeg', '-y', '-i', wav_path, '-acodec', 'libvorbis', ogg_path]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        return ogg_path
+    except Exception as e:
+        logging.error(f"Failed to convert {wav_path} to ogg: {e}")
+        return None
+
+
+def generate_sound_samples(prompt: str, summary_text: str, materials_text: str, basename: str, request_id: str = None):
+    config = get_audio_config()
+    
+    audio_prompts = build_audio_prompts(prompt, summary_text, materials_text, request_id=request_id)
+    
+    update_generation_progress(request_id, stage='loading_sound_pipeline', status='running', reasoning_preview="Loading Stable Audio (this can take several minutes if weights are downloading)...")
+    try:
+        pipe = _load_sound_pipeline(
+            model_id=config['model_id'],
+            cache_pipeline=bool(config.get('cache_pipeline'))
+        )
+    except Exception as e:
+        update_generation_progress(request_id, stage='error', status='error', reasoning_preview=f"Failed to load sound pipeline: {str(e)}")
+        raise
+    
+    results = []
+    rate = pipe.vae.sampling_rate if hasattr(pipe, 'vae') else 44100
+    
+    for i, audio_prompt in enumerate(audio_prompts):
+        msg = f"Generating sample {i+1}/{len(audio_prompts)}: {audio_prompt[:80]}..."
+        update_generation_progress(request_id, stage='sound_generation', status='running', reasoning_preview=msg)
+        
+        seed_value = int(hashlib.sha256(f"{audio_prompt}|{i}|{basename}".encode('utf-8')).hexdigest()[:8], 16)
+        
+        # Generator device handling
+        gen_device = 'cpu' if device.type == 'mps' else device.type
+        generator = torch.Generator(device=gen_device).manual_seed(seed_value)
+        
+        try:
+            with torch.inference_mode():
+                output = pipe(
+                    prompt=audio_prompt,
+                    num_inference_steps=config['steps'],
+                    audio_end_in_s=float(config['duration_sec']),
+                    generator=generator
+                )
+            
+            audio_data = output.audios[0] # Usually [num_channels, num_samples]
+            
+            # Convert to numpy if it's a tensor
+            if torch.is_tensor(audio_data):
+                audio_data = audio_data.cpu().numpy()
+            
+            # Ensure it's [samples, channels] for scipy.io.wavfile
+            if audio_data.ndim == 2:
+                # If [channels, samples], transpose it
+                if audio_data.shape[0] < audio_data.shape[1] and audio_data.shape[0] in (1, 2):
+                    audio_data = audio_data.T
+            
+            sample_filename = f"{basename}_sample{i+1}.wav"
+            sample_path = os.path.join(GALLERY_DIR, sample_filename)
+            
+            scipy.io.wavfile.write(sample_path, rate, audio_data)
+            
+            # Also convert to ogg
+            update_generation_progress(request_id, stage='converting_to_ogg', status='running', reasoning_preview=f"Optimizing sample {i+1} for web...")
+            ogg_path = convert_to_ogg(sample_path)
+            ogg_url = None
+            if ogg_path:
+                ogg_url = f"/api/gallery/image/{os.path.basename(ogg_path)}"
+            
+            results.append({
+                'url': f"/api/gallery/image/{sample_filename}",
+                'ogg_url': ogg_url,
+                'prompt': audio_prompt
+            })
+        except Exception as e:
+            logging.error(f"Error generating sample {i+1}: {e}")
+            continue
+    
+    if not results:
+        update_generation_progress(request_id, stage='error', status='error', reasoning_preview="No sound samples were generated successfully.")
+    else:
+        update_generation_progress(request_id, stage='completed', status='completed')
+        
+    if not config.get('cache_pipeline'):
+        try:
+            pipe.to('cpu')
+            del pipe
+        except Exception:
+            pass
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        import gc
+        gc.collect()
+        
+    return results, config['model_id']
 
 
 def _normalize_graph_token(value: str) -> str:
@@ -3211,11 +3412,14 @@ def remake_sketch(basename: str):
     if not basename:
         return jsonify({'error': 'Missing basename'}), 400
 
+    request_id = request.json.get('request_id') if (request.is_json and request.json) else None
+
     meta_path = os.path.join(GALLERY_DIR, f"{basename}.json")
     if not os.path.isfile(meta_path):
         return jsonify({'error': 'Gallery item not found'}), 404
 
     try:
+        update_generation_progress(request_id, stage='loading_metadata', status='running')
         with open(meta_path, 'r', encoding='utf-8') as f:
             meta = json.load(f)
 
@@ -3243,6 +3447,7 @@ def remake_sketch(basename: str):
             organogram_bytes = f.read()
 
         # Generate new sketch
+        update_generation_progress(request_id, stage='regenerating_sketch', status='running')
         sketch_prompt_content = get_specialized_prompt('inferred-image')
         sketch_bytes, sketch_prompt, sketch_model = generate_sketch_image(
             organogram_bytes=organogram_bytes,
@@ -3271,6 +3476,7 @@ def remake_sketch(basename: str):
         with open(meta_path, 'w', encoding='utf-8') as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
 
+        update_generation_progress(request_id, stage='completed', status='completed')
         return jsonify({
             'ok': True,
             'sketch_url': meta['sketch_url'],
@@ -3282,6 +3488,63 @@ def remake_sketch(basename: str):
     except Exception as e:
         logging.error(f"Error remaking sketch for {basename}: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/gallery/item/<basename>/generate_sound', methods=['POST'])
+@log_activity('generate_sound')
+def generate_sound(basename: str):
+    """
+    Generate audio samples for an existing gallery item using Stable Audio Open.
+    """
+    if not basename:
+        return jsonify({'error': 'Missing basename'}), 400
+
+    request_id = request.json.get('request_id') if request.is_json else None
+
+    meta_path = os.path.join(GALLERY_DIR, f"{basename}.json")
+    if not os.path.isfile(meta_path):
+        return jsonify({'error': 'Gallery item not found'}), 404
+
+    try:
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            meta = json.load(f)
+
+        prompt = meta.get('prompt', '') or ''
+        summary_text = meta.get('summary', '') or meta.get('answer', '') or ''
+        materials_text = meta.get('materials_text', '') or ''
+
+        # Generate sound samples
+        sound_results, sound_model = generate_sound_samples(
+            prompt=prompt,
+            summary_text=summary_text,
+            materials_text=materials_text,
+            basename=basename,
+            request_id=request_id
+        )
+
+        if not sound_results:
+            return jsonify({'error': 'Sound generation failed to produce output'}), 500
+
+        # Update metadata
+        meta['sound_samples'] = sound_results
+        meta['sound_model'] = sound_model
+        meta['updated_at'] = datetime.datetime.now().isoformat()
+
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+
+        return jsonify({
+            'ok': True,
+            'sound_samples': sound_results,
+            'sound_model': sound_model,
+            'item': meta
+        })
+
+    except Exception as e:
+        logging.error(f"Error generating sound for {basename}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/version', methods=['GET'])
 @log_activity('version')
 def version():

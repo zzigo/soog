@@ -14,11 +14,16 @@
                 :key="item.basename"
                 class="mosaic-item"
                 @click="$emit('select-featured', item.basename)"
+                @mouseenter="playAudio(item)"
+                @mouseleave="stopAudio"
               >
                 <img :src="assetHref(item.sketch_url)" :alt="item.title" class="mosaic-img" />
                 <div class="mosaic-overlay">
                   <h1 class="mosaic-title">{{ item.title || item.basename }}</h1>
                   <p class="mosaic-prompt">{{ item.prompt }}</p>
+                  <div v-if="item.sound_samples?.length" class="sound-indicator">
+                    <span class="icon">🔊</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -144,12 +149,14 @@ const props = defineProps({
   modelValue: Boolean
 });
 
-defineEmits(['update:modelValue']);
+defineEmits(['update:modelValue', 'select-featured']);
 
 const config = useRuntimeConfig()
 const apiBase = config.public.apiBase || 'http://localhost:10000/api'
 
 const featuredSketches = ref([])
+const activeAudio = ref(null)
+const fadeInterval = ref(null)
 
 async function loadFeatured() {
   try {
@@ -165,6 +172,73 @@ async function loadFeatured() {
   }
 }
 
+function playAudio(item) {
+  if (!item.sound_samples || item.sound_samples.length === 0) return
+  
+  // Stop existing immediately
+  if (activeAudio.value) {
+    activeAudio.value.pause()
+    activeAudio.value = null
+  }
+  if (fadeInterval.value) {
+    clearInterval(fadeInterval.value)
+    fadeInterval.value = null
+  }
+
+  const sample = item.sound_samples[0]
+  const url = assetHref(sample.ogg_url || sample.url)
+  
+  const audio = new Audio(url)
+  audio.volume = 0
+  activeAudio.value = audio
+  audio.loop = true
+  
+  audio.play().then(() => {
+    // Fade in: 400ms. 20 steps of 20ms each.
+    let vol = 0
+    const step = 0.05
+    fadeInterval.value = setInterval(() => {
+      vol += step
+      if (vol >= 1) {
+        audio.volume = 1
+        clearInterval(fadeInterval.value)
+        fadeInterval.value = null
+      } else {
+        audio.volume = vol
+      }
+    }, 20)
+  }).catch(e => {
+    console.warn('Playback failed (probably user interaction required or file not found):', e)
+    activeAudio.value = null
+  })
+}
+
+function stopAudio() {
+  const audio = activeAudio.value
+  if (!audio) return
+  
+  if (fadeInterval.value) {
+    clearInterval(fadeInterval.value)
+    fadeInterval.value = null
+  }
+  
+  // Fade out: 400ms.
+  let vol = audio.volume
+  const step = 0.05
+  fadeInterval.value = setInterval(() => {
+    vol -= step
+    if (vol <= 0) {
+      audio.volume = 0
+      audio.pause()
+      clearInterval(fadeInterval.value)
+      fadeInterval.value = null
+      activeAudio.value = null
+    } else {
+      audio.volume = vol
+    }
+  }, 20)
+}
+
 function assetHref(url) {
   if (!url) return ''
   if (url.startsWith('http')) return url
@@ -175,7 +249,19 @@ function assetHref(url) {
 }
 
 watch(() => props.modelValue, (val) => {
-  if (val) loadFeatured()
+  if (val) {
+    loadFeatured()
+  } else {
+    // Stop audio when closing modal
+    if (activeAudio.value) {
+      activeAudio.value.pause()
+      activeAudio.value = null
+    }
+    if (fadeInterval.value) {
+      clearInterval(fadeInterval.value)
+      fadeInterval.value = null
+    }
+  }
 })
 
 onMounted(() => {
@@ -292,6 +378,24 @@ onMounted(() => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.4;
+}
+
+.sound-indicator {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sound-indicator .icon {
+  font-size: 14px;
+  color: #98ff5f;
 }
 
 .close-button {

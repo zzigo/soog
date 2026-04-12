@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//etc/nginx/**)",
+      "Bash(curl:*)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(f'Items count: {len\\(d[\\\\\"items\\\\\"]\\)}'\\)\")"
+    ]
+  }
+}

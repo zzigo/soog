@@ -1,0 +1,52 @@
+# Stable Audio Open Prompt Engineering for Timbre Generation
+
+Use the following categories to structure the audio prompt. Combine one or more descriptors from each group to create a rich, intentional sound description.
+
+## 1. Material (The physical substance)
+- metal: cold, ringing, sharp, harmonic
+- glass: brittle, transparent, pure, fragile
+- ceramic: earthy, dry, hollow, textured
+- wood: warm, organic, resonant, fibrous
+- skin: soft, damped, thick, organic
+- paper: thin, rustling, dry, light
+- plastic: synthetic, dull, flexible, pop
+- stone: heavy, massive, gritty, solid
+- fiber: soft, airy, flexible, muted
+
+## 2. Mode of Excitation (The energy source)
+- struck: impulsive, impact, transient-heavy
+- bowed: continuous, friction, harmonic growth
+- scraped: rough, textured, noisy friction
+- rubbed: soft friction, warm, continuous
+- blown: airy, turbulent, breathy
+- plucked: sharp attack, exponential decay
+- rattled: chaotic, multiple impacts, jittery
+- cracked: sudden, high-energy break, transient
+- crumpled: granular, dense, multiple micro-impacts
+
+## 3. Acoustic Features (The perceptual traits)
+- bright: high spectral centroid, sharp
+- dull: low-pass filtered, muted, warm
+- hollow: internal resonance, tubby
+- noisy: high entropy, breathy or gritty
+- breathy: turbulent air, soft noise
+- inharmonic: complex overtones, metallic or bell-like
+- resonant: long-lasting vibration, modal
+- dry: no reverb, short decay, immediate
+- sustained: constant energy, flat envelope
+- brittle: high frequency peaks, easily broken feel
+- warm: rich lower harmonics, smooth
+- rough: high sensory dissonance, granular
+
+## 4. Temporal Morphology (The shape over time)
+- sharp attack: immediate peak, percussive
+- slow bloom: gradual increase in amplitude
+- short decay: fast silence after peak
+- unstable sustain: wobbling pitch or amplitude
+- pulsed tremor: rhythmic micro-modulations
+- granular burst: short, dense clouds of sound
+
+## Prompt Construction Strategy
+Combine these into a single paragraph. 
+Example: "short dry percussive cedar block, low resonance, soft mallet, muted overtones, sharp attack, short decay."
+Focus on isolated sound objects, no background music, no silence at the beginning. 44.1kHz quality.

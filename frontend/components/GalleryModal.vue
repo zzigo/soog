@@ -16,7 +16,16 @@
               :disabled="remakingSketch"
               title="Regenerate inferred sketch image"
             >
-              GENERATE
+              SKETCH
+            </button>
+            <button 
+              v-if="current" 
+              @click="generateSound" 
+              class="remake-header-btn sound-btn" 
+              :disabled="generatingSound"
+              title="Generate timbral samples (Stable Audio Open)"
+            >
+              SOUND
             </button>
             <button @click="toggleRename">Rename</button>
             <button @click="deleteItem" class="delete">Delete</button>
@@ -100,6 +109,24 @@
                 </div>
               </section>
             </div>
+            <section v-if="current?.sound_samples?.length" class="viewer-panel sound-samples-panel">
+              <div class="viewer-title-row">
+                <h4 class="viewer-title">Timbres (Stable Audio)</h4>
+              </div>
+              <div class="sound-list">
+                <div v-for="(sample, idx) in current.sound_samples" :key="idx" class="sound-item">
+                  <div class="sound-info">
+                    <span class="sound-label">Sample {{ idx + 1 }}</span>
+                    <span class="sound-prompt-text" :title="sample.prompt">{{ sample.prompt }}</span>
+                  </div>
+                  <audio controls class="audio-player">
+                    <source v-if="sample.ogg_url" :src="assetHref(sample.ogg_url)" type="audio/ogg">
+                    <source :src="assetHref(sample.url)" type="audio/wav">
+                    Your browser does not support the audio element.
+                  </audio>
+                </div>
+              </div>
+            </section>
             <section class="viewer-panel viewer-panel--full">
               <div class="viewer-title-row">
                 <h4 class="viewer-title">3D Model</h4>
@@ -115,6 +142,16 @@
           <div v-else class="empty full-empty">No item selected</div>
         </div>
       </section>
+      
+      <footer v-if="generatingSound || remakingSketch" class="modal-footer">
+        <div class="progress-info">
+          <div class="status-row">
+            <span class="pulse-dot"></span>
+            <span class="status-label">{{ progressStage ? formatProgressStage(progressStage) : (generatingSound ? 'Generating Sound...' : 'Regenerating Sketch...') }}</span>
+          </div>
+          <div v-if="reasoningPreview" class="reasoning-preview">{{ reasoningPreview }}</div>
+        </div>
+      </footer>
     </div>
   </div>
 </template>
@@ -137,6 +174,51 @@ const renaming = ref(false)
 const newName = ref('')
 const galleryKey = ref(0)
 const remakingSketch = ref(false)
+const generatingSound = ref(false)
+const progressStage = ref('')
+const reasoningPreview = ref('')
+const generationRequestId = ref('')
+let progressPollInterval = null
+
+function createRequestId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `soog-sound-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function stopReasoningPolling() {
+  if (progressPollInterval) {
+    clearInterval(progressPollInterval);
+    progressPollInterval = null;
+  }
+}
+
+async function fetchReasoningProgress() {
+  if (!generationRequestId.value) return;
+  try {
+    const response = await fetch(`${apiBase}/generate/progress/${generationRequestId.value}`, {
+      headers: { Accept: 'application/json' }
+    });
+    if (!response.ok) return;
+    const payload = await response.json();
+    if (!payload?.ok) return;
+    reasoningPreview.value = String(payload.reasoning_preview || '').trim();
+    progressStage.value = String(payload.stage || '').trim();
+    if (payload.status === 'completed' || payload.status === 'error') {
+      stopReasoningPolling();
+    }
+  } catch (e) {
+    reasoningPreview.value = 'Lost connection to progress tracker...';
+  }
+}
+
+function startReasoningPolling() {
+  stopReasoningPolling();
+  reasoningPreview.value = '';
+  progressStage.value = '';
+  progressPollInterval = setInterval(fetchReasoningProgress, 800);
+}
 
 const current = computed(() => items.value.find((item) => item.basename === selectedBasename.value) || null)
 const currentSummaryHtml = computed(() => {
@@ -233,10 +315,12 @@ const currentGroup = computed(() => {
 })
 const currentGroupId = computed(() => currentGroup.value?.groupId || '')
 
-watch(() => current.value, (value) => {
-  if (!value) return
-  renaming.value = false
-})
+function formatProgressStage(stage) {
+  return String(stage || '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
 
 function selectVersion(basename) {
   selectedBasename.value = basename
@@ -386,9 +470,13 @@ async function renameItem() {
 async function remakeSketch() {
   if (!current.value || remakingSketch.value) return
   remakingSketch.value = true
+  generationRequestId.value = createRequestId()
+  startReasoningPolling()
   try {
     const res = await fetch(`${apiBase}/gallery/item/${current.value.basename}/remake_sketch`, {
-      method: 'POST'
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_id: generationRequestId.value })
     })
     const payload = await res.json()
     if (!res.ok) {
@@ -406,10 +494,43 @@ async function remakeSketch() {
     alert(`Error remaking sketch: ${e.message}`)
   } finally {
     remakingSketch.value = false
+    stopReasoningPolling()
+    generationRequestId.value = ''
+  }
+}
+async function generateSound() {
+  if (!current.value || generatingSound.value) return
+  generatingSound.value = true
+  generationRequestId.value = createRequestId()
+  startReasoningPolling()
+  try {
+    const res = await fetch(`${apiBase}/gallery/item/${current.value.basename}/generate_sound`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_id: generationRequestId.value })
+    })
+    const payload = await res.json()
+    if (!res.ok) {
+      throw new Error(payload.error || 'Failed to generate sound')
+    }
+    // Update local item
+    if (current.value) {
+      current.value.sound_samples = payload.sound_samples
+      current.value.sound_model = payload.sound_model
+    }
+    // Reload full list to sync with disk metadata
+    await load(current.value?.basename)
+  } catch (e) {
+    alert(`Error generating sound: ${e.message}`)
+  } finally {
+    generatingSound.value = false
+    stopReasoningPolling()
+    generationRequestId.value = ''
   }
 }
 
-async function toggleFeatured(item) {
+  async function toggleFeatured(item) {
+
   if (!item) return
   const newValue = !item.featured
   try {
@@ -501,6 +622,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   border-color: #666;
   box-shadow: 0 0 8px rgba(152, 255, 95, 0.2);
 }
+.sound-btn:hover:not(:disabled) {
+  box-shadow: 0 0 8px rgba(95, 200, 255, 0.3);
+}
 .remake-header-btn:disabled { 
   opacity: 0.8; 
   cursor: not-allowed; 
@@ -511,6 +635,57 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   0% { background: #333; }
   50% { background: #555; }
   100% { background: #333; }
+}
+
+.sound-samples-panel {
+  border-top: 1px solid #222;
+  background: #080808;
+  padding-bottom: 10px;
+}
+.sound-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+}
+.sound-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  background: #151515;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #222;
+}
+.sound-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.sound-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #55aaff;
+  text-transform: uppercase;
+}
+.sound-prompt-text {
+  font-size: 11px;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.audio-player {
+  height: 32px;
+  max-width: 200px;
+}
+@media (max-width: 600px) {
+  .sound-item { flex-direction: column; align-items: stretch; }
+  .audio-player { max-width: 100%; }
 }
 .remake-btn {
   background: #444;
@@ -631,6 +806,62 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 .rename-container button:hover { background: #1f1f1f; border-color: #666; }
 .empty { color: #777; }
 .full-empty { display: flex; align-items: center; justify-content: center; flex: 1; }
+
+.modal-footer {
+  background: #000;
+  border-top: 1px solid #333;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 40px;
+}
+
+.progress-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #4CAF50;
+  border-radius: 50%;
+  animation: pulse-green 1.5s infinite;
+}
+
+@keyframes pulse-green {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(76, 175, 80, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+}
+
+.status-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #fff;
+}
+
+.reasoning-preview {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+  max-width: 800px;
+  line-height: 1.3;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 @media (max-width: 900px) {
   .modal-body { flex-direction: column; }
