@@ -3666,6 +3666,45 @@ def gallery_rename_group(group_id):
 
 
 
+
+@app.route('/api/gallery/item/<string:basename>/featured', methods=['POST'])
+def gallery_featured_item(basename):
+    """Toggle featured status of a gallery item."""
+    try:
+        data = request.get_json(force=True) or {}
+        featured = bool(data.get('featured', False))
+
+        json_path = os.path.join(GALLERY_DIR, f"{basename}.json")
+        if not os.path.exists(json_path):
+            return jsonify({'error': 'Item not found'}), 404
+
+        with open(json_path, 'r+', encoding='utf-8') as f:
+            meta = json.load(f)
+            meta['featured'] = featured
+            f.seek(0)
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+            f.truncate()
+
+        # Also update the .txt file if needed, but JSON is the primary source for the gallery list.
+        txt_path = os.path.join(GALLERY_DIR, f"{basename}.txt")
+        if os.path.exists(txt_path):
+            with open(txt_path, 'r+', encoding='utf-8') as f:
+                content = f.read()
+                # Simple way to add/update featured in the metadata section of the text file
+                if "# Generation Metadata" in content:
+                    if "- featured:" in content:
+                        content = re.sub(r'- featured:.*', f'- featured: {featured}', content)
+                    else:
+                        content = content.replace("# Generation Metadata\n\n", f"# Generation Metadata\n\n- featured: {featured}\n")
+                f.seek(0)
+                f.write(content)
+                f.truncate()
+
+        return jsonify({'ok': True, 'basename': basename, 'featured': featured})
+    except Exception as e:
+        logging.error(f"Error updating featured status for {basename}: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/dev/save', methods=['POST'])
 def dev_save():
     # Restricted in production unless explicitly enabled

@@ -23,7 +23,7 @@
     "stl"
   ],
   "sketch_url": "/api/gallery/image/20260307-070512_first_test_with_local_deepseek_v1.sketch.png",
-  "sketch_prompt": "realistic 3D object, solid black background, cinematic lighting, dark mode. Concept: **Conceptual Summary**: The Electronophone is a hybrid aerophone-violin inspired... # Welcome to SOOG [The Speculative Organology Organogram Gen.... Form: circular resonators, rectilinear frames, faceted polygons. Colors: orange, green...",
+  "sketch_prompt": "solid black background, obsidian backdrop. A speculative instrument: **Conceptual Summary**: The Electronophone is a hybrid aerophone-violin inspired by the organogram system. It features an inner hollow cylin.... Inspired by: # Welcome to SOOG [The Speculative Organology Organogram Generator 0.0.60] # Wri.... realistic 3D object, highly imaginative, cinematic lighting, dark mode. Form: circular r...",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-12T09:41:53.535561"
+  "updated_at": "2026-04-12T11:20:50.822839"
 }

@@ -25,5 +25,6 @@
   "sketch_url": "/api/gallery/image/20260307-092502_deepseek_give_make_sphere_v1.sketch.png",
   "sketch_prompt": "realistic 3D object, solid black background, realistic reflections, dark mode, cinematic lighting. Instrument Identity: ### Conceptual Summary The instrument is named \"Aural Sphere Harmonizer.\" It features a spherical membrane as its idiophone core, with a speaker at its center for electronic augmen.... User Concept: make a sphere membrane with a speaker in the center, and two tubes with 3 holes each blowing air inside the membrane, ea.... Form: circular resonators, rectilinear frames, faceted polygons, directional arrows. Colors: orange, green, blue, black, red. Materials: ### Materials; 1. 1 PVC tube, 30 cm length, 2.5 cm diameter (x2); 2. 6 wood bess.... System Logic: You are a specialist in building prompts for Image-to-Image Stable Diffusion models, specifically for \"OFA-Sys/small-stable-diffusion-v0\". Your goal is to transform a technical Matplotlib organogram into a rich, speculative instrument sketch. INSTRUC... Photorealistic 3D rendering, high detail, 8k, obsidian background.",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-12T09:03:02.483450"
+  "updated_at": "2026-04-12T09:03:02.483450",
+  "featured": true
 }

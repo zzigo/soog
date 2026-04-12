@@ -12,5 +12,6 @@
   "sketch_url": "/api/gallery/image/20260305-210247_Labyrinthine-Saxophone.sketch.png",
   "sketch_prompt": "realistic 3D object, solid black background, cinematic lighting, dark mode. Concept: **Conceptual Summary: Labyrinthine Saxophone** The organogram of the Labyrinthin... Design the Labyrinthine Saxophone: body constructed from spa.... photorealistic, highly detailed, 8k, obsidian background.",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-12T10:11:54.050764"
+  "updated_at": "2026-04-12T10:11:54.050764",
+  "featured": true
 }

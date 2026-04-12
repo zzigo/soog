@@ -208,9 +208,13 @@
       </button>
     </div>
     <div v-if="error" class="error">{{ error }}</div>
-    <HelpModal v-model="showHelp" />
+    <HelpModal 
+      v-model="showHelp" 
+      @select-featured="handleSelectFeatured"
+    />
     <GalleryModal 
       v-model="showGallery" 
+      :initial-basename="targetBasename"
       @load-code="loadCodeFromGallery"
     />
   </div>
@@ -265,6 +269,7 @@ const generationRequestId = ref('');
 const reasoningPreview = ref('');
 const progressStage = ref('');
 const viewMode = ref('stl');
+const targetBasename = ref('');
 let progressPollInterval = null;
 
 const summaryHtml = computed(() => {
@@ -384,6 +389,7 @@ onMounted(() => {
   loadResponseTimeHistory();
   fetchOllamaModels();
   checkDevice();
+  showHelp.value = true; // Auto-show welcome modal on load
   window.addEventListener('resize', checkDevice);
   window.addEventListener('keydown', handleEscapeKey);
   window.addEventListener('mousemove', onDrag);
@@ -465,6 +471,12 @@ const handleMobileEvaluate = () => {
     }
   }
 };
+
+function handleSelectFeatured(basename) {
+  targetBasename.value = basename;
+  showHelp.value = false;
+  showGallery.value = true;
+}
 
 const loadResponseTimeHistory = () => {
   if (typeof window === 'undefined') return;

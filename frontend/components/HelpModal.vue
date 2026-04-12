@@ -7,6 +7,23 @@
           <button class="close-button" @click="$emit('update:modelValue', false)">×</button>
         </div>
         <div class="modal-body">
+          <section v-if="featuredSketches.length" class="mosaic-section">
+            <div class="mosaic-grid">
+              <div 
+                v-for="item in featuredSketches" 
+                :key="item.basename"
+                class="mosaic-item"
+                @click="$emit('select-featured', item.basename)"
+              >
+                <img :src="assetHref(item.sketch_url)" :alt="item.title" class="mosaic-img" />
+                <div class="mosaic-overlay">
+                  <h1 class="mosaic-title">{{ item.title || item.basename }}</h1>
+                  <p class="mosaic-prompt">{{ item.prompt }}</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <h3>The Speculative Organology Organogram Generator</h3>
           <p>
             SOOG helps you visualize musical instruments based on the organogram technique from ethnomusicologist Mantle Hood. 
@@ -97,7 +114,7 @@
             </p>
           </div>
 
-          <div class="credits">
+          <div class="credits" v-if="false">
             <h4>Academic Attribution</h4>
             <p>
               SOOG is a research project developed by Luciano Azzigotti in conjunction with the doctoral dissertation "<em>Speculative Organology</em>" within the Specialized Master and PhD in Music Performance Research programme at the Hochschule der Künste Bern.
@@ -120,11 +137,50 @@
 </template>
 
 <script setup>
-defineProps({
+import { ref, onMounted, watch } from 'vue'
+import { useRuntimeConfig } from '#app'
+
+const props = defineProps({
   modelValue: Boolean
 });
 
 defineEmits(['update:modelValue']);
+
+const config = useRuntimeConfig()
+const apiBase = config.public.apiBase || 'http://localhost:10000/api'
+
+const featuredSketches = ref([])
+
+async function loadFeatured() {
+  try {
+    const res = await fetch(`${apiBase}/gallery/list`)
+    const data = await res.json()
+    // Filter items that have a sketch_url AND are marked as featured
+    featuredSketches.value = (data.items || [])
+      .filter(item => item.featured && item.sketch_url)
+      // Limit to a reasonable number for the mosaic
+      .slice(0, 24)
+  } catch (e) {
+    console.error('Failed to load featured sketches:', e)
+  }
+}
+
+function assetHref(url) {
+  if (!url) return ''
+  if (url.startsWith('http')) return url
+  const offloadApiBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase
+  if (url.startsWith('/offload')) return offloadApiBase + url
+  if (apiBase.endsWith('/api') && url.startsWith('/api/')) return apiBase + url.substring(4)
+  return apiBase + url
+}
+
+watch(() => props.modelValue, (val) => {
+  if (val) loadFeatured()
+})
+
+onMounted(() => {
+  if (props.modelValue) loadFeatured()
+})
 </script>
 
 <style scoped>
@@ -145,7 +201,7 @@ defineEmits(['update:modelValue']);
   background: #1a1a1a;
   border-radius: 8px;
   width: 90%;
-  max-width: 600px;
+  max-width: 80%;
   max-height: 90vh;
   overflow-y: auto;
   color: white;
@@ -162,6 +218,80 @@ defineEmits(['update:modelValue']);
 
 .modal-body {
   padding: 1.5rem;
+}
+
+.mosaic-section {
+  margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+  border-bottom: 1px solid #333;
+}
+
+.mosaic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(255px, 1fr));
+  gap: 0;
+  background: #000;
+  padding: 0;
+}
+
+.mosaic-item {
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: #111;
+  border: none;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+}
+
+.mosaic-item:hover {
+  transform: scale(1.02);
+  z-index: 10;
+  box-shadow: 0 0 20px rgba(76, 175, 80, 0.4);
+}
+
+.mosaic-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mosaic-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  padding: 15px;
+  text-align: center;
+  backdrop-filter: blur(2px);
+}
+
+.mosaic-item:hover .mosaic-overlay {
+  opacity: 1;
+}
+
+.mosaic-title {
+  font-size: 1.1rem;
+  margin: 0 0 8px 0;
+  color: #4CAF50;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.mosaic-prompt {
+  font-size: 0.75rem;
+  font-style: italic;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.8);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
 }
 
 .close-button {

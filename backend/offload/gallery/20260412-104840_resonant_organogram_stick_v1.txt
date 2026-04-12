@@ -1,0 +1,73 @@
+# Prompt
+
+stick resonant with snare membran as bat wing
+
+# Summary
+
+The organogram for the 'Stick resonant with snare membran as bat wing' conceptualizes a hybrid musical instrument that merges aerodynamic resonance from a bat wing-like structure with membrane-driven sound production. The stick serves as a resonant body, while the snare membran provides dynamic tension and attack characteristics. The bat wing shape enhances air flow and structural rigidity, creating an organic interaction between the stick's flexibility and the membran's stiffness. Acoustic materials such as laminated wood for the stick's soundboard, high-density foam for the membran's damping, and a unique organic-based composite for the wing ensure optimal energy transfer and tonal balance.
+
+# Materials
+
+1. 200g laminated birch wood strip (80cm x 3cm) - Soundboard<br>
+2. 50g solid iron rod (60cm) - Stick<br>
+3. 1m x 2mm tempered glass wool - Membran material<br>
+4. 150g hollow aluminum tube (50cm) - Wing structure<br>
+5. 2 liters of purple acoustic resin - Organic-based composite<br>
+6. 1 set of precision tuning forks (3 prongs) - Frequency control<br>
+7. 1 meter x 0.5mm thick laser-cut steel plate - Structural frame<br>
+8. 1 set of 12 small ivory-like samples - Tactile interface
+
+# Generation Metadata
+
+- featured: True
+- model: deepseek-r1:7b
+- elapsed_ms: 776397
+- sketch_model: OFA-Sys/small-stable-diffusion-v0
+- group_id: resonant_organogram_stick_20260412-104840
+- version: v1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Circle, Rectangle, Polygon, FancyArrowPatch
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(10, 6))
+# Organogram elements: bat wing (white), stick (orange), snare membran (pink), air flow (blue) connections
+wings = [Circle((5, 2.5), radius=1, color='white', alpha=0.7), 
+         Circle((5, -2.5), radius=1, color='white', alpha=0.7)]
+stick = Rectangle((3, 4), width=2, height=0.5, color='orange')
+membran = Rectangle((8, 1), width=4, height=0.5, color='hotpink')
+wing_connection = FancyArrowPatch((6, 3), (9, 3), color='blue', alpha=0.6)
+membran_connection = FancyArrowPatch((8, -2), (8, 1), color='blue', alpha=0.6)
+ax.add_patch(wings[0])
+ax.add_patch(wings[1])
+ax.add_patch(stick)
+ax.add_patch(membran)
+ax.add_patch(wing_connection)
+ax.add_patch(membran_connection)
+ax.set_xlim(0, 12)
+ax.set_ylim(-5, 5)
+ax.set_aspect('equal')
+plt.legend([wings[0], stick, membran, wing_connection, membran_connection], [
+    'Bat Wing Structure', 'Stick Resonator', 'Snare Membran', 'Aerodynamic Flow', 'Energy Transfer'])
+plt.title('Organogram: Stick resonant with snare membran as bat wing')
+plt.show()
+
+# Geometry Code (trimesh)
+
+import numpy as np
+import trimesh
+
+# map: air-column -> cylinder, bell radiation -> cone, mouthpiece interface -> cylinder
+body = trimesh.creation.cylinder(radius=13.98, height=229.15, sections=56)
+bell = trimesh.creation.cone(radius=21.25, height=62.45, sections=56)
+bell.apply_translation((0, 0, -145.8))
+mouth = trimesh.creation.cylinder(radius=7.42, height=38.81, sections=56)
+mouth.apply_translation((0, 0, 133.98))
+spine = trimesh.creation.box(extents=(11.18, 15.38, 91.66))
+mesh = trimesh.util.concatenate([body, bell, mouth, spine])
+
+# Sketch Prompt
+
+solid black background, obsidian backdrop. A speculative instrument: The organogram for the 'Stick resonant with snare membran as bat wing' conceptualizes a hybrid musical instrument that merges aerodynamic re.... Inspired by: stick resonant with snare membran as bat wing. realistic 3D object, highly imaginative, cinematic lighting, dark mode. Form: circular resonators, rectilinear frames, faceted...

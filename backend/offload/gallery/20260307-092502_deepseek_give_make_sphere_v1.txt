@@ -41,6 +41,7 @@ sphere_mesh = create.extrude_circle((50, 45), 5, height=1
 
 # Generation Metadata
 
+- featured: True
 - model: qwen2.5:7b-instruct
 - elapsed_ms: 920975
 - group_id: give_make_sphere_20260307-092502

@@ -8,5 +8,6 @@
   "sketch_url": "/api/gallery/image/20251102-222727_neutron-harp.sketch.png",
   "sketch_prompt": "realistic 3D industrial design object rendering, high-fidelity product photography, solid black background, cinematic lighting, polished surfaces with realistic reflections, three-quarter view, single instrument, obsidian studio background, preserve the organogram geometry cues: resonant chambers, performer interfaces, and directional pathways, preserve the organogram palette cues: orange, blue, white, beige, brown, grey, and green accents. Decode the organogram into a single speculative musical instrument object. Translate circles into aerophonic volumes, vertical rectangles into chordophonic bodies, horizontal rectangles into membranophonic spans, rhombuses into electronic modules, and arrows into playable flows or performer gestures. Keep Mantle Hood organogram color logic visible as subtle material accents: wood orange, bamboo yellow, water blue, earth brown, stone white, plastic grey, glass green. User brief: Design the Neutron Harp: strings tensioned by quantum degenerate matter.... Organological cues: ```python import matplotlib.pyplot as plt import numpy as np from matplotlib...",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-11T22:52:35.112505"
+  "updated_at": "2026-04-11T22:52:35.112505",
+  "featured": true
 }

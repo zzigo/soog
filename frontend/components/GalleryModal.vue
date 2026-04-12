@@ -43,6 +43,13 @@
               @click="selectGroup(group)"
             >
               <div class="group-head">
+                <input 
+                  type="checkbox" 
+                  :checked="group.latest.featured" 
+                  @click.stop="toggleFeatured(group.latest)"
+                  title="Show in Welcome Modal mosaic"
+                  class="featured-checkbox"
+                />
                 <div class="title">{{ group.title }}</div>
                 <div class="item-meta">
                   <div v-if="group.hasAnyStl" class="stl-badge">STL</div>
@@ -119,7 +126,8 @@ import { marked } from 'marked'
 import StlViewer from '~/components/StlViewer.vue'
 
 const props = defineProps({
-  modelValue: { type: Boolean, default: false }
+  modelValue: { type: Boolean, default: false },
+  initialBasename: { type: String, default: '' }
 })
 const emit = defineEmits(['update:modelValue', 'load-code'])
 
@@ -208,7 +216,8 @@ const groupedItems = computed(() => {
     })
     group.versions = ascending.map((item, idx) => ({
       ...item,
-      displayVersion: numericVersion(item) || idx + 1
+      displayVersion: numericVersion(item) || idx + 1,
+      featured: item.featured || false
     }))
     group.latest = group.versions[group.versions.length - 1] || null
     result.push(group)
@@ -269,8 +278,9 @@ async function load(preferredBasename = '') {
   const next = (data.items || []).slice().sort((a, b) => String(b?.timestamp || '').localeCompare(String(a?.timestamp || '')))
   items.value = next
 
-  if (preferredBasename && next.some((item) => item.basename === preferredBasename)) {
-    selectedBasename.value = preferredBasename
+  const target = preferredBasename || props.initialBasename
+  if (target && next.some((item) => item.basename === target)) {
+    selectedBasename.value = target
     return
   }
   selectedBasename.value = next[0]?.basename || ''
@@ -316,22 +326,37 @@ async function downloadCurrentStl() {
 
 async function deleteItem() {
   if (!current.value) return
-  if (!confirm(`Delete version ${current.value.version || ''} from "${currentGroup.value?.title || current.value.basename}"?`)) return
+  const targetBasename = current.value.basename
+  const targetTitle = currentGroup.value?.title || targetBasename
+  
+  if (!confirm(`Delete version ${current.value.version || ''} from "${targetTitle}"?`)) return
 
-  const res = await fetch(`${apiBase}/gallery/item/${current.value.basename}`, { method: 'DELETE' })
-  if (!res.ok) {
-    const payload = await res.json().catch(() => ({}))
-    alert(`Error deleting version: ${payload?.error || res.status}`)
-    return
-  }
+  try {
+    console.log(`Attempting to delete gallery item: ${targetBasename}`)
+    const res = await fetch(`${apiBase}/gallery/item/${targetBasename}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}))
+      throw new Error(payload?.error || `Server responded with ${res.status}`)
+    }
 
-  const keepGroupId = currentGroupId.value
-  await load()
-  const sameGroup = groupedItems.value.find((group) => group.groupId === keepGroupId)
-  if (sameGroup?.latest?.basename) {
-    selectedBasename.value = sameGroup.latest.basename
+    const keepGroupId = currentGroupId.value
+    console.log(`Item deleted, reloading gallery. Keeping group: ${keepGroupId}`)
+    await load()
+    
+    // Attempt to select another version from the same group, or the first item
+    const sameGroup = groupedItems.value.find((group) => group.groupId === keepGroupId)
+    if (sameGroup?.latest?.basename) {
+      selectedBasename.value = sameGroup.latest.basename
+    } else {
+      selectedBasename.value = items.value[0]?.basename || ''
+    }
+    
+    galleryKey.value++
+    console.log('Gallery reloaded and selection updated.')
+  } catch (e) {
+    console.error('Delete failed:', e)
+    alert(`Error deleting version: ${e.message}`)
   }
-  galleryKey.value++
 }
 
 async function renameItem() {
@@ -381,6 +406,26 @@ async function remakeSketch() {
     alert(`Error remaking sketch: ${e.message}`)
   } finally {
     remakingSketch.value = false
+  }
+}
+
+async function toggleFeatured(item) {
+  if (!item) return
+  const newValue = !item.featured
+  try {
+    const res = await fetch(`${apiBase}/gallery/item/${item.basename}/featured`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ featured: newValue })
+    })
+    if (!res.ok) {
+      const payload = await res.json()
+      throw new Error(payload.error || 'Failed to toggle featured status')
+    }
+    // Update locally
+    item.featured = newValue
+  } catch (e) {
+    alert(`Error updating featured status: ${e.message}`)
   }
 }
 
@@ -499,6 +544,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   justify-content: space-between;
   align-items: center;
   gap: 10px;
+}
+.featured-checkbox {
+  margin: 0;
+  cursor: pointer;
+  accent-color: #4CAF50;
 }
 .title {
   font-weight: 600;
