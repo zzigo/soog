@@ -12,6 +12,24 @@
   "sketch_url": "/api/gallery/image/20251102-230108_lithium-antara.sketch.png",
   "sketch_prompt": "solid black background, obsidian backdrop. A speculative instrument: This speculative organogram hybridizes the lithic antara's ancestral geometry with distributed multi-agency systems. The core acoustic reson.... Inspired by: Generate a speculative organogram for a hybrid musical instrument that fuses the.... realistic 3D object, highly imaginative, cinematic lighting, dark mode. photorealistic r...",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-12T13:16:27.572627",
-  "featured": true
+  "updated_at": "2026-04-13T15:30:23.412375",
+  "featured": true,
+  "sound_samples": [
+    {
+      "url": "/api/gallery/image/20251102-230108_lithium-antara_sample1.wav",
+      "ogg_url": null,
+      "prompt": "Here are three audio generation prompts that capture different timbral possibilities of the speculative organogram:"
+    },
+    {
+      "url": "/api/gallery/image/20251102-230108_lithium-antara_sample2.wav",
+      "ogg_url": null,
+      "prompt": "short dry percussive stone grey lithic resonator with sharp attack and short decay, featuring soft mallet on traditional craft ceramic material."
+    },
+    {
+      "url": "/api/gallery/image/20251102-230108_lithium-antara_sample3.wav",
+      "ogg_url": null,
+      "prompt": "long sustainful warm graphite-pink silicone interface layer generating soft inharmonic bell-like tones with gentle airflow modulated by micro-actuators."
+    }
+  ],
+  "sound_model": "stabilityai/stable-audio-open-1.0"
 }

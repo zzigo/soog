@@ -25,5 +25,23 @@
   "sketch_url": "/api/gallery/image/20260307-081201_test_with_local_qwen_v1.sketch.png",
   "sketch_prompt": "realistic 3D object, solid black background, cinematic lighting, dark mode. Concept: ### Conceptual Summary The organogram depicts a cube (representing a Chordophone... make a cube with a membrane and a beater. Form: circular resonators, rectilinear frames, faceted polygons, directional arrows. Colors: brown, grey, ora...",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-12T09:41:04.165066"
+  "updated_at": "2026-04-13T10:57:26.534531",
+  "sound_samples": [
+    {
+      "url": "/api/gallery/image/20260307-081201_test_with_local_qwen_v1_sample1.wav",
+      "ogg_url": null,
+      "prompt": "Here are three unique audio prompts that capture different timbral possibilities of the cube instrument:"
+    },
+    {
+      "url": "/api/gallery/image/20260307-081201_test_with_local_qwen_v1_sample2.wav",
+      "ogg_url": null,
+      "prompt": "Dry percussive wooden block, low resonance, sharp attack, short decay."
+    },
+    {
+      "url": "/api/gallery/image/20260307-081201_test_with_local_qwen_v1_sample3.wav",
+      "ogg_url": null,
+      "prompt": "Sharp mallet striking PVC tube with membrane, mid-range frequency, bright overtones, short sustain."
+    }
+  ],
+  "sound_model": "stabilityai/stable-audio-open-1.0"
 }

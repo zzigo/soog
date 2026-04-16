@@ -12,5 +12,6 @@
   "sketch_url": "/api/gallery/image/20251218-153352_fabrication.sketch.png",
   "sketch_prompt": "A speculative instrument: **Conceptual Summary** The organogram abstracts this microtonal flute as an aerophone (blue circle) with a conical bore (orange trapezoid) r.... Inspired by: construct a flute with microtonal scale, that makes a 3D printable version ready.... realistic 3D object, solid black background, highly imaginative, obsidian, cinematic lighting, dark mode. photo...",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-12T10:21:54.702649"
+  "updated_at": "2026-04-12T10:21:54.702649",
+  "featured": true
 }

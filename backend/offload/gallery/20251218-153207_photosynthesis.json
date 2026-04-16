@@ -12,5 +12,24 @@
   "sketch_url": "/api/gallery/image/20251218-153207_photosynthesis.sketch.png",
   "sketch_prompt": "A speculative instrument: **Conceptual Summary** The organogram visualizes a photosynthesis-powered sound generator as a hybrid electro-acoustic instrument. The prima.... Inspired by: Envision a sound generator powered by photosynthesis.... realistic 3D object, solid black background, highly imaginative, obsidian, cinematic lighting, dark mode. photorealistic rendering, hyper-d...",
   "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
-  "updated_at": "2026-04-12T10:20:08.277695"
+  "updated_at": "2026-04-14T10:16:14.103662",
+  "featured": true,
+  "sound_samples": [
+    {
+      "url": "/api/gallery/image/20251218-153207_photosynthesis_sample1.wav",
+      "ogg_url": null,
+      "prompt": "Here are three audio prompts based on the provided conceptual instrument description:"
+    },
+    {
+      "url": "/api/gallery/image/20251218-153207_photosynthesis_sample2.wav",
+      "ogg_url": null,
+      "prompt": "short dry percussive Monstera deliciosa leaf, bright resonance, soft contact microphone, sharp attack, short decay."
+    },
+    {
+      "url": "/api/gallery/image/20251218-153207_photosynthesis_sample3.wav",
+      "ogg_url": null,
+      "prompt": "long hollow resonant adjustable LED grow light, low spectral centroid, warm sound, slow bloom, sustained energy."
+    }
+  ],
+  "sound_model": "stabilityai/stable-audio-open-1.0"
 }

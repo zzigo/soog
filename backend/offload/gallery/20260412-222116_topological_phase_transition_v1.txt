@@ -1,0 +1,42 @@
+# Prompt
+
+Create a topological phase transition flute whose tone holes access different anyonic states, shown through quantum state diagrams...
+
+# Summary
+
+The topological phase transition flute is designed to access different anyonic states through its tone holes, visualized via quantum state diagrams. The instrument features a spiral bore that transitions between phases, with each section representing a distinct anyonic state. Tone holes are strategically placed along the spiral to control the flow of particles, creating unique sound patterns. The organogram includes arrows indicating phase transitions and colors denoting states: blue for bosons, green for fermions, and purple for anyons. Performative interactions involve players manipulating tone holes to explore quantum entanglement and topological invariants.
+
+# Materials
+
+1. Solidified moonlight for the spiral bore
+2. Mycelium-based composite for the body
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 193122
+- sketch_model: OFA-Sys/small-stable-diffusion-v0
+- group_id: topological_phase_transition_20260412-222116
+- version: v1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt; import numpy as np; from matplotlib.patches import Circle, Rectangle, Polygon, FancyArrowPatch; plt.style.use('dark_background'); fig, ax = plt.subplots(figsize=(10, 6)); spiral_bore = Polygon([(0.25, 0.2), (0.75, 0.8), (1.25, 0.4)], closed=True, fill=False, edgecolor='white', linewidth=3); ax.add_patch(spiral_bore); phase_transition_arrow = FancyArrowPatch((0.6, 0.5), (1.0, 0.7), arrowstyle='-|>', mutation_scale=20, color='white'); ax.annotate('', xy=(0.8, 0.6), xytext=(1.2, 0.9), arrowprops=dict(arrowstyle='<|-|>', lw=3, facecolor='blue', edgecolor='black')); ax.add_patch(phase_transition_arrow); ax.set_aspect('equal')
+
+# Geometry Code (trimesh)
+
+import numpy as np
+import trimesh
+
+# map: air-column -> cylinder, bell radiation -> cone, mouthpiece interface -> cylinder
+body = trimesh.creation.cylinder(radius=13.64, height=173.82, sections=51)
+bell = trimesh.creation.cone(radius=19.93, height=44.79, sections=51)
+bell.apply_translation((0, 0, -109.3))
+mouth = trimesh.creation.cylinder(radius=7.0, height=28.06, sections=51)
+mouth.apply_translation((0, 0, 100.94))
+spine = trimesh.creation.box(extents=(10.91, 15.0, 69.53))
+mesh = trimesh.util.concatenate([body, bell, mouth, spine])
+
+# Sketch Prompt
+
+solid black background, obsidian backdrop. A speculative instrument: The topological phase transition flute is designed to access different anyonic states through its tone holes, visualized via quantum state d.... Inspired by: Create a topological phase transition flute whose tone holes access different an.... realistic 3D object, highly imaginative, cinematic lighting, dark mode. Form: circular r...
