@@ -5,33 +5,66 @@ echo "=== SOOG DEPLOY START ==="
 set -l REPO_DIR /opt/soog
 set -l BACKEND_DIR $REPO_DIR/backend
 set -l FRONTEND_DIR $REPO_DIR/frontend
-set -l OFFLOAD_DIR $BACKEND_DIR/offload
+set -l OFFLOAD_DIR_BACKEND $BACKEND_DIR/offload
+set -l OFFLOAD_DIR_ROOT $REPO_DIR/offload
+set -l OFFLINE_DIR_ROOT $REPO_DIR/offline
+set -l SOOGI_DIR_ROOT $REPO_DIR/soogi
 set -l BACKUP_ROOT /var/tmp/soog-deploy-backups
 set -l TS (date "+%Y%m%d-%H%M%S")
-set -l OFFLOAD_BACKUP "$BACKUP_ROOT/offload-$TS"
+set -l BACKUP_DIR "$BACKUP_ROOT/deploy-backup-$TS"
 
 cd $REPO_DIR; or exit 1
 
-# 1) Backup local generated artifacts (gallery/STL) before syncing code
-if test -d $OFFLOAD_DIR
-    echo "→ Backing up offload to $OFFLOAD_BACKUP"
-    mkdir -p $OFFLOAD_BACKUP; or exit 1
-    rsync -a "$OFFLOAD_DIR/" "$OFFLOAD_BACKUP/"; or exit 1
-else
-    echo "→ No offload directory found, skipping backup"
+# 1) Backup local generated artifacts (gallery/STL/audio) before syncing code
+echo "→ Backing up persistent data to $BACKUP_DIR"
+mkdir -p "$BACKUP_DIR/backend"; or exit 1
+
+if test -d $OFFLOAD_DIR_BACKEND
+    echo "  - Backing up backend/offload"
+    rsync -a "$OFFLOAD_DIR_BACKEND/" "$BACKUP_DIR/backend/offload/"; or exit 1
 end
 
-# 2) Force repository to remote code state (avoids pull conflicts with local lockfiles/artifacts)
+if test -d $OFFLOAD_DIR_ROOT
+    echo "  - Backing up root offload"
+    rsync -a "$OFFLOAD_DIR_ROOT/" "$BACKUP_DIR/offload/"; or exit 1
+end
+
+if test -d $OFFLINE_DIR_ROOT
+    echo "  - Backing up root offline"
+    rsync -a "$OFFLINE_DIR_ROOT/" "$BACKUP_DIR/offline/"; or exit 1
+end
+
+if test -d $SOOGI_DIR_ROOT
+    echo "  - Backing up root soogi"
+    rsync -a "$SOOGI_DIR_ROOT/" "$BACKUP_DIR/soogi/"; or exit 1
+end
+
+# 2) Force repository to remote code state
 echo "→ Syncing repository to origin/main"
 git fetch origin main; or exit 1
 git reset --hard origin/main; or exit 1
 git clean -fd; or exit 1
 
-# 3) Restore offload after code sync (merge local generated content back in)
-if test -d $OFFLOAD_BACKUP
-    echo "→ Restoring offload from backup"
-    mkdir -p $OFFLOAD_DIR; or exit 1
-    rsync -a "$OFFLOAD_BACKUP/" "$OFFLOAD_DIR/"; or exit 1
+# 3) Restore persistent data after code sync
+echo "→ Restoring persistent data from backup"
+if test -d "$BACKUP_DIR/backend/offload"
+    mkdir -p $OFFLOAD_DIR_BACKEND; or exit 1
+    rsync -a "$BACKUP_DIR/backend/offload/" "$OFFLOAD_DIR_BACKEND/"; or exit 1
+end
+
+if test -d "$BACKUP_DIR/offload"
+    mkdir -p $OFFLOAD_DIR_ROOT; or exit 1
+    rsync -a "$BACKUP_DIR/offload/" "$OFFLOAD_DIR_ROOT/"; or exit 1
+end
+
+if test -d "$BACKUP_DIR/offline"
+    mkdir -p $OFFLINE_DIR_ROOT; or exit 1
+    rsync -a "$BACKUP_DIR/offline/" "$OFFLINE_DIR_ROOT/"; or exit 1
+end
+
+if test -d "$BACKUP_DIR/soogi"
+    mkdir -p $SOOGI_DIR_ROOT; or exit 1
+    rsync -a "$BACKUP_DIR/soogi/" "$SOOGI_DIR_ROOT/"; or exit 1
 end
 
 # 4) Backend dependencies (use venv pip directly)

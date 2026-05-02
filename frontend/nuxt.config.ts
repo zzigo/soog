@@ -83,6 +83,20 @@ export default defineNuxtConfig({
         },
         { rel: "manifest", href: "/manifest.json" },
       ],
+      script: [
+        {
+          async: true,
+          src: "https://www.googletagmanager.com/gtag/js?id=G-6L0266QCF4",
+        },
+        {
+          innerHTML: `
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-6L0266QCF4');
+          `,
+        },
+      ],
     },
   },
 
