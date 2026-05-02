@@ -157,6 +157,7 @@ const apiBase = config.public.apiBase || 'http://localhost:10000/api'
 const featuredSketches = ref([])
 const activeAudio = ref(null)
 const fadeInterval = ref(null)
+const currentPlayingBasename = ref(null)
 
 async function loadFeatured() {
   try {
@@ -175,68 +176,115 @@ async function loadFeatured() {
 function playAudio(item) {
   if (!item.sound_samples || item.sound_samples.length === 0) return
   
-  // Stop existing immediately
-  if (activeAudio.value) {
-    activeAudio.value.pause()
-    activeAudio.value = null
-  }
-  if (fadeInterval.value) {
-    clearInterval(fadeInterval.value)
-    fadeInterval.value = null
-  }
-
   const sample = item.sound_samples[0]
   const url = assetHref(sample.ogg_url || sample.url)
-  
+  if (!url) return
+
+  // If already playing this one, do nothing
+  if (currentPlayingBasename.value === item.basename) return
+
+  // Stop any existing playback immediately
+  clearPlaybackState()
+
+  currentPlayingBasename.value = item.basename
   const audio = new Audio(url)
   audio.volume = 0
-  activeAudio.value = audio
   audio.loop = true
+  audio.preload = 'auto'
+  activeAudio.value = audio
   
-  audio.play().then(() => {
-    // Fade in: 400ms. 20 steps of 20ms each.
-    let vol = 0
-    const step = 0.05
-    fadeInterval.value = setInterval(() => {
-      vol += step
-      if (vol >= 1) {
-        audio.volume = 1
-        clearInterval(fadeInterval.value)
-        fadeInterval.value = null
-      } else {
-        audio.volume = vol
+  const playPromise = audio.play()
+  if (playPromise !== undefined) {
+    playPromise.then(() => {
+      // Only continue if we are still supposed to be playing this item
+      if (currentPlayingBasename.value !== item.basename) {
+        audio.pause()
+        return
       }
-    }, 20)
-  }).catch(e => {
-    console.warn('Playback failed (probably user interaction required or file not found):', e)
-    activeAudio.value = null
-  })
+
+      // Fade in: 300ms
+      let vol = 0
+      const duration = 300
+      const interval = 20
+      const steps = duration / interval
+      const stepValue = 1 / steps
+      
+      fadeInterval.value = setInterval(() => {
+        vol += stepValue
+        if (vol >= 1) {
+          audio.volume = 1
+          clearInterval(fadeInterval.value)
+          fadeInterval.value = null
+        } else {
+          audio.volume = vol
+        }
+      }, interval)
+    }).catch(e => {
+      if (e.name !== 'AbortError') {
+        console.warn('Playback failed:', e)
+      }
+      if (currentPlayingBasename.value === item.basename) {
+        currentPlayingBasename.value = null
+        activeAudio.value = null
+      }
+    })
+  }
 }
 
 function stopAudio() {
   const audio = activeAudio.value
-  if (!audio) return
+  const basename = currentPlayingBasename.value
+  
+  if (!audio) {
+    currentPlayingBasename.value = null
+    return
+  }
+
+  // Clear current target so playAudio can trigger again if needed
+  currentPlayingBasename.value = null
   
   if (fadeInterval.value) {
     clearInterval(fadeInterval.value)
     fadeInterval.value = null
   }
   
-  // Fade out: 400ms.
+  // Fade out: 300ms
   let vol = audio.volume
-  const step = 0.05
+  const duration = 300
+  const interval = 20
+  const steps = duration / interval
+  const stepValue = vol / steps
+
   fadeInterval.value = setInterval(() => {
-    vol -= step
+    vol -= stepValue
     if (vol <= 0) {
       audio.volume = 0
       audio.pause()
+      audio.src = '' // Help garbage collection
+      audio.load()
       clearInterval(fadeInterval.value)
       fadeInterval.value = null
-      activeAudio.value = null
+      if (activeAudio.value === audio) {
+        activeAudio.value = null
+      }
     } else {
-      audio.volume = vol
+      audio.volume = Math.max(0, vol)
     }
-  }, 20)
+  }, interval)
+}
+
+function clearPlaybackState() {
+  if (fadeInterval.value) {
+    clearInterval(fadeInterval.value)
+    fadeInterval.value = null
+  }
+  if (activeAudio.value) {
+    activeAudio.value.pause()
+    activeAudio.value.src = ''
+    activeAudio.value.load()
+    activeAudio.value = null
+  }
+  currentPlayingBasename.value = null
 }
 
 function assetHref(url) {
