@@ -232,7 +232,9 @@ async function loadFeatured() {
 function playAudio(item) {
   if (!item.sound_samples || item.sound_samples.length === 0) return
   
-  const sample = item.sound_samples[0]
+  // Select a random sample from the available ones
+  const randomIndex = Math.floor(Math.random() * item.sound_samples.length)
+  const sample = item.sound_samples[randomIndex]
   const url = assetHref(sample.ogg_url || sample.url)
   if (!url) return
 
