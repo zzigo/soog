@@ -30,6 +30,33 @@
           </section>
 
           <h3>The Speculative Organology Organogram Generator</h3>
+          
+          <!-- Roadmap Section -->
+          <div class="roadmap-container">
+            <div class="roadmap-timeline"></div>
+            <div class="roadmap-points">
+              <div 
+                v-for="(point, index) in roadmap" 
+                :key="index" 
+                class="roadmap-point"
+                :class="{ 'is-current': point.current }"
+              >
+                <div class="point-marker"></div>
+                <div class="point-label">
+                  <div class="point-date">{{ point.date }}</div>
+                  <div class="point-title">{{ point.title }}</div>
+                </div>
+                <div class="point-tooltip">
+                  <div class="tooltip-header">
+                    <span class="tooltip-date">{{ point.date }}</span>
+                    <span class="tooltip-title">{{ point.title }}</span>
+                  </div>
+                  <div class="tooltip-body">{{ point.synopsis }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <p>
             SOOG helps you visualize musical instruments based on the organogram technique from ethnomusicologist Mantle Hood. 
             It can also help create speculative instruments by mixing, morphing, and entangling geometrical and acoustical information.
@@ -158,6 +185,35 @@ const featuredSketches = ref([])
 const activeAudio = ref(null)
 const fadeInterval = ref(null)
 const currentPlayingBasename = ref(null)
+
+const roadmap = [
+  {
+    date: 'Dec 2024',
+    title: 'Conceptual Inception',
+    synopsis: 'Initial design of SOOG as the pioneering generative system for musical instrument notation based on Mantle Hood’s organogram technique. Implementation of large-scale models via GPT-4o and DeepSeek-V3 APIs to translate natural language into structured organological representations.'
+  },
+  {
+    date: 'April 2025',
+    title: 'Prototyping & 3D Synthesis',
+    synopsis: 'Development of the first physical-digital prototype, Phosphorbone. Refinement of prompt engineering and expansion of the organological dictionary. Introduction of the 3D prototyping module using Midjourney v6 and SDXL for visual aesthetics, establishing the foundation for future digital fabrication workflows.'
+  },
+  {
+    date: 'Dec 2025',
+    title: 'Local Intelligence',
+    current: true,
+    synopsis: 'Transition to a hybrid infrastructure utilizing local, open-source models (Ollama, Qwen 2.5) for logic and Matplotlib generation. Integration of specialized creative pipelines: Stable Diffusion (SDXL-Turbo) for industrial design sketches and Stable Audio Open for timbral synthesis.'
+  },
+  {
+    date: 'July 2026',
+    title: 'SoMap & Generative CAD',
+    synopsis: 'Completion of SoMap, a comprehensive Markdown database of the MOIAE (Material, Object, Agent, Interface, Environment) system. Transitioning to direct 3D output via Unique3D or InstantMesh for high-fidelity STL mesh synthesis from 2D sketches. Implementation of generative hardware design using Flux.ai and DeepPCB for AI-assisted routing of embedded controller PCBs.'
+  },
+  {
+    date: '2027',
+    title: 'Physical Realization',
+    synopsis: 'Construction of the first generation of SOOG-built physical instruments. Integration of real-time acoustical BEM/FEM simulations using NVIDIA Modulus (Physics-Informed Neural Networks) for near-instant sonic feedback. Implementation of DDSP (Differentiable Digital Signal Processing) to bridge physical resonance data with real-time neural synthesis models.'
+  }
+]
 
 async function loadFeatured() {
   try {
@@ -352,6 +408,157 @@ onMounted(() => {
 
 .modal-body {
   padding: 1.5rem;
+}
+
+/* Roadmap Styles */
+.roadmap-container {
+  position: relative;
+  padding: 3rem 0 3.5rem 0;
+  margin: 1.5rem 0 2.5rem 0;
+  width: 100%;
+}
+
+.roadmap-timeline {
+  position: absolute;
+  top: 3.5rem;
+  left: 2%;
+  right: 2%;
+  height: 2px;
+  background: linear-gradient(90deg, #4CAF50 0%, #2196F3 50%, #9C27B0 100%);
+  border-radius: 2px;
+  opacity: 0.4;
+}
+
+.roadmap-points {
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  z-index: 1;
+}
+
+.roadmap-point {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 20%;
+  position: relative;
+}
+
+.point-marker {
+  width: 12px;
+  height: 12px;
+  background: #1a1a1a;
+  border: 2px solid #4CAF50;
+  border-radius: 50%;
+  margin-bottom: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 8px rgba(0,0,0,0.8);
+  cursor: pointer;
+}
+
+.roadmap-point:nth-child(2) .point-marker { border-color: #38a595; }
+.roadmap-point:nth-child(3) .point-marker { border-color: #2196F3; }
+.roadmap-point:nth-child(4) .point-marker { border-color: #5e5ebf; }
+.roadmap-point:nth-child(5) .point-marker { border-color: #9C27B0; }
+
+.roadmap-point.is-current .point-marker {
+  background: #fff;
+  box-shadow: 0 0 15px rgba(33, 150, 243, 0.6);
+  transform: scale(1.2);
+  border-width: 3px;
+}
+
+.roadmap-point:hover .point-marker {
+  background: #fff;
+  transform: scale(1.4);
+  box-shadow: 0 0 20px rgba(255,255,255,0.3);
+}
+
+.point-label {
+  text-align: center;
+  pointer-events: none;
+}
+
+.point-date {
+  font-size: 0.65rem;
+  color: #888;
+  font-weight: 600;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.point-title {
+  font-size: 0.7rem;
+  color: #bbb;
+  font-weight: 500;
+  line-height: 1.2;
+  max-width: 90px;
+  transition: color 0.3s ease;
+}
+
+.roadmap-point:hover .point-title {
+  color: #fff;
+}
+
+.point-tooltip {
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  width: 320px;
+  background: rgba(26, 26, 26, 0.98);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1.2rem;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 100;
+  box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+}
+
+.roadmap-point:hover .point-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-15px);
+}
+
+.tooltip-header {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.8rem;
+  border-bottom: 1px solid #333;
+  padding-bottom: 0.6rem;
+  gap: 4px;
+}
+
+.tooltip-date {
+  color: #4CAF50;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.roadmap-point:nth-child(2) .tooltip-date { color: #38a595; }
+.roadmap-point:nth-child(3) .tooltip-date { color: #2196F3; }
+.roadmap-point:nth-child(4) .tooltip-date { color: #5e5ebf; }
+.roadmap-point:nth-child(5) .tooltip-date { color: #9C27B0; }
+
+.tooltip-title {
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.tooltip-body {
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: #aaa;
+  font-style: normal;
 }
 
 .mosaic-section {
