@@ -80,7 +80,7 @@ $BACKEND_PIP install -r "$BACKEND_DIR/requirements.txt"; or exit 1
 # 5) Frontend clean install + build (lockfile-strict)
 echo "→ Building frontend"
 cd $FRONTEND_DIR; or exit 1
-rm -rf node_modules .nuxt .output
+sudo rm -rf node_modules .nuxt .output
 if test -f package-lock.json
     npm ci; or exit 1
 else
