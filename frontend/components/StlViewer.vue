@@ -82,6 +82,7 @@ async function init() {
   window.addEventListener('resize', onResize)
 
   const animate = () => {
+    if (!renderer || !scene || !camera) return
     animId = requestAnimationFrame(animate)
     renderer.render(scene, camera)
   }

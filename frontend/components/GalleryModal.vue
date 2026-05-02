@@ -4,6 +4,14 @@
       <header class="modal-header">
         <div class="header-left">
           <h3>Gallery</h3>
+          <div class="search-box">
+            <input 
+              type="text" 
+              v-model="searchQuery" 
+              placeholder="Search organogram..." 
+              class="search-input"
+            />
+          </div>
         </div>
         <div class="header-center">
           <div v-if="current && !renaming" class="actions">
@@ -170,6 +178,7 @@ const emit = defineEmits(['update:modelValue', 'load-code'])
 
 const items = ref([])
 const selectedBasename = ref('')
+const searchQuery = ref('')
 const renaming = ref(false)
 const newName = ref('')
 const galleryKey = ref(0)
@@ -266,7 +275,18 @@ function numericVersion(item) {
 
 const groupedItems = computed(() => {
   const groups = new Map()
-  const sorted = [...items.value].sort((a, b) => String(b?.timestamp || '').localeCompare(String(a?.timestamp || '')))
+  
+  // Filter items based on search query
+  const query = searchQuery.value.toLowerCase().trim()
+  const filteredItems = items.value.filter(item => {
+    if (!query) return true
+    const title = inferTitle(item).toLowerCase()
+    const basename = (item.basename || '').toLowerCase()
+    const prompt = (item.prompt || '').toLowerCase()
+    return title.includes(query) || basename.includes(query) || prompt.includes(query)
+  })
+
+  const sorted = [...filteredItems].sort((a, b) => String(b?.timestamp || '').localeCompare(String(a?.timestamp || '')))
 
   for (const item of sorted) {
     const groupId = inferGroupId(item)
@@ -576,9 +596,25 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 3000; }
 .modal { width: 90vw; height: 80vh; background: #111; color: #fff; border: 1px solid #333; border-radius: 8px; display: flex; flex-direction: column; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #333; }
-.header-left, .header-right { flex: 0 0 100px; }
-.header-right { text-align: right; }
+.header-left { flex: 0 0 350px; display: flex; align-items: center; gap: 15px; }
+.header-right { flex: 0 0 100px; text-align: right; }
 .header-center { flex: 1; display: flex; justify-content: center; gap: 8px; }
+
+.search-box { flex: 1; }
+.search-input {
+  width: 100%;
+  background: #222;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #fff;
+  padding: 6px 12px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.search-input:focus {
+  border-color: #4CAF50;
+}
 .close { background: transparent; color: #fff; border: none; font-size: 20px; cursor: pointer; }
 .modal-body { display: flex; flex: 1; overflow: hidden; }
 .left { width: 45%; border-right: 1px solid #333; display: flex; flex-direction: column; }
