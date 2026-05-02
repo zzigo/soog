@@ -17,7 +17,14 @@
                 @mouseenter="playAudio(item)"
                 @mouseleave="stopAudio"
               >
-                <img :src="assetHref(item.sketch_url)" :alt="item.title" class="mosaic-img" />
+                <img 
+                  :src="assetHref(item.sketch_url)" 
+                  :alt="item.title" 
+                  class="mosaic-img" 
+                  :class="{ 'is-white-bg': invertedItems.has(item.basename) }"
+                  crossorigin="anonymous"
+                  @load="detectBackground($event, item.basename)"
+                />
                 <div class="mosaic-overlay">
                   <h1 class="mosaic-title">{{ item.title || item.basename }}</h1>
                   <p class="mosaic-prompt">{{ item.prompt }}</p>
@@ -185,6 +192,7 @@ const featuredSketches = ref([])
 const activeAudio = ref(null)
 const fadeInterval = ref(null)
 const currentPlayingBasename = ref(null)
+const invertedItems = ref(new Set())
 
 const roadmap = [
   {
@@ -214,6 +222,42 @@ const roadmap = [
     synopsis: 'Construction of the first generation of SOOG-built physical instruments. Integration of real-time acoustical BEM/FEM simulations using NVIDIA Modulus (Physics-Informed Neural Networks) for near-instant sonic feedback. Implementation of DDSP (Differentiable Digital Signal Processing) to bridge physical resonance data with real-time neural synthesis models.'
   }
 ]
+
+async function detectBackground(event, basename) {
+  const img = event.target
+  if (!img || img.naturalWidth === 0) return
+  
+  try {
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    
+    // Small scale for fast processing
+    canvas.width = 40
+    canvas.height = 40
+    
+    ctx.drawImage(img, 0, 0, 40, 40)
+    const { data } = ctx.getImageData(0, 0, 40, 40)
+    
+    let whitePixels = 0
+    let totalPixels = 0
+    const threshold = 240
+    
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 10) continue // Skip transparent
+      totalPixels++
+      if (data[i] >= threshold && data[i + 1] >= threshold && data[i + 2] >= threshold) {
+        whitePixels++
+      }
+    }
+    
+    if (totalPixels > 0 && (whitePixels / totalPixels) > 0.6) {
+      invertedItems.value.add(basename)
+    }
+  } catch (e) {
+    // Silently fail (likely CORS issues on some environments)
+    console.debug('Background detection failed for', basename, e)
+  }
+}
 
 async function loadFeatured() {
   try {
@@ -596,6 +640,11 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: filter 0.5s ease;
+}
+
+.mosaic-img.is-white-bg {
+  filter: invert(1) hue-rotate(180deg);
 }
 
 .mosaic-overlay {
