@@ -21,22 +21,22 @@ mkdir -p "$BACKUP_DIR/backend"; or exit 1
 
 if test -d $OFFLOAD_DIR_BACKEND
     echo "  - Backing up backend/offload"
-    rsync -a "$OFFLOAD_DIR_BACKEND/" "$BACKUP_DIR/backend/offload/"; or exit 1
+    rsync -rtv --no-o --no-g "$OFFLOAD_DIR_BACKEND/" "$BACKUP_DIR/backend/offload/"; or exit 1
 end
 
 if test -d $OFFLOAD_DIR_ROOT
     echo "  - Backing up root offload"
-    rsync -a "$OFFLOAD_DIR_ROOT/" "$BACKUP_DIR/offload/"; or exit 1
+    rsync -rtv --no-o --no-g "$OFFLOAD_DIR_ROOT/" "$BACKUP_DIR/offload/"; or exit 1
 end
 
 if test -d $OFFLINE_DIR_ROOT
     echo "  - Backing up root offline"
-    rsync -a "$OFFLINE_DIR_ROOT/" "$BACKUP_DIR/offline/"; or exit 1
+    rsync -rtv --no-o --no-g "$OFFLINE_DIR_ROOT/" "$BACKUP_DIR/offline/"; or exit 1
 end
 
 if test -d $SOOGI_DIR_ROOT
     echo "  - Backing up root soogi"
-    rsync -a "$SOOGI_DIR_ROOT/" "$BACKUP_DIR/soogi/"; or exit 1
+    rsync -rtv --no-o --no-g "$SOOGI_DIR_ROOT/" "$BACKUP_DIR/soogi/"; or exit 1
 end
 
 # 2) Force repository to remote code state
@@ -49,22 +49,22 @@ git clean -fd; or exit 1
 echo "→ Restoring persistent data from backup"
 if test -d "$BACKUP_DIR/backend/offload"
     mkdir -p $OFFLOAD_DIR_BACKEND; or exit 1
-    rsync -a "$BACKUP_DIR/backend/offload/" "$OFFLOAD_DIR_BACKEND/"; or exit 1
+    rsync -rtv --no-o --no-g "$BACKUP_DIR/backend/offload/" "$OFFLOAD_DIR_BACKEND/"; or exit 1
 end
 
 if test -d "$BACKUP_DIR/offload"
     mkdir -p $OFFLOAD_DIR_ROOT; or exit 1
-    rsync -a "$BACKUP_DIR/offload/" "$OFFLOAD_DIR_ROOT/"; or exit 1
+    rsync -rtv --no-o --no-g "$BACKUP_DIR/offload/" "$OFFLOAD_DIR_ROOT/"; or exit 1
 end
 
 if test -d "$BACKUP_DIR/offline"
     mkdir -p $OFFLINE_DIR_ROOT; or exit 1
-    rsync -a "$BACKUP_DIR/offline/" "$OFFLINE_DIR_ROOT/"; or exit 1
+    rsync -rtv --no-o --no-g "$BACKUP_DIR/offline/" "$OFFLINE_DIR_ROOT/"; or exit 1
 end
 
 if test -d "$BACKUP_DIR/soogi"
     mkdir -p $SOOGI_DIR_ROOT; or exit 1
-    rsync -a "$BACKUP_DIR/soogi/" "$SOOGI_DIR_ROOT/"; or exit 1
+    rsync -rtv --no-o --no-g "$BACKUP_DIR/soogi/" "$SOOGI_DIR_ROOT/"; or exit 1
 end
 
 # 4) Backend dependencies (use venv pip directly)
