@@ -13,8 +13,18 @@ transformers>=4.45.0
 diffusers>=0.35.1
 accelerate>=1.1.0
 safetensors>=0.4.5
+torchsde
 redis>=4.6.0
 python-json-logger>=2.0.7
 scipy>=1.14.0
-trimesh>=4.4.3
+trimesh[all]>=4.4.3
 shapely>=2.0.6
+# 3D Reconstruction Stack
+pytorch-lightning
+omegaconf
+einops
+rembg
+onnxruntime
+pywavelets
+imageio
+imageio-ffmpeg

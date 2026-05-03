@@ -1,0 +1,80 @@
+# Prompt
+
+`modulus freq=500 obs_x=-0.2 obs_y=0.4
+
+# Summary
+
+This organogram represents a simple musical instrument consisting of an aerophone (circle) connected to a chordophone (rectangle). The connection symbolizes the interaction between the sound-producing element and the resonant body.
+
+# Materials
+
+Materials
+1. 2 Maple soundboards, 30 cm x 45 cm
+2. 4 Carbon fiber frame pieces, 60 cm length, 2 mm thickness
+3. Set of 8 custom-shaped gourds, 15-25 cm diameter
+4. 12 Phosphor bronze strings, 0.9 mm diameter
+5. Haptic actuators for touch interface (
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 124113
+- sketch_model: OFA-Sys/small-stable-diffusion-v0
+- group_id: musical_organogram_represents_20260502-211951
+- version: v1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+import numpy as np
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_color('black')
+ax.spines['bottom'].set_color('black')
+ax.grid(True, color='grey', alpha=0.3)
+
+# Aerophone (circle) - plastic
+aerophone = plt.Circle((2, 1), radius=0.5, color='lightblue', fill=True)
+ax.add_patch(aerophone)
+
+# Chordophone (rectangle) - wood
+cordophone = plt.Rectangle((4, 0.5), width=1, height=1, color='orange', fill=True)
+ax.add_patch(cordophone)
+
+# Connection line
+line = plt.Line2D([2.5, 3.5], [0.75, 0.75], color='white', linewidth=2.5)
+ax.add_line(line)
+
+plt.show()
+
+# Geometry Code (trimesh)
+
+import trimesh
+import numpy as np
+
+# map: aerophone -> cylinder -> sound production
+aerophone = trimesh.creation.cylinder(radius=25, height=30)
+
+# map: chordophone -> box -> resonance chamber
+chordophone = trimesh.creation.box(extents=(60, 15, 10))
+
+# map: connection line -> capsule -> path of sound transmission
+connection_path = trimesh.creation.capsule(radius=2.5, height=30)
+
+# Combine the outer shell and inner components
+outer_shell = trimesh.util.concatenate([aerophone, chordophone, connection_path])
+
+# Add internal components (mic and speaker) for visibility
+mic = trimesh.creation.capsule(radius=1.5, height=30)
+speaker = trimesh.creation.cylinder(radius=2, height=40)
+inner_components = trimesh.util.concatenate([mic, speaker])
+
+# Combine outer shell and inner components
+mesh = trimesh.util.concatenate([outer_shell, inner_components])
+
+# Sketch Prompt
+
+solid black background, obsidian backdrop. A speculative instrument: This organogram represents a simple musical instrument consisting of an aerophone (circle) connected to a chordophone (rectangle). The conne.... Inspired by: `modulus freq=500 obs_x=-0.2 obs_y=0.4. realistic 3D object, highly imaginative, cinematic lighting, dark mode. Form: circular resonators, rectilinear frames. Colors: grey,...

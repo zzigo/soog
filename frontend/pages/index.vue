@@ -128,6 +128,13 @@
                   >
                     SKETCH (INFERRED)
                   </button>
+                  <button 
+                    class="tab-btn" 
+                    :class="{ active: viewMode === 'modulus' }" 
+                    @click="viewMode = 'modulus'"
+                  >
+                    ACOUSTICS (MODULUS)
+                  </button>
                 </div>
                 <div class="section-meta-group">
                   <button v-if="viewMode === 'stl' && stlUrl" @click="downloadCurrentStl" class="download-btn">
@@ -142,6 +149,9 @@
                   >
                     {{ loading ? '...' : 'GENERATE' }}
                   </button>
+                  <span v-if="viewMode === 'modulus' && modulusData" class="section-meta">
+                    {{ modulusData.method || 'PINN' }}
+                  </span>
                 </div>
               </div>
 
@@ -163,6 +173,16 @@
                     class="plot-image"
                   />
                   <div v-else class="sketch-placeholder">No diffusion sketch generated for this response.</div>
+                </div>
+                <div v-show="viewMode === 'modulus'" class="tab-pane">
+                  <div v-if="modulusData" class="modulus-results">
+                    <ModulusHeatmap 
+                      v-if="modulusData.results && modulusData.results.pressure_map" 
+                      :data="modulusData.results.pressure_map" 
+                    />
+                    <pre v-else class="modulus-json">{{ JSON.stringify(modulusData.results || modulusData, null, 2) }}</pre>
+                  </div>
+                  <div v-else class="sketch-placeholder">No acoustical simulation data for this response.</div>
                 </div>
               </div>
             </section>
@@ -228,8 +248,10 @@ import AceEditor from '~/components/AceEditor.vue';
 import HelpModal from '~/components/HelpModal.vue';
 import GalleryModal from '~/components/GalleryModal.vue';
 import StlViewer from '~/components/StlViewer.vue';
+import ModulusHeatmap from '~/components/ModulusHeatmap.vue';
 import { useRandomPrompt } from '~/composables/useRandomPrompt';
 import { useFavicon } from '~/composables/useFavicon';
+import { useAcousticSonification } from '~/composables/useAcousticSonification';
 
 // Configure marked
 marked.setOptions({
@@ -239,6 +261,7 @@ marked.setOptions({
 
 // State variables
 const { startProcessing, completeProcessing } = useFavicon();
+const { playResponse } = useAcousticSonification();
 const editorRef = ref(null);
 const leftWidth = ref(50);
 let dragging = false;
@@ -256,6 +279,7 @@ const summary = ref(null);
 const organogramCode = ref('');
 const geometryCode = ref('');
 const stlUrl = ref(null);
+const modulusData = ref(null);
 const materialsText = ref('');
 const ollamaModels = ref([]);
 const currentModel = ref('');
@@ -268,7 +292,7 @@ const lightboxAlt = ref('Preview');
 const generationRequestId = ref('');
 const reasoningPreview = ref('');
 const progressStage = ref('');
-const viewMode = ref('stl');
+const viewMode = ref('stl'); // 'stl', 'sketch', or 'modulus'
 const targetBasename = ref('');
 let progressPollInterval = null;
 
@@ -553,6 +577,18 @@ const completeProgress = () => {
 // Runtime configuration
 const config = useRuntimeConfig();
 const apiBase = ref(config.public.apiBase || 'http://127.0.0.1:10000/api');
+
+// Fix apiBase if it's localhost but we're on a different IP (heuristic for development)
+onMounted(() => {
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    if (apiBase.value.includes('localhost') || apiBase.value.includes('127.0.0.1')) {
+      const actualHost = window.location.hostname;
+      apiBase.value = apiBase.value.replace(/localhost|127\.0\.0\.1/, actualHost);
+      console.log('🔄 Adjusted apiBase for remote access:', apiBase.value);
+    }
+  }
+});
+
 const getGenerateFetchTimeoutMs = () => {
   const value = Number(config.public.generateTimeoutMs);
   if (!Number.isFinite(value)) return 0;
@@ -933,10 +969,31 @@ const handleEvaluate = async (selectedText) => {
     organogramCode.value = '';
     geometryCode.value = '';
     stlUrl.value = null;
+    modulusData.value = null;
     materialsText.value = '';
     responseModel.value = '';
     responseElapsedMs.value = 0;
     sketchModel.value = '';
+
+    // Handle special Modulus response (if only modulus was requested)
+    if (data.type === 'modulus') {
+      modulusData.value = data.modulus;
+      summary.value = data.summary;
+      materialsText.value = data.materials;
+      viewMode.value = 'modulus';
+
+      // Play sonic feedback
+      if (modulusData.value && modulusData.value.results) {
+        const freq = Number(modulusData.value.params?.freq) || 440;
+        const amp = Number(modulusData.value.results.mic_response) || 0.5;
+        playResponse(freq, amp);
+      }
+
+      loading.value = false;
+      completeProgress();
+      completeProcessing();
+      return;
+    }
 
     const imageUrl = data.image_url || data.gallery?.image_url || null;
     const sketchUrl = data.sketch_url || data.gallery?.sketch_url || null;
@@ -954,8 +1011,17 @@ const handleEvaluate = async (selectedText) => {
     }
 
     if (data.summary) summary.value = data.summary;
+    modulusData.value = data.modulus || null;
     responseModel.value = (data.llm_model || currentModel.value || '').trim();
     sketchModel.value = (data.sketch_model || data.gallery?.sketch_model || '').trim();
+
+    // Play sonic feedback for standard generation if modulus data exists
+    if (modulusData.value && modulusData.value.results) {
+      const freq = Number(modulusData.value.params?.freq) || 440;
+      const amp = Number(modulusData.value.results.mic_response) || 0.5;
+      playResponse(freq, amp);
+    }
+
     const requestEndedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     const clientElapsed = Math.max(0, requestEndedAt - requestStartedAt);
     responseElapsedMs.value = Number.isFinite(Number(data.elapsed_ms))
@@ -1483,6 +1549,22 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   width: 100%;
   flex: 1;
   min-height: 240px;
+}
+
+.modulus-results {
+  flex: 1;
+  overflow: auto;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 12px;
+  border-radius: 4px;
+}
+
+.modulus-json {
+  margin: 0;
+  font-size: 11px;
+  color: #4CAF50;
+  font-family: 'Courier New', monospace;
+  line-height: 1.4;
 }
 
 .stl-placeholder {

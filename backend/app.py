@@ -540,6 +540,14 @@ def generate_sketch_image(
         return None, None, None
 
     sketch_prompt_content = get_specialized_prompt('inferred-image')
+    
+    # Load custom base prompt if available
+    base_prompt_path = os.path.join(os.path.dirname(__file__), 'prompt_sketch_base.txt')
+    custom_base = ""
+    if os.path.exists(base_prompt_path):
+        with open(base_prompt_path, 'r', encoding='utf-8') as f:
+            custom_base = f.read().strip()
+    
     sketch_prompt = build_sketch_prompt(
         prompt=prompt,
         prompt_content=sketch_prompt_content,
@@ -547,11 +555,20 @@ def generate_sketch_image(
         materials_text=materials_text,
         plot_code=plot_code
     )
+    
+    if custom_base:
+        sketch_prompt = f"{custom_base}, {sketch_prompt}"
+
+    # Load custom negative prompt if available
+    neg_prompt_path = os.path.join(os.path.dirname(__file__), 'prompt_sketch_negative.txt')
     negative_prompt = (
         "white background, light background, bright background, grey background, "
         "text, typography, labels, caption, watermark, graph, chart, axes, legend, ui, "
         "abstract infographic, collage, multiple instruments, photorealistic photo"
     )
+    if os.path.exists(neg_prompt_path):
+        with open(neg_prompt_path, 'r', encoding='utf-8') as f:
+            negative_prompt = f.read().strip()
 
     pipe = _load_sketch_pipeline(
         model_id=config['model_id'],
@@ -1251,20 +1268,27 @@ def parse_refact_marker(prompt_text: str):
     """
     Parse optional first-line refactor markers:
     - [REFACT key=value key2=value2]
+    - [MODULUS key=value]
     - * ... (short refactor mode)
     Returns: (clean_prompt, meta_dict)
     """
     text = (prompt_text or "").strip()
-    meta = {'is_refact': False}
+    meta = {'is_refact': False, 'is_modulus': False}
     if not text:
         return "", meta
 
     lines = text.splitlines()
     first = lines[0].strip()
 
-    if first.startswith('[REFACT'):
-        meta['is_refact'] = True
-        payload = first[len('[REFACT'):].rstrip(']').strip()
+    if first.startswith('[REFACT') or first.startswith('[MODULUS'):
+        if first.startswith('[REFACT'):
+            meta['is_refact'] = True
+            tag_len = len('[REFACT')
+        else:
+            meta['is_modulus'] = True
+            tag_len = len('[MODULUS')
+
+        payload = first[tag_len:].rstrip(']').strip()
         for token in re.split(r'\s+', payload):
             if '=' not in token:
                 continue
@@ -2852,7 +2876,8 @@ def _save_gallery_item(
     summary_text: str = None,
     sketch_prompt: str = None,
     sketch_model: str = None,
-    refact_meta: dict = None
+    refact_meta: dict = None,
+    modulus_data: dict = None
 ) -> dict:
     refact_meta = refact_meta or {}
     is_refact = bool(refact_meta.get('is_refact'))
@@ -2991,6 +3016,7 @@ def _save_gallery_item(
         'sketch_prompt': (sketch_prompt or '').strip() or None,
         'sketch_model': (sketch_model or '').strip() or None,
         'llm_model': llm_model,
+        'modulus': modulus_data,
         'elapsed_ms': int(elapsed_ms) if elapsed_ms is not None else None,
         'image_url': f"/api/gallery/image/{base}.png" if has_image else None,
         'stl_url': f"/api/gallery/file/{base}.stl" if stl_bytes and stl_path else None,
@@ -3000,6 +3026,7 @@ def _save_gallery_item(
             (['plot'] if has_image else [])
             + (['stl'] if stl_bytes and stl_path else [])
             + (['sketch'] if has_sketch else [])
+            + (['pinn'] if modulus_data else [])
         ]
     }
     with open(json_path, 'w', encoding='utf-8') as f:
@@ -3081,6 +3108,72 @@ def generate_progress(request_id):
         return jsonify({'ok': False, 'status': 'missing'}), 404
     return jsonify({'ok': True, **current})
 
+@app.route('/api/roadmap', methods=['GET'])
+def get_roadmap():
+    """
+    Parses the roadmap data from docs/SOOG_Roadmap_Dataview.md
+    Robust implementation handling JS syntax in Markdown.
+    """
+    roadmap_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'docs', 'SOOG_Roadmap_Dataview.md'))
+    if not os.path.exists(roadmap_path):
+        roadmap_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'SOOG_Roadmap_Dataview.md'))
+        
+    if not os.path.exists(roadmap_path):
+        return jsonify({'error': 'Roadmap file not found'}), 404
+    
+    try:
+        with open(roadmap_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # 1. Extract the array block
+        match = re.search(r'const\s+roadmapData\s*=\s*(\[[\s\S]*?\]);', content)
+        if not match:
+            return jsonify({'error': 'Roadmap data array not found'}), 500
+        
+        raw_js = match.group(1)
+        
+        # 2. Convert JS-ish array to JSON using a multi-step cleanup
+        # This version is more careful with strings and multi-line content
+        
+        # Strip single-line comments
+        clean = re.sub(r'//.*', '', raw_js)
+        
+        # Normalize single quotes to double quotes for VALUES
+        # We target ': ' followed by single quoted content
+        clean = re.sub(r":\s*'([^']*)'", r': "\1"', clean)
+        
+        # Normalize multi-line backticks if any (common in synopsis)
+        clean = re.sub(r":\s*`([^`]*)`", r': "\1"', clean)
+        
+        # Fix unquoted keys
+        # Finds words at the start of a line or after {/ , that are followed by :
+        clean = re.sub(r'([{,]\s*)([a-zA-Z0-9_]+)\s*:', r'\1"\2":', clean)
+        
+        # Fix trailing commas
+        clean = re.sub(r',\s*([\]}])', r'\1', clean)
+        
+        # Remove any lingering problematic characters like newlines inside strings 
+        # (JSON doesn't allow raw newlines in strings)
+        # This is a bit risky but needed for large text blocks in the .md
+        lines = clean.splitlines()
+        json_buffer = []
+        for line in lines:
+            line = line.strip()
+            if not line: continue
+            json_buffer.append(line)
+        
+        final_json = "".join(json_buffer)
+        
+        # One last fix: handle escaped single quotes and other small JS things
+        final_json = final_json.replace('\\\'', "'")
+        
+        data = json.loads(final_json)
+        return jsonify({'ok': True, 'roadmap': data})
+    except Exception as e:
+        logging.error(f"Error parsing roadmap: {e}")
+        # Debug: return the cleaned string on failure to see what's wrong
+        return jsonify({'error': str(e), 'debug_raw': raw_js if 'raw_js' in locals() else None}), 500
+
 @app.route('/api/generate', methods=['POST'])
 @log_activity('generate')
 def generate():
@@ -3092,6 +3185,63 @@ def generate():
         prompt = prompt_input
     if not prompt:
         return jsonify({'error': 'No prompt provided.'}), 400
+
+    # SPECIAL HANDLER: NVIDIA Modulus Simulation Experiment
+    if refact_meta.get('is_modulus'):
+        update_generation_progress(request_id, status='starting', stage='modulus_simulation', reasoning_preview='Running NVIDIA Modulus (Surrogate) Acoustical Simulation...')
+        try:
+            # Import the experimental script logic
+            modeltrainer_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'modeltrainer'))
+            if modeltrainer_path not in sys.path:
+                sys.path.append(modeltrainer_path)
+            
+            import acoustic_modulus
+            importlib.reload(acoustic_modulus)
+            
+            # Extract params from refact_meta
+            sim_params = {
+                'freq': float(refact_meta.get('freq', 440.0)),
+                'obs_x': float(refact_meta.get('obs_x', 0.0)),
+                'obs_y': float(refact_meta.get('obs_y', 0.0)),
+                'prompt': prompt
+            }
+            
+            sim_result = acoustic_modulus.run_simulation(sim_params)
+            
+            # PERSIST TO GALLERY if requested
+            gallery_basename = data.get('gallery_update')
+            if gallery_basename:
+                json_path = os.path.join(GALLERY_DIR, f"{gallery_basename}.json")
+                if os.path.exists(json_path):
+                    with open(json_path, 'r', encoding='utf-8') as f:
+                        meta = json.load(f)
+                    meta['modulus'] = sim_result
+                    
+                    # Update modes list for UI icons
+                    modes = meta.get('modes', [])
+                    if 'pinn' not in modes:
+                        modes.append('pinn')
+                    meta['modes'] = modes
+                    
+                    with open(json_path, 'w', encoding='utf-8') as f:
+                        json.dump(meta, f, indent=2)
+                    logging.info(f"✅ Persistent Update: Gallery item {gallery_basename} updated with PINN simulation.")
+                else:
+                    logging.warning(f"⚠️ Persistence Failed: Gallery JSON not found for {gallery_basename}")
+
+            update_generation_progress(request_id, status='completed', stage='done')
+            return jsonify({
+                "type": "modulus",
+                "ok": True,
+                "modulus": sim_result,
+                "summary": f"Acoustical Simulation Experiment (Modulus)\nMethod: {sim_result.get('method')}\nFrequency: {sim_params['freq']} Hz\nObstacle: ({sim_params['obs_x']}, {sim_params['obs_y']})",
+                "materials": "Simulation Nodes: 2500\nBoundary: Dirichlet/Neumann mix\nSolver: Physics-Informed Neural Network",
+                "elapsed_ms": 0
+            })
+        except Exception as sim_err:
+            logging.error(f"Modulus simulation failed: {sim_err}")
+            return jsonify({'error': f"Modulus simulation failed: {str(sim_err)}"}), 500
+
     update_generation_progress(
         request_id,
         status='starting',
@@ -3249,6 +3399,33 @@ def generate():
         except Exception as sketch_error:
             logging.error(f"Sketch generation failed: {sketch_error}")
 
+        # Extract summary and materials from the primary response
+        text_no_code = re.sub(r"```[\s\S]*?```", "", raw_response).strip()
+        summary_text, materials_text = split_summary_and_materials(text_no_code)
+
+        # ATTEMPT MODULUS SIMULATION FOR EVERY GENERATION
+        modulus_sim = None
+        try:
+            update_generation_progress(request_id, stage='modulus_simulation', status='running', reasoning_preview='Calculating Acoustical PINN Surrogate...')
+            modeltrainer_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'modeltrainer'))
+            if modeltrainer_path not in sys.path:
+                sys.path.append(modeltrainer_path)
+            
+            import acoustic_modulus
+            importlib.reload(acoustic_modulus)
+            
+            # Simple heuristic for simulation parameters from prompt
+            freq_match = re.search(r'(\d+)\s*(?:hz|freq)', prompt, re.I)
+            sim_params = {
+                'freq': float(freq_match.group(1)) if freq_match else 440.0,
+                'obs_x': float(refact_meta.get('obs_x', 0.1)),
+                'obs_y': float(refact_meta.get('obs_y', 0.2)),
+                'prompt': prompt
+            }
+            modulus_sim = acoustic_modulus.run_simulation(sim_params)
+        except Exception as mod_err:
+            logging.error(f"Automatic Modulus simulation failed: {mod_err}")
+
         meta = None
         try:
             meta = _save_gallery_item(
@@ -3266,8 +3443,10 @@ def generate():
                 summary_text=summary_text,
                 sketch_prompt=sketch_prompt,
                 sketch_model=sketch_model,
-                refact_meta=refact_meta
+                refact_meta=refact_meta,
+                modulus_data=modulus_sim
             )
+            # modes are handled inside _save_gallery_item now
             if summary_text:
                 meta['summary'] = summary_text
             if materials_text:
@@ -3308,6 +3487,7 @@ def generate():
             "sketch_url": sketch_url,
             "sketch_prompt": sketch_prompt,
             "sketch_model": sketch_model,
+            "modulus": modulus_sim,
             "gallery": meta,
             "summary": summary_text,
             "materials": materials_text,
@@ -3929,6 +4109,70 @@ def gallery_rename_group(group_id):
 
 
 
+
+@app.route('/api/gallery/item/<basename>/generate_lrm', methods=['POST'])
+@log_activity('generate_lrm')
+def generate_lrm(basename):
+    """
+    Triggers High-Fidelity 3D Reconstruction (LRM) using InstantMesh/TripoSR
+    based on the existing premium sketch.
+    """
+    data = request.json or {}
+    request_id = str(data.get('request_id', '')).strip() or f"lrm-{basename}"
+    
+    json_path = os.path.join(GALLERY_DIR, f"{basename}.json")
+    if not os.path.exists(json_path):
+        return jsonify({'error': 'Item not found'}), 404
+        
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            meta = json.load(f)
+            
+        sketch_filename = f"{basename}.sketch.png"
+        sketch_path = os.path.join(GALLERY_DIR, sketch_filename)
+        
+        if not os.path.exists(sketch_path):
+            return jsonify({'error': 'Premium sketch not found for this item. Generate a sketch first.'}), 400
+            
+        update_generation_progress(request_id, status='running', stage='lrm_3d_reconstruction', reasoning_preview='Initializing High-Fidelity 3D Engine (InstantMesh)...')
+        
+        output_stl_filename = f"{basename}_highres.stl"
+        output_stl_path = os.path.join(GALLERY_DIR, output_stl_filename)
+        
+        # Absolute path for import
+        modeltrainer_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')) # Engine is in backend/ for now
+        if modeltrainer_path not in sys.path:
+            sys.path.append(modeltrainer_path)
+            
+        import highres_3d
+        importlib.reload(highres_3d)
+        
+        result = highres_3d.run_reconstruction(sketch_path, output_stl_path)
+        
+        if result['status'] == 'success':
+            meta['stl_url'] = f"/api/gallery/file/{output_stl_filename}"
+            meta['lrm_metadata'] = result
+            modes = meta.get('modes', [])
+            if 'lrm' not in modes:
+                modes.append('lrm')
+            meta['modes'] = modes
+            
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(meta, f, indent=2)
+                
+            update_generation_progress(request_id, status='completed', stage='done')
+            return jsonify({
+                'ok': True, 
+                'stl_url': meta['stl_url'],
+                'lrm_metadata': result
+            })
+        else:
+            raise Exception("LRM Engine returned failure status")
+            
+    except Exception as e:
+        logging.error(f"High-Res 3D reconstruction failed for {basename}: {e}")
+        update_generation_progress(request_id, status='error', stage='error', reasoning_preview=f"Error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/gallery/item/<string:basename>/featured', methods=['POST'])
 def gallery_featured_item(basename):

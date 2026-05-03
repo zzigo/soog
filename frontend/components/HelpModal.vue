@@ -194,34 +194,26 @@ const fadeInterval = ref(null)
 const currentPlayingBasename = ref(null)
 const invertedItems = ref(new Set())
 
-const roadmap = [
+const roadmap = ref([
   {
-    date: 'Dec 2024',
-    title: 'Conceptual Inception',
-    synopsis: 'Initial design of SOOG as the pioneering generative system for musical instrument notation based on Mantle Hood’s organogram technique. Implementation of large-scale models via GPT-4o and DeepSeek-V3 APIs to translate natural language into structured organological representations.'
-  },
-  {
-    date: 'April 2025',
-    title: 'Prototyping & 3D Synthesis',
-    synopsis: 'Development of the first physical-digital prototype, Phosphorbone. Refinement of prompt engineering and expansion of the organological dictionary. Introduction of the 3D prototyping module using Midjourney v6 and SDXL for visual aesthetics, establishing the foundation for future digital fabrication workflows.'
-  },
-  {
-    date: 'Dec 2025',
-    title: 'Local Intelligence',
-    current: true,
-    synopsis: 'Transition to a hybrid infrastructure utilizing local, open-source models (Ollama, Qwen 2.5) for logic and Matplotlib generation. Integration of specialized creative pipelines: Stable Diffusion (SDXL-Turbo) for industrial design sketches and Stable Audio Open for timbral synthesis.'
-  },
-  {
-    date: 'July 2026',
-    title: 'SoMap & Generative CAD',
-    synopsis: 'Completion of SoMap, a comprehensive Markdown database of the MOIAE (Material, Object, Agent, Interface, Environment) system. Transitioning to direct 3D output via Unique3D or InstantMesh for high-fidelity STL mesh synthesis from 2D sketches. Implementation of generative hardware design using Flux.ai and DeepPCB for AI-assisted routing of embedded controller PCBs.'
-  },
-  {
-    date: '2027',
-    title: 'Physical Realization',
-    synopsis: 'Construction of the first generation of SOOG-built physical instruments. Integration of real-time acoustical BEM/FEM simulations using NVIDIA Modulus (Physics-Informed Neural Networks) for near-instant sonic feedback. Implementation of DDSP (Differentiable Digital Signal Processing) to bridge physical resonance data with real-time neural synthesis models.'
+    date: '...',
+    title: 'Loading Roadmap...',
+    synopsis: 'Synchronizing with project documentation...'
   }
-]
+])
+
+async function fetchRoadmap() {
+  try {
+    const res = await fetch(`${apiBase}/roadmap`)
+    const data = await res.json()
+    if (data.ok && Array.isArray(data.roadmap)) {
+      roadmap.value = data.roadmap
+    }
+  } catch (e) {
+    console.error('Failed to load dynamic roadmap, using fallback:', e)
+    // Keep initial fallback or set a specific one
+  }
+}
 
 async function detectBackground(event, basename) {
   const img = event.target
@@ -389,6 +381,10 @@ function clearPlaybackState() {
   currentPlayingBasename.value = null
 }
 
+onUnmounted(() => {
+  clearPlaybackState()
+})
+
 function assetHref(url) {
   if (!url) return ''
   if (url.startsWith('http')) return url
@@ -415,6 +411,7 @@ watch(() => props.modelValue, (val) => {
 })
 
 onMounted(() => {
+  fetchRoadmap()
   if (props.modelValue) loadFeatured()
 })
 </script>

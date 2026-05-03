@@ -1,0 +1,30 @@
+{
+  "basename": "20260502-212301_hybrid_haz_instrumento_v1",
+  "timestamp": "20260502-212301",
+  "title": "hybrid-haz-instrumento",
+  "title_slug": "hybrid_haz_instrumento",
+  "group_id": "hybrid_haz_instrumento_20260502-212301",
+  "version": "v1",
+  "version_index": 1,
+  "source_basename": null,
+  "prompt": "haz un instrumento resonador de un cubo mas un parlante dentro \n\n\n`modulus freq=440 obs_x=0.8 obs_y=0.8",
+  "answer": "Conceptual Summary\nThis instrument, named \"CubeOndra,\" integrates a cubic resonator with an internal speaker for a unique fusion of acoustic and electronic sound. The cube's exterior is crafted from reclaimed wood to emphasize sustainability, while the internal electronics enhance its versatility in both live performances and installations. The design focuses on creating a rich, reverberant sound environment that can adapt to various settings.",
+  "summary": "Conceptual Summary\nThis instrument, named \"CubeOndra,\" integrates a cubic resonator with an internal speaker for a unique fusion of acoustic and electronic sound. The cube's exterior is crafted from reclaimed wood to emphasize sustainability, while the internal electronics enhance its versatility in both live performances and installations. The design focuses on creating a rich, reverberant sound environment that can adapt to various settings.",
+  "materials_text": "Materials\n1. 1 Reclaimed oak cube, 30 cm x 30 cm x 30 cm\n2. 1 Acrylic speaker, 5 cm diameter\n\n```python\nimport matplotlib.pyplot as plt\nimport numpy as np\nfrom matplotlib.patches import Circle, Rectangle, Polygon, FancyArrowPatch\n\nplt.style.use('dark_background')\nfig, ax = plt.subplots(figsize=(10, 6))\n\n# Cube exterior\ncube = Rectangle((2.5, 2), width=26, height=26, fill=False, edgecolor='orange', linewidth=3)\nax.add_patch(cube)\n\n# Speaker inside the cube\nspeaker = Circle",
+  "code": "import matplotlib.pyplot as plt\nimport numpy as np\nfrom matplotlib.patches import Circle, Rectangle, Polygon, FancyArrowPatch\n\nplt.style.use('dark_background')\nfig, ax = plt.subplots(figsize=(10, 6))\n\n# Cube exterior\ncube = Rectangle((2.5, 2), width=26, height=26, fill=False, edgecolor='orange', linewidth=3)\nax.add_patch(cube)\n\n# Speaker inside the cube\nspeaker = Circle",
+  "plot_code": "import matplotlib.pyplot as plt\nimport numpy as np\nfrom matplotlib.patches import Circle, Rectangle, Polygon, FancyArrowPatch\n\nplt.style.use('dark_background')\nfig, ax = plt.subplots(figsize=(10, 6))\n\n# Cube exterior\ncube = Rectangle((2.5, 2), width=26, height=26, fill=False, edgecolor='orange', linewidth=3)\nax.add_patch(cube)\n\n# Speaker inside the cube\nspeaker = Circle",
+  "stl_code": "import trimesh\nimport numpy as np\nfrom trimesh.util import concatenate\n\n# Create the cube exterior\nexterior_cube = trimesh.creation.box(extents=[30, 30, 30])\n\n# Create the speaker inside the cube\nspeaker_mesh = trimesh.creation.capsule(radius=2.5, height=2)\nspeaker_position = np.array([15, 15, 14])\nspeaker_mesh.apply_translation(speaker_position)\n\n# Combine the exterior and interior components\nmesh = concatenate([exterior_cube, speaker_mesh])",
+  "sketch_prompt": "solid black background, obsidian backdrop. A speculative instrument: Conceptual Summary This instrument, named \"CubeOndra,\" integrates a cubic resonator with an internal speaker for a unique fusion of acoustic.... Inspired by: haz un instrumento resonador de un cubo mas un parlante dentro `modulus freq=440.... realistic 3D object, highly imaginative, cinematic lighting, dark mode. Form: circular r...",
+  "sketch_model": "OFA-Sys/small-stable-diffusion-v0",
+  "llm_model": "qwen2.5:7b-instruct",
+  "elapsed_ms": 59586,
+  "image_url": "/api/gallery/image/20260502-212301_hybrid_haz_instrumento_v1.png",
+  "stl_url": "/api/gallery/file/20260502-212301_hybrid_haz_instrumento_v1.stl",
+  "sketch_url": "/api/gallery/image/20260502-212301_hybrid_haz_instrumento_v1.sketch.png",
+  "modes": [
+    "plot",
+    "stl",
+    "sketch"
+  ],
+  "updated_at": "2026-05-03T06:35:25.377637"
+}
