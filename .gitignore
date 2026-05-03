@@ -129,4 +129,4 @@ poetry.toml
 # Assets and media files
 *.psd
 *.sketch
-thumb
+thumbbackend/models/

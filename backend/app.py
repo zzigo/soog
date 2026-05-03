@@ -4147,7 +4147,7 @@ def generate_lrm(basename):
         import highres_3d
         importlib.reload(highres_3d)
         
-        result = highres_3d.run_reconstruction(sketch_path, output_stl_path)
+        result = highres_3d.run_reconstruction(sketch_path, output_stl_path, prompt=meta.get('prompt', ''))
         
         if result['status'] == 'success':
             meta['stl_url'] = f"/api/gallery/file/{output_stl_filename}"

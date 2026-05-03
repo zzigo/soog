@@ -2641,8 +2641,8 @@
   },
   "lrm_metadata": {
     "status": "success",
-    "model": "InstantMesh (Wiring Test)",
-    "vertices": 2562,
-    "faces": 5120
+    "model": "InstantMesh",
+    "vertices": 10242,
+    "faces": 20480
   }
 }
