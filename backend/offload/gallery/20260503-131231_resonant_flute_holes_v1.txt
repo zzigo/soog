@@ -1,0 +1,89 @@
+# Prompt
+
+A resonant flute with 5 holes tuned at 440, 880, 1760 Hz, obsidian finish.
+
+# Summary
+
+{
+  "summary": "The resonant flute is designed with a unique obsidian finish to enhance its visual and acoustic presence. It features five holes tuned at 440 Hz (C4), 880 Hz (C5), and 1760 Hz (C6) for precise overtones. The instrument's body is crafted from high-density spruce, known for its excellent resonance properties. The obsidian finish not only provides a striking appearance but also helps in reducing unwanted noise and vibrations. The holes are strategically placed to ensure optimal air flow and control, making the flute versatile for both solo and ensemble performances.",
+  "materials": "1. High-density spruce for the body\n2. Obsidian paint for the finish",
+  "plot_code": "import matplotlib.pyplot as plt; import numpy as np; from matplotlib.patches import Circle, Rectangle, Polygon, FancyArrowPatch; plt.style.use('dark_background'); fig, ax = plt.subplots(figsize=(10, 6)); ax.set_aspect('equal')"
+}
+
+```python
+import trimesh
+
+# Create the main body of the flute using a cylinder (aerophone) and a box (membranophone)
+cylinder_body = trimesh.creation.cylinder(radius=5, height=300)  # Aerophone as a cylinder
+box_membrane = trimesh.creation.box(extents=[20, 10, 5])          # Membranophone as a box
+
+# Place the cylinder (body of the flute) at the bottom center and the box (membrane) on top
+cylinder_body.apply_translation([0, 0, -150])
+box_membrane.apply_translation([0, 0, 150])
+
+# Create holes for tuning
+holes = []
+for i in range(5):
+    hole = trimesh.creation.capsule(radius=2, height=300)  # Small cylinders as holes
+    hole.apply_translation([0, 0, -148 + i * 60])          # Position the holes at different heights
+    holes.append(hole)
+
+# Combine all parts into one mesh
+mesh = trimesh.util.concatenate([cylinder_body] + holes + [box_membrane])
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 106013
+- sketch_model: OFA-Sys/small-stable-diffusion-v0
+- group_id: resonant_flute_holes_20260503-131231
+- version: v1
+
+# Plot Code (matplotlib)
+
+import matplotlib.pyplot as plt
+import numpy as np
+plt.style.use('dark_background')
+
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_color('black')
+ax.spines['bottom'].set_color('black')
+plt.gcf().patch.set_alpha(0.0)
+
+# Aerophone (Circle)
+circle = plt.Circle((2, 1), 0.5, color='blue', fill=True)
+ax.add_patch(circle)
+
+# Membranophone (Rectangle)
+rect = plt.Rectangle((6, 1), 1, 0.5, color='red', fill=True)
+ax.add_patch(rect)
+
+plt.show()
+
+# Geometry Code (trimesh)
+
+import trimesh
+
+# Create the main body of the flute using a cylinder (aerophone) and a box (membranophone)
+cylinder_body = trimesh.creation.cylinder(radius=5, height=300)  # Aerophone as a cylinder
+box_membrane = trimesh.creation.box(extents=[20, 10, 5])          # Membranophone as a box
+
+# Place the cylinder (body of the flute) at the bottom center and the box (membrane) on top
+cylinder_body.apply_translation([0, 0, -150])
+box_membrane.apply_translation([0, 0, 150])
+
+# Create holes for tuning
+holes = []
+for i in range(5):
+    hole = trimesh.creation.capsule(radius=2, height=300)  # Small cylinders as holes
+    hole.apply_translation([0, 0, -148 + i * 60])          # Position the holes at different heights
+    holes.append(hole)
+
+# Combine all parts into one mesh
+mesh = trimesh.util.concatenate([cylinder_body] + holes + [box_membrane])
+
+# Sketch Prompt
+
+Speculative musical instrument photographed as a premium object in a black studio, seamless deep black background, glossy black floor with subtle fading reflection, low-key lighting, soft rim light, controlled highlights revealing material texture, realistic contact shadow, sculptural composition, no stage, no performer, no clutter., solid black background, obsidian backdrop. A speculative instrument: This organogram represents the most basic structure of a musical instrument using a single aerophone (circle) and a membranophone (rectangle.... Inspired by: A resonant flute with 5 holes tuned at 440, 880, 1760 Hz, obsidian finish.. realistic 3D object, highly imaginative, cinematic lighting, dark mode. Form: circular resonators...

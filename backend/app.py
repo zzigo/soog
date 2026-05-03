@@ -575,7 +575,15 @@ def generate_sketch_image(
         cache_pipeline=bool(config.get('cache_pipeline'))
     )
 
-    organogram_image = Image.open(BytesIO(organogram_bytes)).convert('RGB')
+    # 1. Force Black Background for the input image
+    # Open organogram (often has transparent/white bg)
+    raw_organogram = Image.open(BytesIO(organogram_bytes)).convert('RGBA')
+    # Create black canvas
+    black_bg = Image.new('RGBA', raw_organogram.size, (0, 0, 0, 255))
+    # Composite: raw_organogram over black
+    organogram_image = Image.alpha_composite(black_bg, raw_organogram).convert('RGB')
+    
+    # 2. Resize to model requirements
     organogram_image = organogram_image.resize((config['width'], config['height']), Image.LANCZOS)
 
     seed_value = int(hashlib.sha256(f"{prompt}|{summary_text}|{materials_text}".encode('utf-8')).hexdigest()[:8], 16)

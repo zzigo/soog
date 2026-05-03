@@ -1,0 +1,73 @@
+# Prompt
+
+Design the Biomorphic Trumpet: a living instrument that grows new harmonic series...
+
+# Summary
+
+Conceptual Summary
+The Biomorphic Trumpet is a living, organic instrument that grows new harmonic series through a symbiotic relationship with its environment and performer. It features an adjustable bore that expands and contracts based on environmental moisture levels, modulating its resonance. The instrument's shell is made of a mycelium-based composite that integrates with the local ecosystem, ensuring sustainable growth and adaptability.
+
+# Materials
+
+Materials
+1. Set of 6 phosphor bronze tuning slides, 20 cm length, 3 mm diameter
+2. Mycelium-based composite for the body, 500 g
+3. Carbon fiber for reinforcement, 200 g
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Circle, Rectangle, Polygon, FancyArrowPatch
+plt.style.use('dark_background')
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Body of the trumpet
+body = Polygon([(50, 20), (300, 20), (300, 180), (
+
+{
+  "stl_code": "import trimesh\nfrom trimesh.creation import box, cylinder, cone, capsule, extrude_path, path_extrude\n\n# map: Circle -> Cylinder -> Resonator\nresonator = cylinder(radius=30, height=150, sections=64)\n\n# map: Rectangle -> Box -> Skin/Leather\nskin = box(extents=[80, 20, 5])\n\n# Create a path for the connection between the resonator and skin\npath = [np.array([[-30, -10], [-30, 10]])]\nconnection = extrude_path(path, [skin.center])[0]\n\n# Combine all parts into one mesh\nmesh = trimesh.util.concatenate([resonator, skin, connection])\n"
+}
+
+# Generation Metadata
+
+- model: qwen2.5:7b-instruct
+- elapsed_ms: 114184
+- sketch_model: OFA-Sys/small-stable-diffusion-v0
+- group_id: biomorphic_design_trumpet_20260503-135452
+- version: v1
+
+# Plot Code (matplotlib)
+
+```python
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, Rectangle
+fig, ax = plt.subplots(figsize=(8, 8))
+ax.set_aspect('equal')
+plt.style.use('dark_background')
+fig.patch.set_alpha(0.0)
+# 1. Main resonant body (Aerophone = Circle)
+circle = Circle((0.5, 0.5), 0.3, color='#ff9a2f', alpha=0.6, label='Resonator')
+ax.add_patch(circle)
+# 2. Membranophone (Horizontal Rectangle)
+rect = Rectangle((0.4, 0.1), 0.2, 0.1, color='#ffc0cb', alpha=0.6, label='Skin/Leather')
+ax.add_patch(rect)
+ax.set_axis_off()
+```
+
+# Geometry Code (trimesh)
+
+import numpy as np
+import trimesh
+
+# map: air-column -> cylinder, bell radiation -> cone, mouthpiece interface -> cylinder
+body = trimesh.creation.cylinder(radius=14.83, height=200.52, sections=42)
+bell = trimesh.creation.cone(radius=23.4, height=57.54, sections=42)
+bell.apply_translation((0, 0, -129.03))
+mouth = trimesh.creation.cylinder(radius=8.13, height=35.5, sections=42)
+mouth.apply_translation((0, 0, 118.01))
+spine = trimesh.creation.box(extents=(11.86, 16.31, 80.21))
+mesh = trimesh.util.concatenate([body, bell, mouth, spine])
+
+# Sketch Prompt
+
+Speculative musical instrument photographed as a premium object in a black studio, seamless deep black background, glossy black floor with subtle fading reflection, low-key lighting, soft rim light, controlled highlights revealing material texture, realistic contact shadow, sculptural composition, no stage, no performer, no clutter., solid black background, obsidian backdrop. A speculative instrument: This simple organogram represents an Aerophone (A circle) coupled with a Membranophone (A horizontal rectangle). The Aerophone serves as the.... Inspired by: Design the Biomorphic Trumpet: a living instrument that grows new harmonic serie.... realistic 3D object, highly imaginative, cinematic lighting, dark mode. Form: circular r...
