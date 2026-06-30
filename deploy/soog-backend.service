@@ -1,0 +1,14 @@
+[Unit]
+Description=Soog Flask Backend
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/opt/soog/backend
+Environment="PATH=/opt/soog/backend/venv/bin"
+EnvironmentFile=/opt/soog/backend/.env
+ExecStart=/opt/soog/backend/venv/bin/python app.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,136 @@
+# General 
+.DS_Store
+.fleet
+.idea/
+logs/
+*.log
+*.tmp
+*.bak
+backup/
+
+# Node.js & Nuxt.js
+node_modules/
+.nuxt/
+.nuxt-*
+.output/
+.gen/
+dist/
+.nitro/
+.cache/
+.history
+# Nuxt dev/build outputs
+.data/
+
+# Local files
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.manifest
+*.spec
+
+# Virtualenv and Python environments
+.venv/
+env/
+ENV/
+env.bak/
+venv/
+venv.bak/
+pyvenv.cfg
+pip-selfcheck.json
+backend/venv/
+
+# Ignore large binary wheels
+backend/*.whl
+backend/nvidia_*.whl
+backend/torch-*.whl
+*.whl
+
+# Packaging & Build
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Test & Coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache/
+pytest_cache/
+.cover
+.pytest_cache/
+*.mo
+*.pot
+.hypothesis/
+.pytype/
+.pyre/
+
+# Flask-specific
+instance/
+.webassets-cache
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Miscellaneous
+cython_debug/
+profile_default/
+ipython_config.py
+
+# Render-specific
+.cache/
+logs/
+*.log
+node_modules/
+.nuxt/
+dist/
+__pycache__/
+
+# Backend-specific
+backend/test.py
+modeltrainer/images/
+modeltrainer/ocr_outputs/
+modeltrainer/pdfs/
+modeltrainer/requeriments.txt
+modeltrainer/outputModel_MantlHood/
+
+# Frontend-specific
+
+# LSP & Tooling
+pyrightconfig.json
+.ruff_cache/
+poetry.toml
+
+# Backup and temp files
+**/*.backup.*
+**/*.back.*
+*.sublime*
+
+# Exclude JetBrains-specific files (PyCharm, WebStorm, etc.)
+.idea/
+
+# Runtime models and generated artifacts
+backend/models/
+backend/offload/
+modeltrainer/outputModel/
+
+# Assets and media files
+*.psd
+*.sketch

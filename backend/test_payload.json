@@ -1,0 +1,6 @@
+{
+  "prompt": "Test dual-mode: sine wave and cylinder",
+  "summary": "Combined matplotlib sine wave visualization with trimesh 3D cylinder to validate both output pipelines",
+  "matplotlib_code": "import matplotlib.pyplot as plt\nimport numpy as np\nx = np.linspace(0, 2*np.pi, 100)\ny = np.sin(x)\nplt.figure(figsize=(8,4))\nplt.plot(x, y, 'b-', linewidth=2)\nplt.title('Sine Wave Test')\nplt.xlabel('x')\nplt.ylabel('sin(x)')\nplt.grid(True)",
+  "trimesh_code": "import trimesh\nfrom trimesh.creation import cylinder, box\nmesh1 = cylinder(radius=10.0, height=30.0, sections=48)\nmesh2 = box(extents=[8.0, 8.0, 8.0])\nmesh2.apply_translation([15.0, 0.0, 0.0])\nmesh = trimesh.util.concatenate([mesh1, mesh2])"
+}
