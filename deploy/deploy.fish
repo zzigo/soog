@@ -96,8 +96,49 @@ node -e "const p=require('./node_modules/three/package.json'); if(!(p.exports&&p
 npm run build; or exit 1
 
 # 6) Restart services
-echo "→ Restarting services"
-sudo systemctl restart soog-backend.service; or exit 1
-sudo systemctl restart soog-frontend.service; or exit 1
+echo "→ Restarting runtime"
+set -l USED_PM2 0
+
+if command -sq pm2
+    if pm2 describe soog-backend >/dev/null 2>/dev/null
+        echo "  - Restarting PM2 app: soog-backend"
+        pm2 restart soog-backend --update-env; or exit 1
+        set USED_PM2 1
+    end
+
+    if pm2 describe soog-frontend >/dev/null 2>/dev/null
+        echo "  - Restarting PM2 app: soog-frontend"
+        pm2 restart soog-frontend --update-env; or exit 1
+        set USED_PM2 1
+    end
+
+    if test $USED_PM2 -eq 1
+        echo "  - Saving PM2 process list"
+        pm2 save; or exit 1
+    end
+end
+
+if test $USED_PM2 -eq 0
+    echo "  - PM2 apps not found, falling back to systemd"
+    if systemctl list-unit-files --type=service | grep -q '^soog-backend\.service'
+        sudo systemctl restart soog-backend.service; or exit 1
+    else
+        echo "✖ soog-backend not found in PM2 or systemd"
+        exit 1
+    end
+
+    if systemctl list-unit-files --type=service | grep -q '^soog-frontend\.service'
+        sudo systemctl restart soog-frontend.service; or exit 1
+    else
+        echo "✖ soog-frontend not found in PM2 or systemd"
+        exit 1
+    end
+end
+
+# 7) Health checks
+echo "→ Verifying local endpoints"
+sleep 3
+curl -fsS http://127.0.0.1:10000/api/ollama/verify >/dev/null; or exit 1
+curl -fsSI http://127.0.0.1:3000 >/dev/null; or exit 1
 
 echo "=== SOOG DEPLOY DONE ==="
