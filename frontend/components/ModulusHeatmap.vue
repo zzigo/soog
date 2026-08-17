@@ -11,6 +11,7 @@
 
 <script setup>
 import { ref, onMounted, watch } from 'vue';
+import { acousticLegendGradient, sampleAcousticPalette } from '~/utils/acousticPalette';
 
 const props = defineProps({
   data: {
@@ -28,6 +29,7 @@ const props = defineProps({
 });
 
 const canvasRef = ref(null);
+const legendGradient = acousticLegendGradient(0.95);
 
 function projectCoord(value, span) {
   const numeric = Number(value);
@@ -37,8 +39,8 @@ function projectCoord(value, span) {
 
 function strokeMarker(ctx, marker, x, y) {
   const palette = {
-    source: '#ffb300',
-    probe: '#00e5ff',
+    source: '#ff9a1f',
+    probe: '#00f6ff',
     obstacle: '#ffffff'
   };
   const color = palette[marker?.type] || '#9e9e9e';
@@ -46,6 +48,8 @@ function strokeMarker(ctx, marker, x, y) {
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineWidth = 1.5;
+  ctx.shadowBlur = 16;
+  ctx.shadowColor = color;
 
   if (marker?.type === 'source') {
     ctx.beginPath();
@@ -80,10 +84,18 @@ const drawHeatmap = () => {
 
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
   const rows = props.data.length;
   const cols = props.data[0].length;
   const cellW = canvas.width / cols;
   const cellH = canvas.height / rows;
+
+  const backgroundGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  backgroundGradient.addColorStop(0, 'rgba(4, 10, 24, 0.72)');
+  backgroundGradient.addColorStop(0.5, 'rgba(13, 16, 38, 0.38)');
+  backgroundGradient.addColorStop(1, 'rgba(3, 5, 18, 0.72)');
+  ctx.fillStyle = backgroundGradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // Find max absolute value for normalization
   let maxVal = 0;
@@ -98,22 +110,25 @@ const drawHeatmap = () => {
     for (let c = 0; c < cols; c++) {
       const val = props.data[r][c];
       const norm = val / maxVal; // -1 to 1
-
-      // Blue-White-Red Diverging Colormap
-      let r8, g8, b8;
-      if (norm > 0) {
-        // Red intensity
-        r8 = 255;
-        g8 = b8 = Math.floor(255 * (1 - norm));
-      } else {
-        // Blue intensity
-        b8 = 255;
-        r8 = g8 = Math.floor(255 * (1 + norm));
-      }
-
-      ctx.fillStyle = `rgb(${r8}, ${g8}, ${b8})`;
+      const color = sampleAcousticPalette(norm, 0.92);
+      ctx.fillStyle = color.css;
       ctx.fillRect(c * cellW, r * cellH, cellW + 0.5, cellH + 0.5);
     }
+  }
+
+  ctx.strokeStyle = 'rgba(60, 196, 255, 0.09)';
+  ctx.lineWidth = 1;
+  for (let col = 0; col <= cols; col += Math.max(1, Math.round(cols / 14))) {
+    ctx.beginPath();
+    ctx.moveTo(col * cellW, 0);
+    ctx.lineTo(col * cellW, canvas.height);
+    ctx.stroke();
+  }
+  for (let row = 0; row <= rows; row += Math.max(1, Math.round(rows / 14))) {
+    ctx.beginPath();
+    ctx.moveTo(0, row * cellH);
+    ctx.lineTo(canvas.width, row * cellH);
+    ctx.stroke();
   }
 
   for (const marker of props.markers || []) {
@@ -121,6 +136,11 @@ const drawHeatmap = () => {
     const y = canvas.height - projectCoord(marker?.y, canvas.height);
     strokeMarker(ctx, marker, x, y);
   }
+
+  ctx.strokeStyle = 'rgba(0, 246, 255, 0.34)';
+  ctx.lineWidth = 1.25;
+  ctx.strokeRect(0.625, 0.625, canvas.width - 1.25, canvas.height - 1.25);
+  ctx.restore();
 };
 
 onMounted(drawHeatmap);
@@ -138,8 +158,11 @@ watch(() => props.markers, drawHeatmap, { deep: true });
 }
 
 .heatmap-canvas {
-  background: #000;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  border: 1px solid rgba(0, 246, 255, 0.22);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 65, 243, 0.06),
+    0 0 28px rgba(0, 246, 255, 0.08);
   image-rendering: pixelated;
   max-width: 100%;
   height: auto;
@@ -150,14 +173,17 @@ watch(() => props.markers, drawHeatmap, { deep: true });
   align-items: center;
   gap: 10px;
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(202, 232, 255, 0.64);
   width: 200px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .gradient-bar {
   flex: 1;
   height: 8px;
-  background: linear-gradient(to right, #00f, #fff, #f00);
-  border-radius: 4px;
+  background: linear-gradient(to right, v-bind(legendGradient));
+  border-radius: 999px;
+  box-shadow: 0 0 16px rgba(0, 246, 255, 0.18);
 }
 </style>
