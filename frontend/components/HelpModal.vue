@@ -120,14 +120,13 @@
             <li><strong>Symbols (Orange):</strong> H=hammer, Y=lacing, P=precise, R=relative, C=cord/string, Ri=ring, M=male, F=female</li>
           </ul>
 
-          <h4>Commands:</h4>
+          <h4>Workspace Sidebar:</h4>
           <ul>
-            <li><kbd>Alt</kbd> + <kbd>Enter</kbd>: Evaluate selected text or all text if nothing is selected</li>
-            <li><kbd>Ctrl</kbd> + <kbd>H</kbd>: Clear editor content</li>
-            <li><kbd>Ctrl</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd> (<kbd>⌘</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd> on Mac): Navigate command history</li>
-            <li>Click the eye icon to show/hide generated code</li>
-            <li>Click the trash icon to clear editor content</li>
-            <li>On mobile devices, use the "Evaluate" button at the bottom of the screen</li>
+            <li>Open the right command sidebar with <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>\</kbd></li>
+            <li>The sidebar now holds live command docs for rendering, acoustic SOT-A tests, and reversioning</li>
+            <li>Use <kbd>Alt</kbd> + <kbd>Enter</kbd> to evaluate selected text or the full editor buffer</li>
+            <li>Use <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>H</kbd> to clear editor content</li>
+            <li>Use <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd> to navigate command history</li>
           </ul>
 
           <h4>Reversioning:</h4>

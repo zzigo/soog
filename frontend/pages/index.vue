@@ -3,13 +3,16 @@
     class="app-container" 
     :class="{ 
       'sorganoid-active': sorganoidMode,
-      'ui-hidden': !uiVisible
+      'ui-hidden': !uiVisible,
+      'workspace-background-mode': workspaceLayout === 'background',
+      'workspace-split-mode': workspaceLayout === 'split'
     }"
   >
     <!-- Left column: resizable editor -->
     <div 
-      class="left-column" 
-      :style="{ width: sorganoidMode ? '100%' : leftWidth + '%' }"
+      class="left-column"
+      :class="{ 'left-column--background': workspaceLayout === 'background' }"
+      :style="leftColumnStyle"
     >
       <div class="editor-wrapper">
         <AceEditor 
@@ -21,92 +24,156 @@
     </div>
     <!-- Draggable divider -->
     <div 
-      v-if="!sorganoidMode && uiVisible"
+      v-if="!sorganoidMode && uiVisible && workspaceLayout === 'split'"
       class="divider" 
       @mousedown="startDrag" 
       @touchstart.prevent="startDragTouch"
     ></div>
-    <!-- Right column hosts HUD and Results -->
-    <div v-if="!sorganoidMode && uiVisible" class="right-column" :style="{ width: (100 - leftWidth) + '%' }">
+    <!-- Right column hosts workspace HUD and results -->
+    <div
+      v-if="!sorganoidMode && uiVisible"
+      class="right-column"
+      :class="{ 'right-column--background': workspaceLayout === 'background' }"
+      :style="rightColumnStyle"
+    >
       <div class="hud">
-      <span class="model-name" :title="currentModel || ''">{{ shortModelLabel }}</span>
-      <button
-        @click="cycleOllamaModel"
-        class="icon-button model-cycle-button"
-        :disabled="modelSwitching || ollamaModels.length < 2"
-        :title="`Model: ${currentModel || 'loading...'} (click to cycle)`"
-      >
-        <svg class="icon" viewBox="0 0 24 24">
-          <path fill="currentColor" d="M12,4V1L8,5L12,9V6A6,6 0 0,1 18,12C18,13 17.75,13.96 17.3,14.8L18.76,16.26C19.53,15.05 20,13.57 20,12A8,8 0 0,0 12,4M6.7,9.2L5.24,7.74C4.47,8.95 4,10.43 4,12A8,8 0 0,0 12,20V23L16,19L12,15V18A6,6 0 0,1 6,12C6,11 6.25,10.04 6.7,9.2Z"/>
-        </svg>
-      </button>
+        <div class="hud-group hud-group--workspace">
+          <button
+            class="layout-pill"
+            :class="{ active: workspaceLayout === 'background' }"
+            @click="setWorkspaceLayout('background')"
+            title="Background workspace"
+          >
+            BG
+          </button>
+          <button
+            class="layout-pill"
+            :class="{ active: workspaceLayout === 'split' }"
+            @click="setWorkspaceLayout('split')"
+            title="Split workspace"
+          >
+            SPLIT
+          </button>
+          <button
+            class="icon-button"
+            :class="{ active: workspaceSidebarOpen }"
+            @click="toggleWorkspaceSidebar"
+            title="Workspace sidebar (⌘/Ctrl + Shift + \\)"
+          >
+            <svg class="icon" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M3 5H21V7H3V5M3 11H21V13H3V11M3 17H9V19H3V17M13 17H21V19H13V17Z" />
+            </svg>
+          </button>
+        </div>
 
-      <button @click="toggleShowCode" class="icon-button" :title="showCode ? 'Hide Code' : 'Show Code'">
-        <svg v-if="showCode" class="icon" viewBox="0 0 24 24">
-          <path fill="currentColor" d="M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9M12,4.5C17,4.5 21.27,7.61 23,12C21.27,16.39 17,19.5 12,19.5C7,19.5 2.73,16.39 1,12C2.73,7.61 7,4.5 12,4.5M3.18,12C4.83,15.36 8.24,17.5 12,17.5C15.76,17.5 19.17,15.36 20.82,12C19.17,8.64 15.76,6.5 12,6.5C8.24,6.5 4.83,8.64 3.18,12Z" />
-        </svg>
-        <svg v-else class="icon" viewBox="0 0 24 24">
-          <path fill="currentColor" d="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.74,7.13 11.35,7 12,7Z" />
-        </svg>
-      </button>
-      <button @click="handleMobileEvaluate" class="icon-button" title="Evaluate selected text or all if no selection">
-        <svg class="icon" viewBox="0 0 24 24">
-          <path fill="currentColor" d="M8,5.14V19.14L19,12.14L8,5.14Z" />
-        </svg>
-      </button>
-      <button @click="handleClear" class="icon-button" title="Clear Editor (Ctrl+H)">
-        <svg class="icon" viewBox="0 0 24 24">
-          <path fill="currentColor" d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" />
-        </svg>
-      </button>
-      <button @click="handleRandomPrompt" class="icon-button" title="Random Prompt">
-        <svg class="icon" viewBox="0 0 24 24">
-          <path fill="currentColor" d="M14.83,13.41L13.42,14.82L16.55,17.95L14.5,20H20V14.5L17.96,16.54L14.83,13.41M14.5,4L16.54,6.04L4,18.59L5.41,20L17.96,7.46L20,9.5V4M10.59,9.17L5.41,4L4,5.41L9.17,10.58L10.59,9.17Z" />
-        </svg>
-      </button>
-      <button @click="showHelp = true" class="icon-button" title="Help">
-        <svg class="icon" viewBox="0 0 24 24">
-          <path fill="currentColor" d="M11,18H13V16H11V18M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,6A4,4 0 0,0 8,10H10A2,2 0 0,1 12,8A2,2 0 0,1 14,10C14,12 11,11.75 11,15H13C13,12.75 16,12.5 16,10A4,4 0 0,0 12,6Z" />
-        </svg>
-      </button>
-      <button @click="showGallery = true" class="icon-button" title="Gallery (Alt+↑/↓)">
-        <svg class="icon" viewBox="0 0 24 24">
-          <path fill="currentColor" d="M21 19V5C21 3.89 20.1 3 19 3H5C3.89 3 3 3.89 3 5V19C3 20.1 3.89 21 5 21H19C20.1 21 21 20.1 21 19M8.5 13.5L11 16.51L14.5 12L19 18H5L8.5 13.5Z"/>
-        </svg>
-      </button>
+        <div v-if="workspaceLayout === 'background'" class="hud-group hud-group--views">
+          <button
+            v-for="item in availableBackgroundViews"
+            :key="item.key"
+            class="layout-pill layout-pill--view"
+            :class="{ active: activeBackgroundView === item.key }"
+            :disabled="!item.enabled"
+            @click="setBackgroundView(item.key)"
+            :title="item.label"
+          >
+            {{ item.label }}
+          </button>
+        </div>
 
-      <button
-  @click="toggleSomap"
-  class="icon-button"
-  :class="{ active: $route.path === '/somap' }"
-  title="Somap (Alt+2)"
->
-  <svg class="icon" viewBox="0 0 24 24">
-    <!-- Un círculo y un vórtice central, evocando un nodo de knowledge graph -->
-    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/>
-    <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.8"/>
-    <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" stroke="currentColor" stroke-width="1.2" fill="none"/>
-  </svg>
-</button>
-
-<button
-  @click="$router.push('/concert')"
-  class="icon-button"
-  title="3D Concert Hall (Alt+3)"
->
-  <svg class="icon" viewBox="0 0 24 24">
-    <path fill="currentColor" d="M12,3L2,12H5V20H19V12H22L12,3M11.5,18V14H12.5V18H11.5M9,18V16H10V18H9M14,18V16H15V18H14M11.5,13V12H12.5V13H11.5M9,15V14H10V15H9M14,15V14H15V15H14Z" />
-  </svg>
-</button>
+        <div class="hud-group hud-group--main">
+          <span class="model-name" :title="currentModel || ''">{{ shortModelLabel }}</span>
+          <button
+            @click="cycleOllamaModel"
+            class="icon-button model-cycle-button"
+            :disabled="modelSwitching || ollamaModels.length < 2"
+            :title="`Model: ${currentModel || 'loading...'} (click to cycle)`"
+          >
+            <svg class="icon" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M12,4V1L8,5L12,9V6A6,6 0 0,1 18,12C18,13 17.75,13.96 17.3,14.8L18.76,16.26C19.53,15.05 20,13.57 20,12A8,8 0 0,0 12,4M6.7,9.2L5.24,7.74C4.47,8.95 4,10.43 4,12A8,8 0 0,0 12,20V23L16,19L12,15V18A6,6 0 0,1 6,12C6,11 6.25,10.04 6.7,9.2Z"/>
+            </svg>
+          </button>
+          <button @click="toggleShowCode" class="icon-button" :title="showCode ? 'Hide Code' : 'Show Code'">
+            <svg v-if="showCode" class="icon" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9M12,4.5C17,4.5 21.27,7.61 23,12C21.27,16.39 17,19.5 12,19.5C7,19.5 2.73,16.39 1,12C2.73,7.61 7,4.5 12,4.5M3.18,12C4.83,15.36 8.24,17.5 12,17.5C15.76,17.5 19.17,15.36 20.82,12C19.17,8.64 15.76,6.5 12,6.5C8.24,6.5 4.83,8.64 3.18,12Z" />
+            </svg>
+            <svg v-else class="icon" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.74,7.13 11.35,7 12,7Z" />
+            </svg>
+          </button>
+          <button @click="handleMobileEvaluate" class="icon-button" title="Evaluate selected text or all if no selection">
+            <svg class="icon" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M8,5.14V19.14L19,12.14L8,5.14Z" />
+            </svg>
+          </button>
+          <button @click="handleClear" class="icon-button" title="Clear Editor (Ctrl+H)">
+            <svg class="icon" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" />
+            </svg>
+          </button>
+          <button @click="handleRandomPrompt" class="icon-button" title="Random Prompt">
+            <svg class="icon" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M14.83,13.41L13.42,14.82L16.55,17.95L14.5,20H20V14.5L17.96,16.54L14.83,13.41M14.5,4L16.54,6.04L4,18.59L5.41,20L17.96,7.46L20,9.5V4M10.59,9.17L5.41,4L4,5.41L9.17,10.58L10.59,9.17Z" />
+            </svg>
+          </button>
+          <button @click="showHelp = true" class="icon-button" title="Help">
+            <svg class="icon" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M11,18H13V16H11V18M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,6A4,4 0 0,0 8,10H10A2,2 0 0,1 12,8A2,2 0 0,1 14,10C14,12 11,11.75 11,15H13C13,12.75 16,12.5 16,10A4,4 0 0,0 12,6Z" />
+            </svg>
+          </button>
+          <button @click="showGallery = true" class="icon-button" title="Gallery (Alt+↑/↓)">
+            <svg class="icon" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M21 19V5C21 3.89 20.1 3 19 3H5C3.89 3 3 3.89 3 5V19C3 20.1 3.89 21 5 21H19C20.1 21 21 20.1 21 19M8.5 13.5L11 16.51L14.5 12L19 18H5L8.5 13.5Z"/>
+            </svg>
+          </button>
+          <button
+            @click="toggleSomap"
+            class="icon-button"
+            :class="{ active: $route.path === '/somap' }"
+            title="Somap (Alt+2)"
+          >
+            <svg class="icon" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/>
+              <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.8"/>
+              <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" stroke="currentColor" stroke-width="1.2" fill="none"/>
+            </svg>
+          </button>
+          <button
+            @click="$router.push('/concert')"
+            class="icon-button"
+            title="3D Concert Hall (Alt+3)"
+          >
+            <svg class="icon" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M12,3L2,12H5V20H19V12H22L12,3M11.5,18V14H12.5V18H11.5M9,18V16H10V18H9M14,18V16H15V18H14M11.5,13V12H12.5V13H11.5M9,15V14H10V15H9M14,15V14H15V15H14Z" />
+            </svg>
+          </button>
+          <NuxtLink
+            v-if="profile?.is_admin"
+            to="/usage"
+            class="auth-pill admin-pill"
+            title="Daily and weekly usage"
+          >
+            USAGE
+          </NuxtLink>
+          <span v-if="isAuthenticated && quota" class="quota-pill" :title="quotaTitle">{{ quotaLabel }}</span>
+          <button
+            v-if="isAuthenticated"
+            @click="handleSignOut"
+            class="auth-pill"
+            :title="`${userLabel} · sign out`"
+          >
+            {{ userLabel }}
+          </button>
+          <button v-else @click="showAuthGate = true" class="auth-pill" title="Sign in">SIGN IN</button>
+        </div>
       </div>
-      
+
       <Transition
         enter-active-class="fadeIn"
         leave-active-class="fadeOut"
         :duration="300"
         mode="out-in"
       >
-        <div v-if="hasResults" class="results-panel" :key="transitionKey">
+        <div v-if="hasResults && workspaceLayout === 'split'" class="results-panel" :key="transitionKey">
           <div class="results-split">
             <section class="panel panel-organogram">
               <h3 class="section-title">ORGANOGRAM</h3>
@@ -135,26 +202,15 @@
             <section class="panel panel-visualizer">
               <div class="section-header tab-header">
                 <div class="tabs">
-                  <button 
-                    class="tab-btn" 
-                    :class="{ active: viewMode === 'stl' }" 
-                    @click="viewMode = 'stl'"
+                  <button
+                    v-for="item in splitTabOptions"
+                    :key="item.key"
+                    class="tab-btn"
+                    :class="{ active: viewMode === item.key }"
+                    :disabled="!item.enabled"
+                    @click="viewMode = item.key"
                   >
-                    GEOMETRY (3D)
-                  </button>
-                  <button 
-                    class="tab-btn" 
-                    :class="{ active: viewMode === 'sketch' }" 
-                    @click="viewMode = 'sketch'"
-                  >
-                    SKETCH (INFERRED)
-                  </button>
-                  <button 
-                    class="tab-btn" 
-                    :class="{ active: viewMode === 'modulus' }" 
-                    @click="viewMode = 'modulus'"
-                  >
-                    ACOUSTICS (MODULUS)
+                    {{ item.label }}
                   </button>
                 </div>
                 <div class="section-meta-group">
@@ -162,16 +218,16 @@
                     Download STL
                   </button>
                   <span v-if="viewMode === 'sketch' && sketchModel" class="section-meta">{{ sketchModel }}</span>
-                  <button 
-                    v-if="viewMode === 'sketch' && hasResults" 
-                    @click="remakeSketch" 
-                    class="remake-btn-small" 
+                  <button
+                    v-if="viewMode === 'sketch' && hasResults"
+                    @click="remakeSketch"
+                    class="remake-btn-small"
                     :disabled="loading"
                   >
                     {{ loading ? '...' : 'GENERATE' }}
                   </button>
                   <span v-if="viewMode === 'modulus' && modulusData" class="section-meta">
-                    {{ modulusData.method || 'PINN' }}
+                    {{ modulusData.method || 'SOT-A' }}
                   </span>
                 </div>
               </div>
@@ -197,9 +253,10 @@
                 </div>
                 <div v-show="viewMode === 'modulus'" class="tab-pane">
                   <div v-if="modulusData" class="modulus-results">
-                    <ModulusHeatmap 
-                      v-if="modulusData.results && modulusData.results.pressure_map" 
-                      :data="modulusData.results.pressure_map" 
+                    <ModulusHeatmap
+                      v-if="modulusData.results && modulusData.results.pressure_map"
+                      :data="modulusData.results.pressure_map"
+                      :markers="modulusMarkers"
                     />
                     <pre v-else class="modulus-json">{{ JSON.stringify(modulusData.results || modulusData, null, 2) }}</pre>
                   </div>
@@ -209,8 +266,136 @@
             </section>
           </div>
         </div>
+
+        <div v-else-if="hasResults && workspaceLayout === 'background'" class="background-stage" :key="`${transitionKey}-${activeBackgroundView}`">
+          <div class="background-stage__meta">
+            <span class="background-stage__label">{{ backgroundStageLabel }}</span>
+            <span v-if="responseMetaText" class="background-stage__sub">{{ responseMetaText }}</span>
+          </div>
+
+          <img
+            v-if="activeBackgroundView === 'plot' && plotImage"
+            :src="plotImage"
+            alt="Organogram background"
+            class="background-stage__image"
+            @click="openLightbox(plotImage, 'Organogram')"
+          />
+          <ClientOnly v-else-if="activeBackgroundView === 'stl'">
+            <div v-if="stlUrl" class="background-stage__viewer">
+              <StlViewer :url="stlUrl" />
+            </div>
+            <div v-else class="stl-placeholder">No STL geometry generated for this response.</div>
+          </ClientOnly>
+          <img
+            v-else-if="activeBackgroundView === 'sketch' && sketchImage"
+            :src="sketchImage"
+            alt="Sketch background"
+            class="background-stage__image"
+            @click="openLightbox(sketchImage, 'Sketch')"
+          />
+          <div v-else-if="activeBackgroundView === 'modulus'" class="background-stage__heatmap">
+            <ModulusHeatmap
+              v-if="modulusData?.results?.pressure_map"
+              :data="modulusData.results.pressure_map"
+              :size="720"
+              :markers="modulusMarkers"
+            />
+            <div v-else class="sketch-placeholder">No acoustical simulation data for this response.</div>
+          </div>
+        </div>
       </Transition>
     </div>
+
+    <aside
+      v-if="!sorganoidMode && uiVisible"
+      class="workspace-sidebar"
+      :class="{ 'workspace-sidebar--open': workspaceSidebarOpen }"
+    >
+      <div class="workspace-sidebar__rail">
+        <button
+          class="workspace-sidebar__tab"
+          :class="{ active: workspaceSidebarTab === 'help' }"
+          @click="workspaceSidebarOpen = true; workspaceSidebarTab = 'help'"
+        >
+          HELP
+        </button>
+        <button
+          class="workspace-sidebar__tab"
+          :class="{ active: workspaceSidebarTab === 'session' }"
+          @click="workspaceSidebarOpen = true; workspaceSidebarTab = 'session'"
+        >
+          SESSION
+        </button>
+        <button
+          class="workspace-sidebar__tab"
+          :class="{ active: workspaceSidebarTab === 'acoustic' }"
+          @click="workspaceSidebarOpen = true; workspaceSidebarTab = 'acoustic'"
+        >
+          SOT-A
+        </button>
+      </div>
+
+      <div class="workspace-sidebar__panel">
+        <div class="workspace-sidebar__header">
+          <span>{{ workspaceSidebarTab.toUpperCase() }}</span>
+          <button class="icon-button workspace-sidebar__close" @click="toggleWorkspaceSidebar" title="Collapse sidebar">
+            <svg class="icon" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M19,13H5V11H19V13Z" />
+            </svg>
+          </button>
+        </div>
+
+        <div v-if="workspaceSidebarTab === 'help'" class="workspace-sidebar__body">
+          <div v-for="domain in commandDomains" :key="domain.key" class="command-domain">
+            <div class="command-domain__header">
+              <span class="command-domain__badge" :style="{ '--domain-color': domain.color }">{{ domain.label }}</span>
+            </div>
+            <div v-for="command in domain.commands" :key="command.syntax" class="command-domain__row">
+              <code>{{ command.syntax }}</code>
+              <p>{{ command.detail }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="workspaceSidebarTab === 'session'" class="workspace-sidebar__body">
+          <div class="session-facts">
+            <div v-for="fact in sessionFacts" :key="fact.label" class="session-fact">
+              <span>{{ fact.label }}</span>
+              <strong>{{ fact.value }}</strong>
+            </div>
+          </div>
+          <div class="session-summary">
+            <h4>Summary</h4>
+            <div class="summary-content" v-html="summaryHtml || '<p>No summary yet.</p>'"></div>
+          </div>
+        </div>
+
+        <div v-else class="workspace-sidebar__body">
+          <div class="acoustic-summary">
+            <h4>Live Command</h4>
+            <p>{{ acousticCommandSummary }}</p>
+          </div>
+          <div class="acoustic-summary">
+            <h4>First Primitive</h4>
+            <p>Use <code>@acoustic primitive=circle freq=440 source=-0.55,0 probe=0.55,0 obstacle=0.15,0</code> and evaluate it directly from the editor.</p>
+          </div>
+          <div v-if="modulusData" class="session-facts">
+            <div class="session-fact">
+              <span>Method</span>
+              <strong>{{ modulusData.method || 'SOT-A' }}</strong>
+            </div>
+            <div class="session-fact">
+              <span>Probe response</span>
+              <strong>{{ Number(modulusData.results?.probe_response ?? modulusData.results?.mic_response ?? 0).toFixed(3) }}</strong>
+            </div>
+            <div class="session-fact">
+              <span>Peaks</span>
+              <strong>{{ (modulusData.results?.resonance_peaks_hz || []).slice(0, 4).join(', ') || '—' }}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
 
     <Transition
       enter-active-class="fadeIn"
@@ -258,7 +443,15 @@
       :initial-basename="targetBasename"
       @load-code="loadCodeFromGallery"
     />
-
+    <AuthGateModal
+      :model-value="showAuthGate"
+      :loading="authActionLoading"
+      :configured="authConfigured"
+      :error="authGateError"
+      @close="showAuthGate = false"
+      @google="beginSignIn(true)"
+      @logto="beginSignIn(false)"
+    />
     <!-- Sorganoid Layer -->
     <ClientOnly>
       <SorganoidWorld 
@@ -275,7 +468,7 @@
     </div>
     </template>
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue';
 import { useRuntimeConfig } from '#app';
 import { marked } from 'marked';
 import AceEditor from '~/components/AceEditor.vue';
@@ -284,10 +477,13 @@ import GalleryModal from '~/components/GalleryModal.vue';
 import StlViewer from '~/components/StlViewer.vue';
 import ModulusHeatmap from '~/components/ModulusHeatmap.vue';
 import SorganoidWorld from '~/components/SorganoidWorld.vue';
+import AuthGateModal from '~/components/AuthGateModal.vue';
+import UsageDashboard from '~/components/UsageDashboard.vue';
 import { useRandomPrompt } from '~/composables/useRandomPrompt';
 import { useFavicon } from '~/composables/useFavicon';
 import { useAcousticSonification } from '~/composables/useAcousticSonification';
 import { useApi } from '~/composables/useApi';
+import { useSoogAuth } from '~/composables/useSoogAuth';
 
 // Configure marked
 marked.setOptions({
@@ -297,6 +493,17 @@ marked.setOptions({
 
 // State variables
 const { apiBase } = useApi();
+const {
+  isAuthenticated,
+  isLoading: authLoading,
+  configured: authConfigured,
+  profile,
+  quota,
+  authHeaders,
+  refreshProfile,
+  signIn,
+  signOut,
+} = useSoogAuth();
 const { startProcessing, completeProcessing } = useFavicon();
 const { playResponse } = useAcousticSonification();
 const editorRef = ref(null);
@@ -334,6 +541,11 @@ const generationRequestId = ref('');
 const reasoningPreview = ref('');
 const progressStage = ref('');
 const viewMode = ref('stl'); // 'stl', 'sketch', or 'modulus'
+const backgroundViewMode = ref('plot'); // 'plot', 'stl', 'sketch', or 'modulus'
+const workspaceLayout = ref('background'); // 'split' or 'background'
+const workspaceSidebarOpen = ref(true);
+const workspaceSidebarTab = ref('help'); // 'help', 'session', 'acoustic'
+const lastAcousticCommand = ref(null);
 const targetBasename = ref('');
 let progressPollInterval = null;
 
@@ -344,11 +556,33 @@ const summaryHtml = computed(() => {
 const showCode = ref(true);
 const showHelp = ref(false);
 const showGallery = ref(false);
+const showAuthGate = ref(false);
+const authActionLoading = ref(false);
+const authGateError = ref('');
+const pendingRenderPrompt = ref('');
+const profileRefreshAttempted = ref(false);
 const transitionKey = ref(0);
 const isMobileOrTablet = ref(false);
 const showLightbox = ref(false);
 const RESPONSE_TIMES_KEY = 'soog_response_times_ms';
 const MAX_RESPONSE_SAMPLES = 20;
+const PENDING_RENDER_KEY = 'soog.pending-render.v1';
+
+const userLabel = computed(() => {
+  const value = profile.value?.name || profile.value?.email || profile.value?.subject || 'ACCOUNT';
+  return String(value).length > 16 ? `${String(value).slice(0, 13)}…` : String(value);
+});
+const quotaLabel = computed(() => {
+  const daily = quota.value?.daily;
+  if (!daily) return '';
+  return `${daily.used}/${daily.limit === null ? '∞' : daily.limit} D`;
+});
+const quotaTitle = computed(() => {
+  if (!quota.value) return '';
+  const daily = quota.value.daily;
+  const weekly = quota.value.weekly;
+  return `Daily ${daily.used}/${daily.limit ?? 'unlimited'} · Weekly ${weekly.used}/${weekly.limit ?? 'unlimited'}`;
+});
 
 const averageResponseMs = computed(() => {
   if (!responseTimesMs.value.length) return 20000;
@@ -378,7 +612,131 @@ const responseMetaText = computed(() => {
   return parts.join(' | ');
 });
 
-const hasResults = computed(() => !!(plotImage.value || sketchImage.value || summary.value || materialsText.value || stlUrl.value));
+const hasResults = computed(() => !!(plotImage.value || sketchImage.value || summary.value || materialsText.value || stlUrl.value || modulusData.value));
+const workspaceModeLabel = computed(() => workspaceLayout.value === 'background' ? 'background' : 'split');
+const leftColumnStyle = computed(() => {
+  if (sorganoidMode.value) {
+    return { width: '100%' };
+  }
+  if (workspaceLayout.value === 'background') {
+    const clamped = Math.max(34, Math.min(leftWidth.value, 62));
+    return { width: `min(${clamped}vw, 760px)` };
+  }
+  return { width: `${leftWidth.value}%` };
+});
+const rightColumnStyle = computed(() => (
+  workspaceLayout.value === 'background'
+    ? {}
+    : { width: `${100 - leftWidth.value}%` }
+));
+const availableBackgroundViews = computed(() => ([
+  { key: 'plot', label: 'ORGANOGRAM', enabled: Boolean(plotImage.value) },
+  { key: 'stl', label: 'GEOMETRY', enabled: Boolean(stlUrl.value) },
+  { key: 'sketch', label: 'SKETCH', enabled: Boolean(sketchImage.value) },
+  { key: 'modulus', label: 'ACOUSTIC', enabled: Boolean(modulusData.value) }
+]));
+const activeBackgroundView = computed(() => {
+  const preferred = availableBackgroundViews.value.find((item) => item.key === backgroundViewMode.value && item.enabled);
+  if (preferred) return preferred.key;
+  return availableBackgroundViews.value.find((item) => item.enabled)?.key || 'plot';
+});
+const backgroundStageLabel = computed(() => {
+  const current = availableBackgroundViews.value.find((item) => item.key === activeBackgroundView.value);
+  return current?.label || 'RESULT';
+});
+const splitTabOptions = computed(() => ([
+  { key: 'stl', label: 'GEOMETRY (3D)', enabled: Boolean(stlUrl.value) },
+  { key: 'sketch', label: 'SKETCH (INFERRED)', enabled: Boolean(sketchImage.value) },
+  { key: 'modulus', label: 'ACOUSTICS (SOT-A)', enabled: Boolean(modulusData.value) }
+]));
+const acousticCommandSummary = computed(() => {
+  const meta = lastAcousticCommand.value;
+  if (!meta) return 'No acoustic command evaluated yet.';
+  return `${meta.primitive.toUpperCase()} · ${meta.freq} Hz · src ${meta.source.join(', ')} · probe ${meta.probe.join(', ')}`;
+});
+const modulusMarkers = computed(() => {
+  const params = modulusData.value?.params || {};
+  const markers = [];
+  const sources = Array.isArray(params.sources) ? params.sources : [];
+  for (const src of sources) {
+    if (Array.isArray(src?.pos) && src.pos.length >= 2) {
+      markers.push({
+        type: 'source',
+        x: Number(src.pos[0]),
+        y: Number(src.pos[1]),
+        label: src.freq ? `${Math.round(Number(src.freq))}Hz` : 'src'
+      });
+    }
+  }
+  if (Array.isArray(params.probe) && params.probe.length >= 2) {
+    markers.push({
+      type: 'probe',
+      x: Number(params.probe[0]),
+      y: Number(params.probe[1]),
+      label: 'probe'
+    });
+  }
+  if (Array.isArray(params.obstacle) && params.obstacle.length >= 2) {
+    markers.push({
+      type: 'obstacle',
+      x: Number(params.obstacle[0]),
+      y: Number(params.obstacle[1]),
+      label: params.primitive || 'obs'
+    });
+  }
+  return markers.filter((marker) => Number.isFinite(marker.x) && Number.isFinite(marker.y));
+});
+
+const commandDomains = [
+  {
+    key: 'render',
+    label: 'RENDER',
+    color: '#8bc34a',
+    commands: [
+      { syntax: 'Alt+Enter', detail: 'Evaluate current selection or the full editor buffer.' },
+      { syntax: 'BG / SPLIT', detail: 'Switch between livecoding-over-background and split workspace.' },
+      { syntax: 'Alt+1 · Alt+2 · Alt+3', detail: 'Jump between SOOG, SOMAP, and Concert Room.' }
+    ]
+  },
+  {
+    key: 'acoustic',
+    label: 'SOT-A',
+    color: '#ff9800',
+    commands: [
+      { syntax: '@acoustic primitive=circle freq=440 source=-0.55,0 probe=0.55,0 obstacle=0.15,0', detail: 'Run the first acoustic command against the online field solver.' },
+      { syntax: 'primitive=<circle|square|triangle|hexagon>', detail: 'Choose a cavity family for the current acoustic test.' },
+      { syntax: 'follow-up lines', detail: 'Any lines after the command are passed as contextual notes to the solver.' }
+    ]
+  },
+  {
+    key: 'reversion',
+    label: 'REVERSION',
+    color: '#42a5f5',
+    commands: [
+      { syntax: '* correction notes…', detail: 'Fast reversion on top of the current instrument lineage.' },
+      { syntax: '+ addon notes…', detail: 'Alternative shorthand for iterative variants.' },
+      { syntax: '[REFACT source=<basename> group=<group_id> title=<name>]', detail: 'Explicit reversion header for precise lineage control.' }
+    ]
+  },
+  {
+    key: 'world',
+    label: 'WORLD',
+    color: '#ab47bc',
+    commands: [
+      { syntax: '§ ...', detail: 'Enter Sorganoid / world commands without touching the default workspace.' },
+      { syntax: '⌘/Ctrl + Shift + \\', detail: 'Toggle this command sidebar.' },
+      { syntax: '?', detail: 'Legacy help stays intact; command docs now live here.' }
+    ]
+  }
+];
+
+const sessionFacts = computed(() => ([
+  { label: 'Workspace', value: workspaceModeLabel.value.toUpperCase() },
+  { label: 'Model', value: responseModel.value || currentModel.value || '—' },
+  { label: 'Last render', value: responseElapsedMs.value ? `${(responseElapsedMs.value / 1000).toFixed(1)}s` : '—' },
+  { label: 'Rolling avg', value: `${(averageResponseMs.value / 1000).toFixed(1)}s` },
+  { label: 'Code append', value: showCode.value ? 'ON' : 'OFF' }
+]));
 
 const checkDevice = () => {
   isMobileOrTablet.value = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -450,10 +808,126 @@ function formatProgressStage(stage) {
     .replace(/\b\w/g, (ch) => ch.toUpperCase());
 }
 
+function clampUnitCoord(value, fallback = 0) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(-0.95, Math.min(0.95, numeric));
+}
+
+function formatCommandCoord(value) {
+  return String(Number(value).toFixed(2)).replace(/\.?0+$/, '');
+}
+
+function parsePointToken(rawValue, fallbackX, fallbackY) {
+  if (typeof rawValue !== 'string' || !rawValue.trim()) {
+    return [clampUnitCoord(fallbackX), clampUnitCoord(fallbackY)];
+  }
+  const parts = rawValue
+    .split(/[,:/]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return [
+    clampUnitCoord(parts[0], fallbackX),
+    clampUnitCoord(parts[1], fallbackY)
+  ];
+}
+
+function parseAcousticCommand(text) {
+  const lines = String(text || '').split('\n');
+  const firstIdx = lines.findIndex((line) => {
+    const trimmed = line.trim();
+    return trimmed && !trimmed.startsWith('#');
+  });
+  if (firstIdx === -1) return null;
+
+  const header = lines[firstIdx].trim();
+  if (!header.toLowerCase().startsWith('@acoustic')) return null;
+
+  const rawTokens = header.slice('@acoustic'.length).trim().split(/\s+/).filter(Boolean);
+  const params = {};
+  for (const token of rawTokens) {
+    const eqIdx = token.indexOf('=');
+    if (eqIdx === -1) continue;
+    const key = token.slice(0, eqIdx).trim().toLowerCase();
+    const value = token.slice(eqIdx + 1).trim();
+    if (key) params[key] = value;
+  }
+
+  const primitive = ['circle', 'square', 'triangle', 'hexagon'].includes(String(params.primitive || '').toLowerCase())
+    ? String(params.primitive).toLowerCase()
+    : 'circle';
+  const freq = Math.max(20, Math.min(4000, Math.round(Number(params.freq || params.hz || 440) || 440)));
+  const source = parsePointToken(params.source, -0.55, 0);
+  const probe = parsePointToken(params.probe, 0.55, 0);
+  const obstacle = parsePointToken(params.obstacle || params.obs, 0.15, 0);
+
+  const remainder = lines
+    .slice(firstIdx + 1)
+    .join('\n')
+    .trim();
+
+  const body = remainder || [
+    `Acoustic primitive study for a ${primitive} cavity.`,
+    `Use a sine generator at ${freq} Hz.`,
+    `Source at (${formatCommandCoord(source[0])}, ${formatCommandCoord(source[1])}), probe at (${formatCommandCoord(probe[0])}, ${formatCommandCoord(probe[1])}), obstacle at (${formatCommandCoord(obstacle[0])}, ${formatCommandCoord(obstacle[1])}).`
+  ].join(' ');
+
+  return {
+    normalizedPrompt: [
+      `[MODULUS freq=${freq} primitive=${primitive} source_x=${formatCommandCoord(source[0])} source_y=${formatCommandCoord(source[1])} probe_x=${formatCommandCoord(probe[0])} probe_y=${formatCommandCoord(probe[1])} obs_x=${formatCommandCoord(obstacle[0])} obs_y=${formatCommandCoord(obstacle[1])}]`,
+      body
+    ].join('\n'),
+    meta: {
+      primitive,
+      freq,
+      source,
+      probe,
+      obstacle,
+      notes: body
+    }
+  };
+}
+
+function pickPreferredSplitView() {
+  if (stlUrl.value) return 'stl';
+  if (sketchImage.value) return 'sketch';
+  if (modulusData.value) return 'modulus';
+  return 'stl';
+}
+
+function pickPreferredBackgroundView() {
+  if (plotImage.value) return 'plot';
+  if (stlUrl.value) return 'stl';
+  if (sketchImage.value) return 'sketch';
+  if (modulusData.value) return 'modulus';
+  return 'plot';
+}
+
+function toggleWorkspaceSidebar() {
+  workspaceSidebarOpen.value = !workspaceSidebarOpen.value;
+}
+
+function setWorkspaceLayout(layout) {
+  workspaceLayout.value = layout === 'background' ? 'background' : 'split';
+  if (workspaceLayout.value === 'background') {
+    backgroundViewMode.value = pickPreferredBackgroundView();
+  } else {
+    viewMode.value = pickPreferredSplitView();
+  }
+}
+
+function setBackgroundView(mode) {
+  backgroundViewMode.value = mode;
+}
+
 const handleKeyDown = (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'm') {
     e.preventDefault();
     uiVisible.value = !uiVisible.value;
+  }
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === 'Backslash') {
+    e.preventDefault();
+    toggleWorkspaceSidebar();
   }
 };
 
@@ -461,7 +935,6 @@ onMounted(() => {
   loadResponseTimeHistory();
   fetchOllamaModels();
   checkDevice();
-  showHelp.value = true; // Auto-show welcome modal on load
   window.addEventListener('resize', checkDevice);
   window.addEventListener('keydown', handleEscapeKey);
   window.addEventListener('keydown', handleKeyDown);
@@ -543,6 +1016,51 @@ const handleMobileEvaluate = () => {
         error.value = 'Please enter some text to evaluate.';
       }
     }
+  }
+};
+
+const rememberPendingRender = (prompt = pendingRenderPrompt.value) => {
+  if (typeof window === 'undefined' || !String(prompt || '').trim()) return;
+  window.sessionStorage.setItem(PENDING_RENDER_KEY, JSON.stringify({ prompt: String(prompt).trim() }));
+};
+
+const beginSignIn = async (google) => {
+  authActionLoading.value = true;
+  authGateError.value = '';
+  rememberPendingRender();
+  try {
+    await signIn(Boolean(google));
+  } catch (cause) {
+    authGateError.value = cause?.message || 'Unable to start sign-in.';
+    authActionLoading.value = false;
+  }
+};
+
+const handleSignOut = async () => {
+  try {
+    await signOut();
+  } catch (cause) {
+    error.value = cause?.message || 'Unable to sign out.';
+  }
+};
+
+const resumePendingRender = async () => {
+  if (typeof window === 'undefined' || !isAuthenticated.value || loading.value) return;
+  const raw = window.sessionStorage.getItem(PENDING_RENDER_KEY);
+  if (!raw) return;
+  window.sessionStorage.removeItem(PENDING_RENDER_KEY);
+  try {
+    const payload = JSON.parse(raw);
+    const prompt = String(payload?.prompt || '').trim();
+    if (!prompt) return;
+    showHelp.value = false;
+    showAuthGate.value = false;
+    pendingRenderPrompt.value = '';
+    window.history.replaceState({}, '', window.location.pathname);
+    await nextTick();
+    await handleEvaluate(prompt);
+  } catch {
+    // Ignore malformed or stale pending intent.
   }
 };
 
@@ -706,7 +1224,7 @@ async function remakeSketch() {
 
     const response = await fetch(`${apiBase.value}/generate/sketch`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
       body: JSON.stringify({
         prompt,
         summary: summaryText,
@@ -839,6 +1357,9 @@ async function loadCodeFromGallery(item) {
   stlUrl.value = item.stl_url ? resolveAssetUrl(item.stl_url) : null;
   plotImage.value = item.image_url ? resolveAssetUrl(item.image_url) : null;
   sketchImage.value = item.sketch_url ? resolveAssetUrl(item.sketch_url) : null;
+  modulusData.value = item.modulus || null;
+  viewMode.value = pickPreferredSplitView();
+  backgroundViewMode.value = pickPreferredBackgroundView();
   showGallery.value = false;
 }
 
@@ -909,6 +1430,10 @@ const handleEvaluate = async (selectedText) => {
     return;
   }
 
+  const acousticCommand = parseAcousticCommand(selectedText);
+  const requestPrompt = acousticCommand?.normalizedPrompt || selectedText;
+  lastAcousticCommand.value = acousticCommand?.meta || null;
+
   // Sorganoid Command Detection
   if (selectedText.trim().startsWith('§')) {
     const cmd = selectedText.trim();
@@ -925,6 +1450,13 @@ const handleEvaluate = async (selectedText) => {
   } else {
     // Normal evaluation resets sorganoid mode for now
     sorganoidMode.value = false;
+  }
+
+  if (!isAuthenticated.value) {
+    pendingRenderPrompt.value = selectedText.trim();
+    authGateError.value = '';
+    showAuthGate.value = true;
+    return;
   }
 
   const requestStartedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -945,13 +1477,15 @@ const handleEvaluate = async (selectedText) => {
       const timeoutId = timeoutMs > 0 ? setTimeout(() => controller?.abort(), timeoutMs) : null;
       let response;
       try {
+        const secureHeaders = await authHeaders();
         response = await fetch(`${apiBase.value}/generate`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            ...secureHeaders,
           },
-          body: JSON.stringify({ prompt: selectedText, request_id: generationRequestId.value }),
+          body: JSON.stringify({ prompt: requestPrompt, request_id: generationRequestId.value }),
           signal: controller?.signal
         });
       } catch (fetchErr) {
@@ -970,18 +1504,26 @@ const handleEvaluate = async (selectedText) => {
       const text = await response.text();
       
       if (!response.ok) {
+        let errorData = {};
+        try {
+          errorData = JSON.parse(text);
+        } catch {
+          errorData = {};
+        }
+        if (response.status === 401) {
+          pendingRenderPrompt.value = selectedText.trim();
+          showAuthGate.value = true;
+          throw new Error(errorData.error || 'Sign in to render with SOOG.');
+        }
+        if (response.status === 429) {
+          quota.value = errorData.quota || quota.value;
+          throw new Error(errorData.error || 'Your render quota has been reached.');
+        }
         // Handle 502 Bad Gateway and similar errors
         if (response.status === 502 || response.status === 503) {
           throw new Error('Backend service unavailable (502/503). Please check server status.');
         }
-        
-        // Try to parse as JSON for error message
-        try {
-          const errorData = JSON.parse(text);
-          throw new Error(errorData.error || `Server error ${response.status}`);
-        } catch (jsonError) {
-          throw new Error(text || `Server error ${response.status}`);
-        }
+        throw new Error(errorData.error || text || `Server error ${response.status}`);
       }
       
       // Validate response has content
@@ -1018,6 +1560,7 @@ const handleEvaluate = async (selectedText) => {
 
   try {
     const data = await callOnce();
+    void refreshProfile(apiBase.value).catch(() => {});
 
     // Reset results
     plotImage.value = null;
@@ -1038,6 +1581,7 @@ const handleEvaluate = async (selectedText) => {
       summary.value = data.summary;
       materialsText.value = data.materials;
       viewMode.value = 'modulus';
+      backgroundViewMode.value = 'modulus';
 
       // Play sonic feedback
       if (modulusData.value && modulusData.value.results) {
@@ -1075,6 +1619,8 @@ const handleEvaluate = async (selectedText) => {
     modulusData.value = data.modulus || null;
     responseModel.value = (data.llm_model || currentModel.value || '').trim();
     sketchModel.value = (data.sketch_model || data.gallery?.sketch_model || '').trim();
+    viewMode.value = pickPreferredSplitView();
+    backgroundViewMode.value = pickPreferredBackgroundView();
 
     // Play sonic feedback for standard generation if modulus data exists
     if (modulusData.value && modulusData.value.results) {
@@ -1205,6 +1751,28 @@ async function handleGalleryArrows(e) {
 onMounted(() => window.addEventListener('keydown', handleGalleryArrows))
 onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
 
+watch(
+  [isAuthenticated, authLoading],
+  async ([authenticated, authBusy]) => {
+    if (!authenticated) {
+      profileRefreshAttempted.value = false;
+      profile.value = null;
+      quota.value = null;
+      return;
+    }
+    if (authBusy || profileRefreshAttempted.value) return;
+    profileRefreshAttempted.value = true;
+    try {
+      await refreshProfile(apiBase.value);
+      authGateError.value = '';
+      await resumePendingRender();
+    } catch (cause) {
+      authGateError.value = cause?.message || 'Unable to validate the SOOG session.';
+    }
+  },
+  { immediate: true }
+)
+
 </script>
 
 <style scoped>
@@ -1221,6 +1789,10 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   margin: 0;
   background: #000;
   transition: background-color 0.5s ease;
+}
+
+.app-container.workspace-background-mode {
+  isolation: isolate;
 }
 
 .app-container.sorganoid-active {
@@ -1259,8 +1831,14 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   display: block;
   min-width: 0;
   overflow: hidden;
-  z-index: 20; /* High z-index to stay on top */
+  z-index: 20;
   transition: opacity 0.5s ease, width 0.5s ease;
+}
+
+.left-column--background {
+  position: relative;
+  z-index: 30;
+  border-right: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .right-column {
@@ -1269,8 +1847,28 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   display: flex;
   flex-direction: column;
   min-width: 0;
-  z-index: 20;
+  z-index: 10;
   transition: opacity 0.5s ease;
+}
+
+.right-column--background {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  z-index: 0;
+  border-left: none;
+}
+
+.app-container.workspace-background-mode .editor-wrapper {
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.86) 48%, rgba(0, 0, 0, 0.28) 100%);
+}
+
+.app-container.workspace-background-mode .left-column :deep(.ace_editor),
+.app-container.workspace-background-mode .left-column :deep(.ace_scroller),
+.app-container.workspace-background-mode .left-column :deep(.ace_content),
+.app-container.workspace-background-mode .left-column :deep(.ace_gutter) {
+  background: transparent !important;
 }
 
 .divider {
@@ -1313,9 +1911,62 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   padding: 4px 12px;
   display: flex;
   gap: 8px;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #111;
+  flex-wrap: wrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  position: relative;
+  z-index: 12;
+}
+
+.right-column--background .hud {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  border-bottom: none;
+  padding: 8px 14px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.86), rgba(0, 0, 0, 0));
+}
+
+.hud-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.hud-group--main {
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.layout-pill {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.52);
+  padding: 2px 7px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.layout-pill:hover,
+.layout-pill.active {
+  color: rgba(255, 255, 255, 0.88);
+  border-color: rgba(255, 255, 255, 0.44);
+}
+
+.layout-pill:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.layout-pill--view.active {
+  border-color: rgba(255, 179, 0, 0.9);
+  color: #ffb300;
 }
 
 .icon-button {
@@ -1355,6 +2006,47 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
 
 .model-cycle-button {
   margin-right: 2px;
+}
+
+.auth-pill,
+.quota-pill {
+  min-height: 22px;
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.48);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 8px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.auth-pill {
+  cursor: pointer;
+}
+
+.auth-pill:hover {
+  border-color: rgba(76, 175, 80, 0.65);
+  color: #81c784;
+}
+
+.admin-pill {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.admin-pill,
+.admin-pill:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.quota-pill {
+  display: inline-flex;
+  align-items: center;
 }
 
 .icon {
@@ -1502,9 +2194,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   overflow-x: hidden;
   background: transparent;
   display: grid;
-  grid-template-rows: minmax(250px, 1fr) minmax(250px, 1fr) minmax(220px, 0.95fr) minmax(260px, 1fr);
+  grid-template-rows: minmax(240px, 1.1fr) minmax(220px, 0.9fr) minmax(300px, 1fr);
   gap: 0;
-  padding: 0 16px 88px 16px;
+  padding: 0 0 88px 0;
   box-sizing: border-box;
 }
 
@@ -1512,7 +2204,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   background: transparent;
   border: none;
   border-radius: 0;
-  padding: 12px 0;
+  padding: 12px 16px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1653,9 +2345,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
 .modulus-results {
   flex: 1;
   overflow: auto;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 12px;
-  border-radius: 4px;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
 }
 
 .modulus-json {
@@ -1800,6 +2492,207 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   color: #aaa;
 }
 
+.background-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 40px 72px 40px;
+  overflow: hidden;
+}
+
+.background-stage__meta {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 2;
+}
+
+.background-stage__label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.background-stage__sub {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.44);
+}
+
+.background-stage__image,
+.background-stage__viewer,
+.background-stage__heatmap {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.background-stage__image {
+  object-fit: contain;
+}
+
+.background-stage__viewer {
+  min-height: 0;
+}
+
+.background-stage__heatmap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workspace-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 44px;
+  width: 360px;
+  display: flex;
+  transform: translateX(316px);
+  transition: transform 0.24s ease;
+  z-index: 80;
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(14px);
+}
+
+.workspace-sidebar--open {
+  transform: translateX(0);
+}
+
+.workspace-sidebar__rail {
+  width: 44px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.workspace-sidebar__tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.46);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  cursor: pointer;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  padding: 12px 0;
+}
+
+.workspace-sidebar__tab.active {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.workspace-sidebar__panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.workspace-sidebar__header {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.workspace-sidebar__close {
+  color: rgba(255, 255, 255, 0.46);
+}
+
+.workspace-sidebar__body {
+  flex: 1;
+  overflow: auto;
+  padding: 14px 16px 68px;
+}
+
+.command-domain + .command-domain,
+.acoustic-summary + .acoustic-summary,
+.session-summary,
+.session-facts + .session-facts {
+  margin-top: 18px;
+}
+
+.command-domain__header {
+  margin-bottom: 8px;
+}
+
+.command-domain__badge {
+  display: inline-block;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--domain-color);
+  color: var(--domain-color);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
+.command-domain__row + .command-domain__row {
+  margin-top: 10px;
+}
+
+.command-domain__row code,
+.acoustic-summary code {
+  display: block;
+  color: rgba(255, 255, 255, 0.9);
+  background: transparent;
+  padding: 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.command-domain__row p,
+.acoustic-summary p,
+.session-summary :deep(p) {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.session-facts {
+  display: grid;
+  gap: 10px;
+}
+
+.session-fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.session-fact strong {
+  color: rgba(255, 255, 255, 0.86);
+  font-weight: 400;
+  text-align: right;
+}
+
+.session-summary h4,
+.acoustic-summary h4 {
+  margin: 0 0 6px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 400;
+}
+
 @media (max-width: 768px) {
   .hud { width: 100% !important; box-sizing: border-box; position: absolute; top: 0; left: 0; z-index: 100; background: rgba(0,0,0,0.8); }
   .left-column { padding-top: 50px !important; }
@@ -1815,8 +2708,16 @@ onUnmounted(() => window.removeEventListener('keydown', handleGalleryArrows))
   .left-column { height: 50vh !important; }
   .right-column { height: 50vh !important; }
   .results-split {
-    grid-template-rows: minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 0.95fr) minmax(220px, 1fr);
+    grid-template-rows: minmax(180px, 1fr) minmax(180px, 0.95fr) minmax(220px, 1fr);
     padding-bottom: 110px;
+  }
+  .workspace-sidebar {
+    width: 100vw;
+    transform: translateX(calc(100vw - 44px));
+  }
+  .background-stage {
+    padding-left: 12px;
+    padding-right: 12px;
   }
 }
 </style>

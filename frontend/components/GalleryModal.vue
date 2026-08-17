@@ -201,6 +201,7 @@ const emit = defineEmits(['update:modelValue', 'load-code'])
 
 const { apiBase } = useApi()
 const config = useRuntimeConfig()
+const { authHeaders } = useSoogAuth()
 
 const items = ref([])
 const selectedBasename = ref('')
@@ -256,7 +257,7 @@ async function executeSoundGen() {
   try {
     const res = await fetch(`${apiBase.value}/gallery/item/${current.value.basename}/generate_sound`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
       body: JSON.stringify({ 
         request_id: generationRequestId.value,
         prompt: customSoundPrompt.value 
@@ -277,7 +278,7 @@ async function generateLRM() {
   try {
     const res = await fetch(`${apiBase.value}/gallery/item/${current.value.basename}/generate_lrm`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
       body: JSON.stringify({ request_id: generationRequestId.value })
     })
     if (!res.ok) {
@@ -297,7 +298,7 @@ async function remakeSketch() {
   try {
     const res = await fetch(`${apiBase.value}/gallery/item/${current.value.basename}/remake_sketch`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
       body: JSON.stringify({ request_id: generationRequestId.value })
     })
     if (!res.ok) throw new Error('Failed to remake sketch')
@@ -315,7 +316,7 @@ async function generateModulus() {
     const prompt = `[MODULUS] ${current.value.prompt}`
     const res = await fetch(`${apiBase.value}/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
       body: JSON.stringify({ 
         prompt, 
         request_id: generationRequestId.value, 

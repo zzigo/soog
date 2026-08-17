@@ -40,7 +40,16 @@ export default defineNuxtConfig({
           : "https://soog.zztt.org/api"),
       // "0" means disabled (no client-side timeout cap).
       generateTimeoutMs: process.env.NUXT_PUBLIC_GENERATE_TIMEOUT_MS || "0",
+      logtoEndpoint:
+        process.env.NUXT_PUBLIC_LOGTO_ENDPOINT || "https://logto.zztt.org",
+      logtoAppId: process.env.NUXT_PUBLIC_LOGTO_APP_ID || "",
+      logtoApiResource:
+        process.env.NUXT_PUBLIC_LOGTO_API_RESOURCE || "https://soog.zztt.org/api",
     },
+  },
+
+  routeRules: {
+    "/auth/callback": { ssr: false },
   },
 
   vite: {

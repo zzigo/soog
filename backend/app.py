@@ -65,6 +65,19 @@ logging.basicConfig(
 
 load_dotenv()
 
+from auth_usage import (
+    authenticate_request,
+    get_identity_payload,
+    init_usage_db,
+    metered_action,
+    record_provider_call,
+    require_auth,
+    update_user_quota,
+    usage_dashboard,
+)
+
+init_usage_db()
+
 # Default model for all generations.
 DEFAULT_OLLAMA_MODEL = 'deepseek-r1:8b'
 # Fallback model if the default one fails repeatedly.
@@ -1318,6 +1331,44 @@ def parse_refact_marker(prompt_text: str):
     return text, meta
 
 
+def _coerce_float(value, default):
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+    return numeric if np.isfinite(numeric) else float(default)
+
+
+def _infer_modulus_primitive(prompt_text: str, fallback: str = 'circle') -> str:
+    lowered = str(prompt_text or '').lower()
+    keyword_map = {
+        'circle': ('circle', 'circular', 'round', 'pipe', 'tube', 'aerophone'),
+        'square': ('square', 'box', 'boxed', 'casing'),
+        'triangle': ('triangle', 'triangular', 'reed cluster'),
+        'hexagon': ('hexagon', 'hexagonal', 'honeycomb', 'cellular'),
+    }
+    for primitive, keywords in keyword_map.items():
+        if any(keyword in lowered for keyword in keywords):
+            return primitive
+    return fallback if fallback in ('circle', 'square', 'triangle', 'hexagon') else 'circle'
+
+
+def _build_modulus_sim_params(refact_meta: dict, prompt_text: str):
+    primitive = str(refact_meta.get('primitive') or '').strip().lower()
+    primitive = _infer_modulus_primitive(prompt_text, primitive or 'circle')
+    return {
+        'freq': _coerce_float(refact_meta.get('freq'), 440.0),
+        'obs_x': _coerce_float(refact_meta.get('obs_x'), 0.15),
+        'obs_y': _coerce_float(refact_meta.get('obs_y'), 0.0),
+        'source_x': _coerce_float(refact_meta.get('source_x'), -0.55),
+        'source_y': _coerce_float(refact_meta.get('source_y'), 0.0),
+        'probe_x': _coerce_float(refact_meta.get('probe_x'), 0.55),
+        'probe_y': _coerce_float(refact_meta.get('probe_y'), 0.0),
+        'primitive': primitive,
+        'prompt': prompt_text,
+    }
+
+
 def _iter_gallery_metas():
     if not os.path.isdir(GALLERY_DIR):
         return []
@@ -1413,6 +1464,25 @@ def extract_llm_thinking(payload: dict) -> str:
     if payload.get('thinking') is not None:
         return str(payload.get('thinking') or '')
     return ''
+
+
+def build_llm_usage_meta(url: str, base_url: str, model_name: str, payload: dict, thinking: str = ''):
+    usage = payload.get('usage') if isinstance(payload.get('usage'), dict) else {}
+    if not usage:
+        usage = {
+            'prompt_eval_count': payload.get('prompt_eval_count'),
+            'eval_count': payload.get('eval_count'),
+        }
+    meta = {
+        'provider': 'ollama',
+        'endpoint': url,
+        'base_url': base_url,
+        'model': model_name,
+        'thinking': thinking,
+        'usage': usage,
+    }
+    record_provider_call(meta)
+    return meta
 
 
 def stream_ollama_response(url: str, headers: dict, body: dict, timeout=300, progress_callback=None):
@@ -1573,7 +1643,7 @@ def call_ollama_structured(
         for url, body in build_attempts(think_enabled):
             try:
                 if url.endswith('/api/chat') or url.endswith('/api/generate'):
-                    content, thinking, _ = stream_ollama_response(
+                    content, thinking, final_payload = stream_ollama_response(
                         url,
                         headers=headers,
                         body=body,
@@ -1581,12 +1651,9 @@ def call_ollama_structured(
                         progress_callback=progress_callback
                     )
                     data = _extract_json_object(content)
-                    return data, {
-                        'endpoint': url,
-                        'base_url': base_url,
-                        'model': model_name,
-                        'thinking': thinking
-                    }
+                    return data, build_llm_usage_meta(
+                        url, base_url, model_name, final_payload, thinking
+                    )
 
                 response = requests.post(url, headers=headers, json=body, timeout=timeout)
                 if response.status_code >= 400:
@@ -1611,12 +1678,9 @@ def call_ollama_structured(
                 payload = response.json()
                 content = extract_llm_content(payload)
                 data = _extract_json_object(content)
-                return data, {
-                    'endpoint': url,
-                    'base_url': base_url,
-                    'model': model_name,
-                    'thinking': extract_llm_thinking(payload)
-                }
+                return data, build_llm_usage_meta(
+                    url, base_url, model_name, payload, extract_llm_thinking(payload)
+                )
             except requests.exceptions.RequestException as req_err:
                 last_error = f"Request failed for {url}: {req_err}"
                 continue
@@ -1691,7 +1755,7 @@ def call_ollama_chat(
         for url, body in build_attempts(think_enabled):
             try:
                 if url.endswith('/api/chat') or url.endswith('/api/generate'):
-                    content, thinking, _ = stream_ollama_response(
+                    content, thinking, final_payload = stream_ollama_response(
                         url,
                         headers=headers,
                         body=body,
@@ -1701,12 +1765,9 @@ def call_ollama_chat(
                     if not content:
                         last_error = f"Empty model response from {url}"
                         continue
-                    return content, {
-                        'endpoint': url,
-                        'base_url': base_url,
-                        'model': model_name,
-                        'thinking': thinking
-                    }
+                    return content, build_llm_usage_meta(
+                        url, base_url, model_name, final_payload, thinking
+                    )
 
                 response = requests.post(url, headers=headers, json=body, timeout=timeout)
                 if response.status_code >= 400:
@@ -1733,12 +1794,9 @@ def call_ollama_chat(
                 if not content:
                     last_error = f"Empty model response from {url}"
                     continue
-                return content, {
-                    'endpoint': url,
-                    'base_url': base_url,
-                    'model': model_name,
-                    'thinking': extract_llm_thinking(payload)
-                }
+                return content, build_llm_usage_meta(
+                    url, base_url, model_name, payload, extract_llm_thinking(payload)
+                )
             except requests.exceptions.RequestException as req_err:
                 last_error = f"Request failed for {url}: {req_err}"
                 continue
@@ -3110,6 +3168,35 @@ def view_logs():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/auth/me', methods=['GET'])
+@require_auth()
+def auth_me():
+    identity = authenticate_request()
+    return jsonify({'ok': True, **get_identity_payload(identity)})
+
+
+@app.route('/api/admin/usage', methods=['GET'])
+@require_auth(admin=True)
+def admin_usage():
+    period = str(request.args.get('period') or 'week').strip().lower()
+    return jsonify({'ok': True, **usage_dashboard(period)})
+
+
+@app.route('/api/admin/quotas/<string:subject>', methods=['PUT'])
+@require_auth(admin=True)
+def admin_update_quota(subject: str):
+    payload = request.get_json(silent=True) or {}
+    try:
+        user = update_user_quota(
+            subject=subject,
+            daily=payload.get('daily'),
+            weekly=payload.get('weekly'),
+        )
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Quota values must be blank, -1, or non-negative integers'}), 400
+    return jsonify({'ok': True, 'user': user})
+
+
 @app.route('/api/generate/progress/<string:request_id>', methods=['GET'])
 def generate_progress(request_id):
     current = get_generation_progress(request_id)
@@ -3220,8 +3307,9 @@ def sorganoid_save_world(name):
 
 @app.route('/api/generate', methods=['POST'])
 @log_activity('generate')
+@metered_action('organogram')
 def generate():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     request_id = str((data or {}).get('request_id') or '').strip()
     prompt_input = data.get('prompt', '').strip()
     prompt, refact_meta = parse_refact_marker(prompt_input)
@@ -3247,13 +3335,7 @@ def generate():
             import acoustic_modulus
             importlib.reload(acoustic_modulus)
             
-            # Extract params from refact_meta
-            sim_params = {
-                'freq': float(refact_meta.get('freq', 440.0)),
-                'obs_x': float(refact_meta.get('obs_x', 0.0)),
-                'obs_y': float(refact_meta.get('obs_y', 0.0)),
-                'prompt': prompt
-            }
+            sim_params = _build_modulus_sim_params(refact_meta, prompt)
             
             sim_result = acoustic_modulus.run_simulation(sim_params)
             
@@ -3283,8 +3365,20 @@ def generate():
                 "type": "modulus",
                 "ok": True,
                 "modulus": sim_result,
-                "summary": f"Acoustical Simulation Experiment (Modulus)\nMethod: {sim_result.get('method')}\nFrequency: {sim_params['freq']} Hz\nObstacle: ({sim_params['obs_x']}, {sim_params['obs_y']})",
-                "materials": "Simulation Nodes: 2500\nBoundary: Dirichlet/Neumann mix\nSolver: Physics-Informed Neural Network",
+                "summary": (
+                    "Acoustical primitive study\n"
+                    f"Method: {sim_result.get('method')}\n"
+                    f"Primitive: {sim_result.get('params', {}).get('primitive', sim_params['primitive'])}\n"
+                    f"Frequency: {sim_result.get('params', {}).get('freq', sim_params['freq'])} Hz\n"
+                    f"Source: ({sim_params['source_x']:.2f}, {sim_params['source_y']:.2f})\n"
+                    f"Probe: ({sim_params['probe_x']:.2f}, {sim_params['probe_y']:.2f})\n"
+                    f"Obstacle: ({sim_params['obs_x']:.2f}, {sim_params['obs_y']:.2f})"
+                ),
+                "materials": (
+                    f"Primitive cavity: {sim_result.get('params', {}).get('primitive', sim_params['primitive'])}\n"
+                    f"Grid size: {sim_result.get('params', {}).get('grid_size', '—')}\n"
+                    f"Resonance peaks: {', '.join(str(x) for x in (sim_result.get('results', {}).get('resonance_peaks_hz') or [])[:6]) or '—'}"
+                ),
                 "elapsed_ms": 0
             })
         except Exception as sim_err:
@@ -3463,14 +3557,7 @@ def generate():
             import acoustic_modulus
             importlib.reload(acoustic_modulus)
             
-            # Simple heuristic for simulation parameters from prompt
-            freq_match = re.search(r'(\d+)\s*(?:hz|freq)', prompt, re.I)
-            sim_params = {
-                'freq': float(freq_match.group(1)) if freq_match else 440.0,
-                'obs_x': float(refact_meta.get('obs_x', 0.1)),
-                'obs_y': float(refact_meta.get('obs_y', 0.2)),
-                'prompt': prompt
-            }
+            sim_params = _build_modulus_sim_params(refact_meta, prompt)
             modulus_sim = acoustic_modulus.run_simulation(sim_params)
         except Exception as mod_err:
             logging.error(f"Automatic Modulus simulation failed: {mod_err}")
@@ -3590,6 +3677,7 @@ def predict():
 
 @app.route('/api/generate/sketch', methods=['POST'])
 @log_activity('generate_sketch')
+@metered_action('sketch', charged=False)
 def generate_sketch():
     """
     Generate or regenerate a diffusion sketch based on provided organogram and text.
@@ -3633,6 +3721,7 @@ def generate_sketch():
         return jsonify({'error': str(e)}), 500
 @app.route('/api/gallery/item/<basename>/remake_sketch', methods=['POST'])
 @log_activity('remake_sketch')
+@metered_action('remake_sketch', charged=False)
 def remake_sketch(basename: str):
     """
     Regenerate the diffusion sketch for an existing gallery item.
@@ -3721,6 +3810,7 @@ def remake_sketch(basename: str):
 
 @app.route('/api/gallery/item/<basename>/generate_sound', methods=['POST'])
 @log_activity('generate_sound')
+@metered_action('sound', charged=False)
 def generate_sound(basename: str):
     """
     Generate audio samples for an existing gallery item using Stable Audio Open.
@@ -4161,6 +4251,7 @@ def gallery_rename_group(group_id):
 
 @app.route('/api/gallery/item/<basename>/generate_lrm', methods=['POST'])
 @log_activity('generate_lrm')
+@metered_action('lrm', charged=False)
 def generate_lrm(basename):
     """
     Triggers High-Fidelity 3D Reconstruction (LRM) using InstantMesh/TripoSR
@@ -4312,8 +4403,8 @@ def page_not_found(e):
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 10000))
-    debug_mode = os.getenv("FLASK_DEBUG", "1").strip().lower() in ("1", "true", "yes", "on")
-    use_reloader = os.getenv("FLASK_RELOAD", "1").strip().lower() in ("1", "true", "yes", "on")
+    debug_mode = os.getenv("FLASK_DEBUG", "0").strip().lower() in ("1", "true", "yes", "on")
+    use_reloader = os.getenv("FLASK_RELOAD", "0").strip().lower() in ("1", "true", "yes", "on")
     logging.info(
         f"Starting Flask app on port {port} "
         f"(debug={debug_mode}, reloader={use_reloader})"
