@@ -98,37 +98,63 @@ npm run build; or exit 1
 # 6) Restart services
 echo "→ Restarting runtime"
 set -l USED_PM2 0
-set -l APP_USER (stat -c %U $REPO_DIR 2>/dev/null)
-if test -z "$APP_USER"
-    set APP_USER (whoami)
-end
-set -l APP_HOME (getent passwd $APP_USER | cut -d: -f6)
-if test -z "$APP_HOME"
-    set APP_HOME "/home/$APP_USER"
-end
-set -l PM2_HOME_DIR "$APP_HOME/.pm2"
 
 if command -sq pm2
     set -l PM2_BIN (command -s pm2)
+    set -l PM2_USERS
+    set -l REPO_OWNER (stat -c %U $REPO_DIR 2>/dev/null)
+    set -l PM2_DAEMON_OWNER (ps -eo user=,cmd= | awk '/PM2 v[0-9.]+: God Daemon/ {print $1; exit}')
+
+    for candidate in (whoami) $SUDO_USER $REPO_OWNER $PM2_DAEMON_OWNER zz
+        if test -n "$candidate"
+            if not contains -- $candidate $PM2_USERS
+                set -a PM2_USERS $candidate
+            end
+        end
+    end
+
+    set -l PM2_APP_USER
     set -l PM2_PREFIX
-    if test "$APP_USER" != (whoami)
-        set PM2_PREFIX sudo -u $APP_USER -H env PM2_HOME="$PM2_HOME_DIR" PATH="/usr/local/bin:/usr/bin:/bin"
+    for candidate in $PM2_USERS
+        set -l CANDIDATE_HOME (getent passwd $candidate | cut -d: -f6)
+        if test -z "$CANDIDATE_HOME"
+            set CANDIDATE_HOME "/home/$candidate"
+        end
+
+        set -l CANDIDATE_PREFIX
+        if test "$candidate" != (whoami)
+            set CANDIDATE_PREFIX sudo -u $candidate -H env PM2_HOME="$CANDIDATE_HOME/.pm2" PATH="/usr/local/bin:/usr/bin:/bin"
+        end
+
+        if $CANDIDATE_PREFIX $PM2_BIN describe soog-backend >/dev/null 2>/dev/null
+            set PM2_APP_USER $candidate
+            set PM2_PREFIX $CANDIDATE_PREFIX
+            break
+        end
+
+        if $CANDIDATE_PREFIX $PM2_BIN describe soog-frontend >/dev/null 2>/dev/null
+            set PM2_APP_USER $candidate
+            set PM2_PREFIX $CANDIDATE_PREFIX
+            break
+        end
     end
 
-    if $PM2_PREFIX $PM2_BIN describe soog-backend >/dev/null 2>/dev/null
-        echo "  - Restarting PM2 app ($APP_USER): soog-backend"
-        $PM2_PREFIX $PM2_BIN restart soog-backend --update-env; or exit 1
-        set USED_PM2 1
-    end
+    if test -n "$PM2_APP_USER"
+        if $PM2_PREFIX $PM2_BIN describe soog-backend >/dev/null 2>/dev/null
+            echo "  - Restarting PM2 app ($PM2_APP_USER): soog-backend"
+            $PM2_PREFIX $PM2_BIN restart soog-backend --update-env; or exit 1
+            set USED_PM2 1
+        end
 
-    if $PM2_PREFIX $PM2_BIN describe soog-frontend >/dev/null 2>/dev/null
-        echo "  - Restarting PM2 app ($APP_USER): soog-frontend"
-        $PM2_PREFIX $PM2_BIN restart soog-frontend --update-env; or exit 1
-        set USED_PM2 1
+        if $PM2_PREFIX $PM2_BIN describe soog-frontend >/dev/null 2>/dev/null
+            echo "  - Restarting PM2 app ($PM2_APP_USER): soog-frontend"
+            $PM2_PREFIX $PM2_BIN restart soog-frontend --update-env; or exit 1
+            set USED_PM2 1
+        end
     end
 
     if test $USED_PM2 -eq 1
-        echo "  - Saving PM2 process list for $APP_USER"
+        echo "  - Saving PM2 process list for $PM2_APP_USER"
         $PM2_PREFIX $PM2_BIN save; or exit 1
     end
 end
