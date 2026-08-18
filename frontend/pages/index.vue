@@ -38,22 +38,54 @@
     >
       <div class="hud">
         <div class="hud-group hud-group--workspace">
-          <button
-            class="layout-pill"
-            :class="{ active: workspaceLayout === 'background' }"
-            @click="setWorkspaceLayout('background')"
-            title="Background workspace"
-          >
-            BG
-          </button>
-          <button
-            class="layout-pill"
-            :class="{ active: workspaceLayout === 'split' }"
-            @click="setWorkspaceLayout('split')"
-            title="Split workspace"
-          >
-            SPLIT
-          </button>
+          <div ref="workspacePresetMenuRef" class="workspace-preset-menu">
+            <button
+              class="icon-button"
+              :class="{ active: workspacePresetMenuOpen }"
+              @click="toggleWorkspacePresetMenu"
+              title="Workspace presets"
+            >
+              <svg class="icon workspace-preset-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="4" y="4" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none" />
+                <template v-if="workspacePreset === 'splitVertical'">
+                  <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
+                </template>
+                <template v-else-if="workspacePreset === 'splitThree'">
+                  <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
+                  <path d="M12 12H20" stroke="currentColor" stroke-width="1.5" />
+                </template>
+                <template v-else-if="workspacePreset === 'splitFour'">
+                  <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
+                  <path d="M4 12H20" stroke="currentColor" stroke-width="1.5" />
+                </template>
+              </svg>
+            </button>
+            <div v-if="workspacePresetMenuOpen" class="workspace-preset-dropdown">
+              <button
+                v-for="preset in workspacePresetOptions"
+                :key="preset.key"
+                class="workspace-preset-option"
+                :class="{ active: workspacePreset === preset.key }"
+                @click="setWorkspacePreset(preset.key)"
+              >
+                <svg class="workspace-preset-option__icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="4" y="4" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none" />
+                  <template v-if="preset.key === 'splitVertical'">
+                    <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
+                  </template>
+                  <template v-else-if="preset.key === 'splitThree'">
+                    <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
+                    <path d="M12 12H20" stroke="currentColor" stroke-width="1.5" />
+                  </template>
+                  <template v-else-if="preset.key === 'splitFour'">
+                    <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
+                    <path d="M4 12H20" stroke="currentColor" stroke-width="1.5" />
+                  </template>
+                </svg>
+                <span>{{ preset.label }}</span>
+              </button>
+            </div>
+          </div>
           <button
             class="icon-button"
             :class="{ active: workspaceSidebarOpen }"
@@ -63,20 +95,6 @@
             <svg class="icon" viewBox="0 0 24 24">
               <path fill="currentColor" d="M3 5H21V7H3V5M3 11H21V13H3V11M3 17H9V19H3V17M13 17H21V19H13V17Z" />
             </svg>
-          </button>
-        </div>
-
-        <div v-if="workspaceLayout === 'background'" class="hud-group hud-group--views">
-          <button
-            v-for="item in availableBackgroundViews"
-            :key="item.key"
-            class="layout-pill layout-pill--view"
-            :class="{ active: activeBackgroundView === item.key }"
-            :disabled="!item.enabled"
-            @click="setBackgroundView(item.key)"
-            :title="item.label"
-          >
-            {{ item.label }}
           </button>
         </div>
 
@@ -173,63 +191,40 @@
         :duration="300"
         mode="out-in"
       >
-        <div v-if="hasResults && workspaceLayout === 'split'" class="results-panel" :key="transitionKey">
-          <div class="results-split">
-            <section class="panel panel-organogram">
-              <h3 class="section-title">ORGANOGRAM</h3>
-              <img
-                v-if="plotImage"
-                :src="plotImage"
-                alt="Organogram"
-                @click="openLightbox(plotImage, 'Organogram')"
-                class="plot-image"
-              />
-              <div v-else class="panel-placeholder">Live acoustic previews do not generate an organogram image.</div>
-            </section>
-
-            <section class="panel panel-text">
-              <div class="section-header">
-                <h3 class="section-title">CONCEPTUAL SUMMARY</h3>
-                <span v-if="responseMetaText" class="section-meta">{{ responseMetaText }}</span>
-              </div>
-              <div v-if="summaryHtml" class="summary-content" v-html="summaryHtml"></div>
-              <div v-else class="panel-placeholder">Evaluate a generation to populate conceptual summary and materials.</div>
-              <div class="section-header materials-title">
-                <h3 class="section-title">MATERIALS</h3>
-                <span v-if="responseMetaText" class="section-meta">{{ responseMetaText }}</span>
-              </div>
-              <pre v-if="materialsText" class="materials-list">{{ materialsText }}</pre>
-              <div v-else class="panel-placeholder">No material list yet.</div>
-            </section>
-
-            <section class="panel panel-visualizer">
-              <div class="section-header tab-header">
-                <div class="tabs">
+        <div
+          class="results-panel"
+          :class="{
+            'results-panel--idle': !hasResults,
+            'results-panel--background': workspaceLayout === 'background'
+          }"
+          :key="`${transitionKey}-${workspacePreset}`"
+        >
+          <div class="workspace-stage" :class="`workspace-stage--${workspacePreset}`">
+            <section
+              v-for="pane in activeWorkspacePanes"
+              :key="pane.id"
+              class="workspace-pane"
+              :class="`workspace-pane--${pane.area}`"
+            >
+              <div class="workspace-pane__header">
+                <span class="workspace-pane__title">{{ workspaceViewLabel(pane.view) }}</span>
+                <div class="workspace-pane__controls">
                   <button
-                    v-for="item in splitTabOptions"
-                    :key="item.key"
-                    class="tab-btn"
-                    :class="{ active: viewMode === item.key }"
-                    :disabled="!item.enabled"
-                    @click="viewMode = item.key"
+                    v-if="pane.view === 'geometry' && stlUrl"
+                    @click="downloadCurrentStl"
+                    class="download-btn"
                   >
-                    {{ item.label }}
-                  </button>
-                </div>
-                <div class="section-meta-group">
-                  <button v-if="viewMode === 'stl' && stlUrl" @click="downloadCurrentStl" class="download-btn">
                     Download STL
                   </button>
-                  <span v-if="viewMode === 'sketch' && sketchModel" class="section-meta">{{ sketchModel }}</span>
                   <button
-                    v-if="viewMode === 'sketch' && hasResults"
+                    v-if="pane.view === 'sketch' && hasResults"
                     @click="remakeSketch"
                     class="remake-btn-small"
                     :disabled="loading"
                   >
                     {{ loading ? '...' : 'GENERATE' }}
                   </button>
-                  <template v-if="viewMode === 'modulus' && activeModulusData">
+                  <template v-if="pane.view === 'acoustic' && activeAcousticMode === '2d' && acousticHasPlane">
                     <div class="modulus-mode-toggle">
                       <button
                         class="modulus-mode-btn"
@@ -246,35 +241,75 @@
                         3D
                       </button>
                     </div>
-                    <span class="section-meta">
-                      {{ activeModulusData.method || 'SOT-A' }}
-                    </span>
                   </template>
+                  <select
+                    class="workspace-pane__select"
+                    :value="pane.assigned"
+                    @change="setWorkspacePaneView(pane.index, $event.target.value)"
+                  >
+                    <option v-for="option in workspaceViewOptions" :key="option.key" :value="option.key">
+                      {{ option.label }}
+                    </option>
+                  </select>
                 </div>
               </div>
 
-              <div class="tab-content">
-                <div v-show="viewMode === 'stl'" class="tab-pane">
+              <div class="workspace-pane__body">
+                <template v-if="pane.view === 'organogram'">
+                  <img
+                    v-if="plotImage"
+                    :src="plotImage"
+                    alt="Organogram"
+                    @click="openLightbox(plotImage, 'Organogram')"
+                    class="plot-image"
+                  />
+                  <div v-else class="panel-placeholder">No organogram image generated yet.</div>
+                </template>
+
+                <template v-else-if="pane.view === 'sound'">
+                  <div class="sound-pane">
+                    <div v-if="soundPaneFacts.length" class="modulus-readout sound-pane__facts">
+                      <span v-for="fact in soundPaneFacts" :key="fact">{{ fact }}</span>
+                    </div>
+                    <div v-if="summaryHtml" class="summary-content" v-html="summaryHtml"></div>
+                    <div v-else class="panel-placeholder">Evaluate a generation to populate conceptual summary and materials.</div>
+                    <div class="section-header materials-title">
+                      <h3 class="section-title">MATERIALS</h3>
+                      <span v-if="responseMetaText" class="section-meta">{{ responseMetaText }}</span>
+                    </div>
+                    <pre v-if="materialsText" class="materials-list">{{ materialsText }}</pre>
+                    <div v-else class="panel-placeholder">No material list yet.</div>
+                  </div>
+                </template>
+
+                <template v-else-if="pane.view === 'geometry'">
                   <ClientOnly>
                     <div v-if="stlUrl" class="stl-viewer-container">
                       <StlViewer :url="stlUrl" />
                     </div>
                     <div v-else class="stl-placeholder">No STL geometry generated for this response.</div>
                   </ClientOnly>
-                </div>
-                <div v-show="viewMode === 'sketch'" class="tab-pane">
-                  <img
-                    v-if="sketchImage"
-                    :src="sketchImage"
-                    alt="Sketch render"
-                    @click="openLightbox(sketchImage, 'Sketch')"
-                    class="plot-image"
-                  />
-                  <div v-else class="sketch-placeholder">No diffusion sketch generated for this response.</div>
-                </div>
-                <div v-show="viewMode === 'modulus'" class="tab-pane">
+                </template>
+
+                <template v-else-if="pane.view === 'acoustic'">
                   <div v-if="activeModulusData" class="modulus-results">
-                    <div v-if="activeModulusData.results && activeModulusData.results.pressure_map" class="modulus-stack">
+                    <div v-if="activeAcousticMode === '3d' && acousticHasVolume" class="modulus-stack">
+                      <ClientOnly>
+                        <div class="modulus-volume-shell">
+                          <AcousticVolumeViewer
+                            :volume="activeModulusData.results.pressure_volume"
+                            :markers="modulusMarkers"
+                            :primitive="activeModulusData.params?.primitive || 'sphere'"
+                          />
+                        </div>
+                      </ClientOnly>
+                      <div class="modulus-readout">
+                        <span>Probe {{ acousticProbeResponseText }}</span>
+                        <span>Peaks {{ acousticPeakSummary }}</span>
+                        <span>{{ activeModulusSource === 'preview' ? 'Preview volume' : 'Evaluated volume' }}</span>
+                      </div>
+                    </div>
+                    <div v-else-if="acousticHasPlane" class="modulus-stack">
                       <ModulusHeatmap
                         v-if="modulusRenderMode === '2d'"
                         :data="activeModulusData.results.pressure_map"
@@ -291,78 +326,30 @@
                       <div class="modulus-readout">
                         <span>Probe {{ acousticProbeResponseText }}</span>
                         <span>Peaks {{ acousticPeakSummary }}</span>
-                        <span v-if="liveAcousticCommand">Live code-linked preview</span>
+                        <span>{{ activeModulusSource === 'preview' ? 'Live surrogate preview' : 'Evaluated phase 2 field' }}</span>
                       </div>
                     </div>
                     <pre v-else class="modulus-json">{{ JSON.stringify(activeModulusData.results || activeModulusData, null, 2) }}</pre>
                   </div>
-                  <div v-else class="sketch-placeholder">No acoustical simulation data for this response.</div>
-                </div>
+                  <div v-else class="panel-placeholder">No acoustical simulation data for this response.</div>
+                </template>
+
+                <template v-else-if="pane.view === 'sketch'">
+                  <img
+                    v-if="sketchImage"
+                    :src="sketchImage"
+                    alt="Sketch render"
+                    @click="openLightbox(sketchImage, 'Sketch')"
+                    class="plot-image"
+                  />
+                  <div v-else class="sketch-placeholder">No diffusion sketch generated for this response.</div>
+                </template>
+
+                <template v-else>
+                  <div class="panel-placeholder">No routed content for this pane yet.</div>
+                </template>
               </div>
             </section>
-          </div>
-        </div>
-
-        <div v-else-if="hasResults && workspaceLayout === 'background'" class="background-stage" :key="`${transitionKey}-${activeBackgroundView}`">
-          <div class="background-stage__meta">
-            <span class="background-stage__label">{{ backgroundStageLabel }}</span>
-            <span v-if="responseMetaText" class="background-stage__sub">{{ responseMetaText }}</span>
-          </div>
-
-          <img
-            v-if="activeBackgroundView === 'plot' && plotImage"
-            :src="plotImage"
-            alt="Organogram background"
-            class="background-stage__image"
-            @click="openLightbox(plotImage, 'Organogram')"
-          />
-          <ClientOnly v-else-if="activeBackgroundView === 'stl'">
-            <div v-if="stlUrl" class="background-stage__viewer">
-              <StlViewer :url="stlUrl" />
-            </div>
-            <div v-else class="stl-placeholder">No STL geometry generated for this response.</div>
-          </ClientOnly>
-          <img
-            v-else-if="activeBackgroundView === 'sketch' && sketchImage"
-            :src="sketchImage"
-            alt="Sketch background"
-            class="background-stage__image"
-            @click="openLightbox(sketchImage, 'Sketch')"
-          />
-          <div v-else-if="activeBackgroundView === 'modulus'" class="background-stage__heatmap">
-            <div v-if="activeModulusData?.results?.pressure_map" class="background-stage__acoustic">
-              <div class="background-stage__acoustic-hud">
-                <button
-                  class="modulus-mode-btn"
-                  :class="{ active: modulusRenderMode === '2d' }"
-                  @click="modulusRenderMode = '2d'"
-                >
-                  2D
-                </button>
-                <button
-                  class="modulus-mode-btn"
-                  :class="{ active: modulusRenderMode === '3d' }"
-                  @click="modulusRenderMode = '3d'"
-                >
-                  3D
-                </button>
-              </div>
-              <ModulusHeatmap
-                v-if="modulusRenderMode === '2d'"
-                :data="activeModulusData.results.pressure_map"
-                :size="720"
-                :markers="modulusMarkers"
-              />
-              <ClientOnly v-else>
-                <div class="background-stage__surface">
-                  <AcousticFieldSurface
-                    :data="activeModulusData.results.pressure_map"
-                    :markers="modulusMarkers"
-                  />
-                </div>
-              </ClientOnly>
-            </div>
-            <div v-else class="sketch-placeholder">No acoustical simulation data for this response.</div>
           </div>
         </div>
       </Transition>
@@ -439,19 +426,35 @@
           </div>
           <div v-if="!liveAcousticCommand" class="acoustic-summary">
             <h4>First Primitive</h4>
-            <p>Use <code>@acoustic primitive=circle freq=440 source=-0.55,0 probe=0.55,0 obstacle=0.15,0</code> and evaluate it directly from the editor.</p>
+            <p>Use <code>@acoustic mode=2d primitive=circle freq=440 source=-0.55,0 probe=0.55,0 obstacle=0.15,0</code> or <code>@acoustic mode=3d primitive=sphere freq=440 source=-0.45,0,-0.28 probe=0.42,0.08,0.32 obstacle=0.08,0.12,0</code>.</p>
             <button class="sidebar-action" @click="insertStarterAcousticCommand">Insert starter command</button>
           </div>
           <template v-else>
             <div class="acoustic-actions">
               <button class="sidebar-action" @click="evaluateCurrentAcousticCommand">Evaluate SOT-A</button>
-              <button class="sidebar-action" @click="modulusRenderMode = modulusRenderMode === '2d' ? '3d' : '2d'">
+              <button v-if="activeAcousticMode === '2d'" class="sidebar-action" @click="modulusRenderMode = modulusRenderMode === '2d' ? '3d' : '2d'">
                 {{ modulusRenderMode === '2d' ? 'Switch to 3D' : 'Switch to 2D' }}
+              </button>
+            </div>
+            <div class="acoustic-mode-row">
+              <button
+                class="primitive-chip"
+                :class="{ active: acousticSliderState.mode === '2d' }"
+                @click="setAcousticMode('2d')"
+              >
+                planar
+              </button>
+              <button
+                class="primitive-chip"
+                :class="{ active: acousticSliderState.mode === '3d' }"
+                @click="setAcousticMode('3d')"
+              >
+                volumetric
               </button>
             </div>
             <div class="acoustic-primitive-row">
               <button
-                v-for="primitive in ['circle', 'square', 'triangle', 'hexagon']"
+                v-for="primitive in acousticPrimitiveOptions"
                 :key="primitive"
                 class="primitive-chip"
                 :class="{ active: acousticSliderState.primitive === primitive }"
@@ -483,6 +486,11 @@
                 <strong>{{ acousticSliderState.sourceY.toFixed(2) }}</strong>
                 <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.sourceY" @input="updateAcousticSliderValue('source', 1, Number($event.target.value))">
               </label>
+              <label v-if="acousticSliderState.mode === '3d'" class="slider-unit">
+                <span>Source Z</span>
+                <strong>{{ acousticSliderState.sourceZ.toFixed(2) }}</strong>
+                <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.sourceZ" @input="updateAcousticSliderValue('source', 2, Number($event.target.value))">
+              </label>
               <label class="slider-unit">
                 <span>Probe X</span>
                 <strong>{{ acousticSliderState.probeX.toFixed(2) }}</strong>
@@ -492,6 +500,11 @@
                 <span>Probe Y</span>
                 <strong>{{ acousticSliderState.probeY.toFixed(2) }}</strong>
                 <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.probeY" @input="updateAcousticSliderValue('probe', 1, Number($event.target.value))">
+              </label>
+              <label v-if="acousticSliderState.mode === '3d'" class="slider-unit">
+                <span>Probe Z</span>
+                <strong>{{ acousticSliderState.probeZ.toFixed(2) }}</strong>
+                <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.probeZ" @input="updateAcousticSliderValue('probe', 2, Number($event.target.value))">
               </label>
               <label class="slider-unit">
                 <span>Obstacle X</span>
@@ -503,10 +516,24 @@
                 <strong>{{ acousticSliderState.obstacleY.toFixed(2) }}</strong>
                 <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.obstacleY" @input="updateAcousticSliderValue('obstacle', 1, Number($event.target.value))">
               </label>
+              <label v-if="acousticSliderState.mode === '3d'" class="slider-unit">
+                <span>Obstacle Z</span>
+                <strong>{{ acousticSliderState.obstacleZ.toFixed(2) }}</strong>
+                <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.obstacleZ" @input="updateAcousticSliderValue('obstacle', 2, Number($event.target.value))">
+              </label>
             </div>
             <div class="acoustic-preview-shell">
+              <ClientOnly v-if="activeAcousticMode === '3d' && acousticHasVolume">
+                <div class="acoustic-preview-surface acoustic-preview-volume">
+                  <AcousticVolumeViewer
+                    :volume="activeModulusData.results.pressure_volume"
+                    :markers="modulusMarkers"
+                    :primitive="activeModulusData.params?.primitive || 'sphere'"
+                  />
+                </div>
+              </ClientOnly>
               <ModulusHeatmap
-                v-if="modulusRenderMode === '2d' && activeModulusData?.results?.pressure_map"
+                v-else-if="modulusRenderMode === '2d' && activeModulusData?.results?.pressure_map"
                 :data="activeModulusData.results.pressure_map"
                 :size="280"
                 :markers="modulusMarkers"
@@ -619,6 +646,7 @@ import GalleryModal from '~/components/GalleryModal.vue';
 import StlViewer from '~/components/StlViewer.vue';
 import ModulusHeatmap from '~/components/ModulusHeatmap.vue';
 import AcousticFieldSurface from '~/components/AcousticFieldSurface.vue';
+import AcousticVolumeViewer from '~/components/AcousticVolumeViewer.vue';
 import SorganoidWorld from '~/components/SorganoidWorld.vue';
 import AuthGateModal from '~/components/AuthGateModal.vue';
 import UsageDashboard from '~/components/UsageDashboard.vue';
@@ -651,7 +679,7 @@ const {
 const { startProcessing, completeProcessing } = useFavicon();
 const { playResponse } = useAcousticSonification();
 const editorRef = ref(null);
-const leftWidth = ref(50);
+const leftWidth = ref(38);
 let dragging = false;
 let startX = 0;
 let startLeft = 50;
@@ -684,13 +712,17 @@ const lightboxAlt = ref('Preview');
 const generationRequestId = ref('');
 const reasoningPreview = ref('');
 const progressStage = ref('');
-const viewMode = ref('stl'); // 'stl', 'sketch', or 'modulus'
-const backgroundViewMode = ref('plot'); // 'plot', 'stl', 'sketch', or 'modulus'
 const modulusRenderMode = ref('2d');
 const workspaceLayout = ref('background'); // 'split' or 'background'
+const workspacePreset = ref('fullscreen');
+const workspacePresetMenuOpen = ref(false);
+const workspacePresetMenuRef = ref(null);
+const workspaceAutoView = ref('organogram');
+const workspacePaneViews = ref(['auto', 'organogram', 'sound', 'acoustic']);
 const workspaceSidebarOpen = ref(true);
 const workspaceSidebarTab = ref('help'); // 'help', 'session', 'acoustic'
 const lastAcousticCommand = ref(null);
+const evaluatedAcousticSignature = ref('');
 const editorContent = ref('');
 const liveModulusData = ref(null);
 const targetBasename = ref('');
@@ -718,6 +750,36 @@ const showLightbox = ref(false);
 const RESPONSE_TIMES_KEY = 'soog_response_times_ms';
 const MAX_RESPONSE_SAMPLES = 20;
 const PENDING_RENDER_KEY = 'soog.pending-render.v1';
+const WORKSPACE_PRESET_CONFIG = {
+  fullscreen: {
+    label: 'Fullscreen',
+    areas: ['a'],
+    defaults: ['auto'],
+  },
+  splitVertical: {
+    label: 'Split Vertical',
+    areas: ['a', 'b'],
+    defaults: ['organogram', 'geometry'],
+  },
+  splitThree: {
+    label: 'Split 3',
+    areas: ['a', 'b', 'c'],
+    defaults: ['organogram', 'sound', 'acoustic'],
+  },
+  splitFour: {
+    label: 'Split 4',
+    areas: ['a', 'b', 'c', 'd'],
+    defaults: ['organogram', 'sound', 'geometry', 'acoustic'],
+  },
+};
+const WORKSPACE_VIEW_CATALOG = [
+  { key: 'auto', label: 'Auto Route' },
+  { key: 'organogram', label: 'Organogram' },
+  { key: 'sound', label: 'Sound' },
+  { key: 'geometry', label: '3D Object' },
+  { key: 'acoustic', label: 'Acoustic' },
+  { key: 'sketch', label: 'Sketch' },
+];
 
 const userLabel = computed(() => {
   const value = profile.value?.name || profile.value?.email || profile.value?.subject || 'ACCOUNT';
@@ -764,10 +826,58 @@ const responseMetaText = computed(() => {
 });
 
 const liveAcousticCommand = computed(() => parseAcousticCommand(editorContent.value));
+const liveAcousticSignature = computed(() => acousticSignatureFromMeta(liveAcousticCommand.value?.meta));
 const currentAcousticMeta = computed(() => liveAcousticCommand.value?.meta || lastAcousticCommand.value);
-const activeModulusData = computed(() => liveModulusData.value || modulusData.value);
+const activeModulusData = computed(() => {
+  if (modulusData.value) {
+    if (evaluatedAcousticSignature.value && evaluatedAcousticSignature.value === liveAcousticSignature.value) {
+      return modulusData.value;
+    }
+    if (!liveModulusData.value) {
+      return modulusData.value;
+    }
+  }
+  return liveModulusData.value || modulusData.value;
+});
+const activeModulusSource = computed(() => {
+  if (activeModulusData.value && modulusData.value && activeModulusData.value === modulusData.value) return 'evaluated';
+  if (activeModulusData.value && liveModulusData.value && activeModulusData.value === liveModulusData.value) return 'preview';
+  return 'none';
+});
+const activeAcousticMode = computed(() => (
+  String(activeModulusData.value?.params?.mode || currentAcousticMeta.value?.mode || '2d').toLowerCase() === '3d'
+    ? '3d'
+    : '2d'
+));
+const acousticPrimitiveOptions = computed(() => (
+  activeAcousticMode.value === '3d'
+    ? ['sphere', 'cube', 'cylinder']
+    : ['circle', 'square', 'triangle', 'hexagon']
+));
+const acousticHasPlane = computed(() => Boolean(activeModulusData.value?.results?.pressure_map));
+const acousticHasVolume = computed(() => Boolean(activeModulusData.value?.results?.pressure_volume));
 const hasResults = computed(() => !!(plotImage.value || sketchImage.value || summary.value || materialsText.value || stlUrl.value || activeModulusData.value));
-const workspaceModeLabel = computed(() => workspaceLayout.value === 'background' ? 'background' : 'split');
+const workspacePresetOptions = computed(() => Object.entries(WORKSPACE_PRESET_CONFIG).map(([key, value]) => ({
+  key,
+  label: value.label,
+})));
+const workspaceViewOptions = computed(() => WORKSPACE_VIEW_CATALOG);
+const activeWorkspacePreset = computed(() => WORKSPACE_PRESET_CONFIG[workspacePreset.value] || WORKSPACE_PRESET_CONFIG.fullscreen);
+const workspaceModeLabel = computed(() => activeWorkspacePreset.value.label);
+const activeWorkspacePanes = computed(() => {
+  const preset = activeWorkspacePreset.value;
+  return preset.areas.map((area, index) => {
+    const assigned = workspacePaneViews.value[index] || preset.defaults[index] || 'auto';
+    const view = assigned === 'auto' ? workspaceAutoView.value : assigned;
+    return {
+      id: `${workspacePreset.value}-${area}-${index}`,
+      area,
+      index,
+      assigned,
+      view,
+    };
+  });
+});
 const leftColumnStyle = computed(() => {
   if (sorganoidMode.value) {
     return { width: '100%' };
@@ -776,37 +886,22 @@ const leftColumnStyle = computed(() => {
     const clamped = Math.max(34, Math.min(leftWidth.value, 62));
     return { width: `min(${clamped}vw, 760px)` };
   }
-  return { width: `${leftWidth.value}%` };
+  const dockWidth = Math.max(24, Math.min(leftWidth.value, 58));
+  return {
+    width: `min(${dockWidth}vw, 760px)`,
+    flex: `0 0 min(${dockWidth}vw, 760px)`,
+  };
 });
 const rightColumnStyle = computed(() => (
   workspaceLayout.value === 'background'
     ? {}
-    : { width: `${100 - leftWidth.value}%` }
+    : { width: 'auto', flex: '1 1 auto', minWidth: '0' }
 ));
-const availableBackgroundViews = computed(() => ([
-  { key: 'plot', label: 'ORGANOGRAM', enabled: Boolean(plotImage.value) },
-  { key: 'stl', label: 'GEOMETRY', enabled: Boolean(stlUrl.value) },
-  { key: 'sketch', label: 'SKETCH', enabled: Boolean(sketchImage.value) },
-  { key: 'modulus', label: 'ACOUSTIC', enabled: Boolean(activeModulusData.value) }
-]));
-const activeBackgroundView = computed(() => {
-  const preferred = availableBackgroundViews.value.find((item) => item.key === backgroundViewMode.value && item.enabled);
-  if (preferred) return preferred.key;
-  return availableBackgroundViews.value.find((item) => item.enabled)?.key || 'plot';
-});
-const backgroundStageLabel = computed(() => {
-  const current = availableBackgroundViews.value.find((item) => item.key === activeBackgroundView.value);
-  return current?.label || 'RESULT';
-});
-const splitTabOptions = computed(() => ([
-  { key: 'stl', label: 'GEOMETRY (3D)', enabled: Boolean(stlUrl.value) },
-  { key: 'sketch', label: 'SKETCH (INFERRED)', enabled: Boolean(sketchImage.value) },
-  { key: 'modulus', label: 'ACOUSTICS (SOT-A)', enabled: Boolean(activeModulusData.value) }
-]));
 const acousticCommandSummary = computed(() => {
   const meta = currentAcousticMeta.value;
   if (!meta) return 'No acoustic command evaluated yet.';
-  return `${meta.primitive.toUpperCase()} · ${meta.freq} Hz · src ${meta.source.join(', ')} · probe ${meta.probe.join(', ')}`;
+  const formatPoint = (point = []) => point.map((value) => Number(value).toFixed(2)).join(', ');
+  return `${String(meta.mode || '2d').toUpperCase()} · ${meta.primitive.toUpperCase()} · ${meta.freq} Hz · src ${formatPoint(meta.source)} · probe ${formatPoint(meta.probe)}`;
 });
 const modulusMarkers = computed(() => {
   const params = activeModulusData.value?.params || {};
@@ -818,6 +913,7 @@ const modulusMarkers = computed(() => {
         type: 'source',
         x: Number(src.pos[0]),
         y: Number(src.pos[1]),
+        z: Number(src.pos[2] ?? 0),
         label: src.freq ? `${Math.round(Number(src.freq))}Hz` : 'src'
       });
     }
@@ -827,6 +923,7 @@ const modulusMarkers = computed(() => {
       type: 'probe',
       x: Number(params.probe[0]),
       y: Number(params.probe[1]),
+      z: Number(params.probe[2] ?? 0),
       label: 'probe'
     });
   }
@@ -835,10 +932,11 @@ const modulusMarkers = computed(() => {
       type: 'obstacle',
       x: Number(params.obstacle[0]),
       y: Number(params.obstacle[1]),
+      z: Number(params.obstacle[2] ?? 0),
       label: params.primitive || 'obs'
     });
   }
-  return markers.filter((marker) => Number.isFinite(marker.x) && Number.isFinite(marker.y));
+  return markers.filter((marker) => Number.isFinite(marker.x) && Number.isFinite(marker.y) && Number.isFinite(marker.z ?? 0));
 });
 const acousticProbeResponseText = computed(() => {
   const value = Number(activeModulusData.value?.results?.probe_response ?? activeModulusData.value?.results?.mic_response);
@@ -847,15 +945,33 @@ const acousticProbeResponseText = computed(() => {
 const acousticPeakSummary = computed(() => (
   (activeModulusData.value?.results?.resonance_peaks_hz || []).slice(0, 4).join(', ') || '—'
 ));
+const soundPaneFacts = computed(() => {
+  const facts = [];
+  if (responseMetaText.value) facts.push(responseMetaText.value);
+  if (activeModulusData.value?.method) facts.push(activeModulusData.value.method);
+  if (activeModulusSource.value === 'preview') facts.push('live preview');
+  if (activeModulusSource.value === 'evaluated') facts.push('evaluated field');
+  if (activeModulusData.value?.results?.probe_response !== undefined) {
+    facts.push(`probe ${acousticProbeResponseText.value}`);
+  }
+  if (activeModulusData.value?.results?.resonance_peaks_hz?.length) {
+    facts.push(`peaks ${acousticPeakSummary.value}`);
+  }
+  return facts;
+});
 const acousticSliderState = computed(() => ({
-  primitive: currentAcousticMeta.value?.primitive || 'circle',
+  mode: currentAcousticMeta.value?.mode || '2d',
+  primitive: currentAcousticMeta.value?.primitive || (currentAcousticMeta.value?.mode === '3d' ? 'sphere' : 'circle'),
   freq: Number(currentAcousticMeta.value?.freq || 440),
   sourceX: Number(currentAcousticMeta.value?.source?.[0] ?? -0.55),
   sourceY: Number(currentAcousticMeta.value?.source?.[1] ?? 0),
+  sourceZ: Number(currentAcousticMeta.value?.source?.[2] ?? -0.28),
   probeX: Number(currentAcousticMeta.value?.probe?.[0] ?? 0.55),
   probeY: Number(currentAcousticMeta.value?.probe?.[1] ?? 0),
+  probeZ: Number(currentAcousticMeta.value?.probe?.[2] ?? 0.32),
   obstacleX: Number(currentAcousticMeta.value?.obstacle?.[0] ?? 0.15),
   obstacleY: Number(currentAcousticMeta.value?.obstacle?.[1] ?? 0),
+  obstacleZ: Number(currentAcousticMeta.value?.obstacle?.[2] ?? 0),
 }));
 
 const commandDomains = [
@@ -865,7 +981,8 @@ const commandDomains = [
     color: '#8bc34a',
     commands: [
       { syntax: 'Alt+Enter', detail: 'Evaluate current selection or the full editor buffer.' },
-      { syntax: 'BG / SPLIT', detail: 'Switch between livecoding-over-background and split workspace.' },
+      { syntax: 'workspace menu', detail: 'Choose fullscreen, split vertical, split 3, or split 4 from the HUD preset icon.' },
+      { syntax: 'pane routing', detail: 'Each pane can point to auto, organogram, sound, 3D object, acoustic, or sketch.' },
       { syntax: 'Alt+1 · Alt+2 · Alt+3', detail: 'Jump between SOOG, SOMAP, and Concert Room.' }
     ]
   },
@@ -874,10 +991,13 @@ const commandDomains = [
     label: 'SOT-A',
     color: '#ff9800',
     commands: [
-      { syntax: '@acoustic primitive=circle freq=440 source=-0.55,0 probe=0.55,0 obstacle=0.15,0', detail: 'Run the first acoustic command against the online field solver.' },
-      { syntax: 'primitive=<circle|square|triangle|hexagon>', detail: 'Choose a cavity family for the current acoustic test.' },
-      { syntax: 'SOT-A sliders', detail: 'The right sidebar now edits the @acoustic command directly and refreshes a local preview.' },
-      { syntax: '2D / 3D', detail: 'Switch the acoustic field between cyberpunk heatmap and 3D surface preview.' },
+      { syntax: '@acoustic mode=2d primitive=circle freq=440 source=-0.55,0 probe=0.55,0 obstacle=0.15,0', detail: 'Run the planar cavity study against the online field solver.' },
+      { syntax: '@acoustic mode=3d primitive=sphere freq=440 source=-0.45,0,-0.28 probe=0.42,0.08,0.32 obstacle=0.08,0.12,0', detail: 'Run the volumetric cavity study with real XYZ coordinates.' },
+      { syntax: 'solver=<fd|surrogate>', detail: 'Optional override when you want to force the backend phase 2 field or the lighter preview-style solver.' },
+      { syntax: 'preview vs evaluate', detail: 'Sliders and edits keep a local surrogate preview; Evaluate swaps in the backend phase 2 finite-difference field when the command matches.' },
+      { syntax: 'primitive=<circle|square|triangle|hexagon|sphere|cube|cylinder>', detail: 'Choose planar or volumetric primitive families for the current acoustic test.' },
+      { syntax: 'SOT-A sliders', detail: 'The right sidebar edits the @acoustic command directly, including XYZ when mode=3d.' },
+      { syntax: 'surface / volumetric', detail: '2D fields can switch heatmap vs surface; 3D fields render as a volumetric point cloud.' },
       { syntax: 'follow-up lines', detail: 'Any lines after the command are passed as contextual notes to the solver.' }
     ]
   },
@@ -908,6 +1028,7 @@ const sessionFacts = computed(() => ([
   { label: 'Model', value: responseModel.value || currentModel.value || '—' },
   { label: 'Last render', value: responseElapsedMs.value ? `${(responseElapsedMs.value / 1000).toFixed(1)}s` : '—' },
   { label: 'Rolling avg', value: `${(averageResponseMs.value / 1000).toFixed(1)}s` },
+  { label: 'Acoustic field', value: activeModulusSource.value === 'preview' ? 'PREVIEW' : activeModulusSource.value === 'evaluated' ? 'EVALUATED' : '—' },
   { label: 'Code append', value: showCode.value ? 'ON' : 'OFF' }
 ]));
 
@@ -991,27 +1112,99 @@ function formatCommandCoord(value) {
   return String(Number(value).toFixed(2)).replace(/\.?0+$/, '');
 }
 
-function parsePointToken(rawValue, fallbackX, fallbackY) {
+function roundAcousticCoord(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Number(numeric.toFixed(3)) : 0;
+}
+
+function acousticSignatureFromMeta(meta) {
+  if (!meta) return '';
+  const mode = String(meta.mode || '2d').toLowerCase() === '3d' ? '3d' : '2d';
+  const defaults = acousticPointDefaults(mode);
+  const size = mode === '3d' ? 3 : 2;
+  const primitive = normalizeAcousticPrimitive(mode, meta.primitive);
+  const freq = Math.round(Number(meta.freq) || 440);
+  const source = ensurePointSize(meta.source, size, defaults.source).map(roundAcousticCoord).join(',');
+  const probe = ensurePointSize(meta.probe, size, defaults.probe).map(roundAcousticCoord).join(',');
+  const obstacle = ensurePointSize(meta.obstacle, size, defaults.obstacle).map(roundAcousticCoord).join(',');
+  return [mode, primitive, freq, source, probe, obstacle].join('|');
+}
+
+function acousticSignatureFromSimulation(simulation) {
+  const params = simulation?.params || {};
+  const sources = Array.isArray(params.sources) ? params.sources : [];
+  const sourcePoint = sources[0]?.pos || params.source || params.sources?.[0]?.pos;
+  return acousticSignatureFromMeta({
+    mode: params.mode,
+    primitive: params.primitive,
+    freq: params.freq || params.frequencies_hz?.[0],
+    source: sourcePoint,
+    probe: params.probe,
+    obstacle: params.obstacle,
+  });
+}
+
+function acousticPointDefaults(mode = '2d') {
+  return mode === '3d'
+    ? {
+        source: [-0.45, 0, -0.28],
+        probe: [0.42, 0.08, 0.32],
+        obstacle: [0.08, 0.12, 0],
+      }
+    : {
+        source: [-0.55, 0],
+        probe: [0.55, 0],
+        obstacle: [0.15, 0],
+      };
+}
+
+function normalizeAcousticPrimitive(mode, primitive) {
+  const nextMode = String(mode || '2d').toLowerCase() === '3d' ? '3d' : '2d';
+  const value = String(primitive || '').trim().toLowerCase();
+  const aliases = nextMode === '3d'
+    ? { round: 'sphere', circular: 'sphere', ball: 'sphere', box: 'cube', pipe: 'cylinder', tube: 'cylinder' }
+    : { round: 'circle', circular: 'circle', box: 'square', triangular: 'triangle', honeycomb: 'hexagon' };
+  const resolved = aliases[value] || value;
+  const allowed = nextMode === '3d'
+    ? ['sphere', 'cube', 'cylinder']
+    : ['circle', 'square', 'triangle', 'hexagon'];
+  return allowed.includes(resolved) ? resolved : (nextMode === '3d' ? 'sphere' : 'circle');
+}
+
+function ensurePointSize(point, size, fallbacks) {
+  return Array.from({ length: size }, (_, index) => {
+    const raw = Array.isArray(point) ? point[index] : undefined;
+    return clampUnitCoord(raw, fallbacks[index] ?? 0);
+  });
+}
+
+function parsePointToken(rawValue, fallbacks) {
   if (typeof rawValue !== 'string' || !rawValue.trim()) {
-    return [clampUnitCoord(fallbackX), clampUnitCoord(fallbackY)];
+    return ensurePointSize([], fallbacks.length, fallbacks);
   }
   const parts = rawValue
     .split(/[,:/]/)
     .map((part) => part.trim())
     .filter(Boolean);
-  return [
-    clampUnitCoord(parts[0], fallbackX),
-    clampUnitCoord(parts[1], fallbackY)
-  ];
+  return ensurePointSize(parts, fallbacks.length, fallbacks);
 }
 
 function parseAcousticCommand(text) {
   const lines = String(text || '').split('\n');
-  const firstIdx = lines.findIndex((line) => line.trim().toLowerCase().startsWith('@acoustic'));
+  const firstIdx = lines.findIndex((line) => {
+    const trimmed = line.trim().toLowerCase();
+    return trimmed.startsWith('@acoustic');
+  });
   if (firstIdx === -1) return null;
 
   const header = lines[firstIdx].trim();
-  const rawTokens = header.slice('@acoustic'.length).trim().split(/\s+/).filter(Boolean);
+  const headerLower = header.toLowerCase();
+  const headerPrefix = headerLower.startsWith('@acoustic3d')
+    ? '@acoustic3d'
+    : headerLower.startsWith('@acoustic2d')
+      ? '@acoustic2d'
+      : '@acoustic';
+  const rawTokens = header.slice(headerPrefix.length).trim().split(/\s+/).filter(Boolean);
   const params = {};
   for (const token of rawTokens) {
     const eqIdx = token.indexOf('=');
@@ -1021,32 +1214,62 @@ function parseAcousticCommand(text) {
     if (key) params[key] = value;
   }
 
-  const primitive = ['circle', 'square', 'triangle', 'hexagon'].includes(String(params.primitive || '').toLowerCase())
-    ? String(params.primitive).toLowerCase()
-    : 'circle';
+  const mode = (
+    String(params.mode || '').toLowerCase() === '3d'
+    || headerPrefix === '@acoustic3d'
+    || ['sphere', 'cube', 'cylinder'].includes(String(params.primitive || '').toLowerCase())
+  ) ? '3d' : '2d';
+  const primitive = normalizeAcousticPrimitive(mode, params.primitive);
+  const solver = String(params.solver || '').trim().toLowerCase();
+  const defaults = acousticPointDefaults(mode);
   const freq = Math.max(20, Math.min(4000, Math.round(Number(params.freq || params.hz || 440) || 440)));
-  const source = parsePointToken(params.source, -0.55, 0);
-  const probe = parsePointToken(params.probe, 0.55, 0);
-  const obstacle = parsePointToken(params.obstacle || params.obs, 0.15, 0);
+  const source = parsePointToken(params.source, defaults.source);
+  const probe = parsePointToken(params.probe, defaults.probe);
+  const obstacle = parsePointToken(params.obstacle || params.obs, defaults.obstacle);
 
   const remainder = lines
     .slice(firstIdx + 1)
     .join('\n')
     .trim();
 
+  const formatPoint = (point) => point.map((value) => formatCommandCoord(value)).join(', ');
   const body = remainder || [
-    `Acoustic primitive study for a ${primitive} cavity.`,
+    `${mode === '3d' ? 'Volumetric' : 'Planar'} acoustic primitive study for a ${primitive} cavity.`,
     `Use a sine generator at ${freq} Hz.`,
-    `Source at (${formatCommandCoord(source[0])}, ${formatCommandCoord(source[1])}), probe at (${formatCommandCoord(probe[0])}, ${formatCommandCoord(probe[1])}), obstacle at (${formatCommandCoord(obstacle[0])}, ${formatCommandCoord(obstacle[1])}).`
+    `Source at (${formatPoint(source)}), probe at (${formatPoint(probe)}), obstacle at (${formatPoint(obstacle)}).`
   ].join(' ');
+
+  const modulusArgs = [
+    `mode=${mode}`,
+    `freq=${freq}`,
+    `primitive=${primitive}`,
+    `source_x=${formatCommandCoord(source[0])}`,
+    `source_y=${formatCommandCoord(source[1])}`,
+    `probe_x=${formatCommandCoord(probe[0])}`,
+    `probe_y=${formatCommandCoord(probe[1])}`,
+    `obs_x=${formatCommandCoord(obstacle[0])}`,
+    `obs_y=${formatCommandCoord(obstacle[1])}`,
+  ];
+  if (solver) {
+    modulusArgs.push(`solver=${solver}`);
+  }
+  if (mode === '3d') {
+    modulusArgs.push(
+      `source_z=${formatCommandCoord(source[2])}`,
+      `probe_z=${formatCommandCoord(probe[2])}`,
+      `obs_z=${formatCommandCoord(obstacle[2])}`,
+    );
+  }
 
   return {
     normalizedPrompt: [
-      `[MODULUS freq=${freq} primitive=${primitive} source_x=${formatCommandCoord(source[0])} source_y=${formatCommandCoord(source[1])} probe_x=${formatCommandCoord(probe[0])} probe_y=${formatCommandCoord(probe[1])} obs_x=${formatCommandCoord(obstacle[0])} obs_y=${formatCommandCoord(obstacle[1])}]`,
+      `[MODULUS ${modulusArgs.join(' ')}]`,
       body
     ].join('\n'),
     meta: {
+      mode,
       primitive,
+      solver,
       freq,
       source,
       probe,
@@ -1058,13 +1281,19 @@ function parseAcousticCommand(text) {
 
 function buildAcousticHeader(meta) {
   if (!meta) return '';
+  const mode = String(meta.mode || '2d').toLowerCase() === '3d' ? '3d' : '2d';
+  const defaults = acousticPointDefaults(mode);
+  const source = ensurePointSize(meta.source, mode === '3d' ? 3 : 2, defaults.source);
+  const probe = ensurePointSize(meta.probe, mode === '3d' ? 3 : 2, defaults.probe);
+  const obstacle = ensurePointSize(meta.obstacle, mode === '3d' ? 3 : 2, defaults.obstacle);
   return [
     '@acoustic',
-    `primitive=${meta.primitive}`,
+    `mode=${mode}`,
+    `primitive=${normalizeAcousticPrimitive(mode, meta.primitive)}`,
     `freq=${Math.round(Number(meta.freq) || 440)}`,
-    `source=${formatCommandCoord(meta.source[0])},${formatCommandCoord(meta.source[1])}`,
-    `probe=${formatCommandCoord(meta.probe[0])},${formatCommandCoord(meta.probe[1])}`,
-    `obstacle=${formatCommandCoord(meta.obstacle[0])},${formatCommandCoord(meta.obstacle[1])}`,
+    `source=${source.map((value) => formatCommandCoord(value)).join(',')}`,
+    `probe=${probe.map((value) => formatCommandCoord(value)).join(',')}`,
+    `obstacle=${obstacle.map((value) => formatCommandCoord(value)).join(',')}`,
   ].join(' ');
 }
 
@@ -1089,13 +1318,17 @@ function updateAcousticCommandInEditor(patch) {
   const editor = editorRef.value?.aceEditor?.();
   const meta = liveAcousticCommand.value?.meta;
   if (!editor || !meta) return;
+  const mode = String(patch.mode ?? meta.mode ?? '2d').toLowerCase() === '3d' ? '3d' : '2d';
+  const defaults = acousticPointDefaults(mode);
+  const size = mode === '3d' ? 3 : 2;
 
   const nextMeta = {
-    primitive: patch.primitive ?? meta.primitive,
+    mode,
+    primitive: normalizeAcousticPrimitive(mode, patch.primitive ?? meta.primitive),
     freq: patch.freq ?? meta.freq,
-    source: patch.source ?? meta.source,
-    probe: patch.probe ?? meta.probe,
-    obstacle: patch.obstacle ?? meta.obstacle,
+    source: ensurePointSize(patch.source ?? meta.source, size, defaults.source),
+    probe: ensurePointSize(patch.probe ?? meta.probe, size, defaults.probe),
+    obstacle: ensurePointSize(patch.obstacle ?? meta.obstacle, size, defaults.obstacle),
     notes: meta.notes,
   };
 
@@ -1111,9 +1344,15 @@ function updateAcousticSliderValue(channel, axis, rawValue) {
   const meta = liveAcousticCommand.value?.meta;
   if (!meta) return;
   const safe = clampUnitCoord(rawValue, 0);
-  const next = [...meta[channel]];
+  const defaults = acousticPointDefaults(meta.mode || '2d');
+  const size = String(meta.mode || '2d').toLowerCase() === '3d' ? 3 : 2;
+  const next = ensurePointSize(meta[channel], size, defaults[channel]);
   next[axis] = safe;
   updateAcousticCommandInEditor({ [channel]: next });
+}
+
+function setAcousticMode(mode) {
+  updateAcousticCommandInEditor({ mode });
 }
 
 function insertStarterAcousticCommand() {
@@ -1123,7 +1362,7 @@ function insertStarterAcousticCommand() {
   if (findAcousticHeaderLine(current.split('\n')) !== -1) return;
 
   const starter = [
-    '@acoustic primitive=circle freq=440 source=-0.55,0 probe=0.55,0 obstacle=0.15,0',
+    '@acoustic mode=2d primitive=circle freq=440 source=-0.55,0 probe=0.55,0 obstacle=0.15,0',
     'Primitive cavity study for a first live acoustic test.',
     '',
   ].join('\n');
@@ -1155,6 +1394,46 @@ function evaluateCurrentAcousticCommand() {
   handleEvaluate(content);
 }
 
+function workspaceViewLabel(key) {
+  return WORKSPACE_VIEW_CATALOG.find((item) => item.key === key)?.label || String(key || 'Pane');
+}
+
+function pickPreferredWorkspaceView() {
+  if (plotImage.value) return 'organogram';
+  if (activeModulusData.value) return 'acoustic';
+  if (stlUrl.value) return 'geometry';
+  if (sketchImage.value) return 'sketch';
+  if (summary.value || materialsText.value) return 'sound';
+  return 'organogram';
+}
+
+function syncWorkspaceLayoutFromPreset() {
+  workspaceLayout.value = workspacePreset.value === 'fullscreen' ? 'background' : 'split';
+}
+
+function syncWorkspaceAutoView() {
+  workspaceAutoView.value = pickPreferredWorkspaceView();
+}
+
+function toggleWorkspacePresetMenu() {
+  workspacePresetMenuOpen.value = !workspacePresetMenuOpen.value;
+}
+
+function setWorkspacePreset(presetKey) {
+  const preset = WORKSPACE_PRESET_CONFIG[presetKey];
+  if (!preset) return;
+  workspacePreset.value = presetKey;
+  workspacePaneViews.value = [...preset.defaults];
+  syncWorkspaceLayoutFromPreset();
+  workspacePresetMenuOpen.value = false;
+}
+
+function setWorkspacePaneView(index, viewKey) {
+  const next = [...workspacePaneViews.value];
+  next[index] = viewKey;
+  workspacePaneViews.value = next;
+}
+
 function syncEditorContent() {
   const editor = editorRef.value?.aceEditor?.();
   if (!editor) return false;
@@ -1170,36 +1449,8 @@ function syncEditorContent() {
   return true;
 }
 
-function pickPreferredSplitView() {
-  if (stlUrl.value) return 'stl';
-  if (sketchImage.value) return 'sketch';
-  if (activeModulusData.value) return 'modulus';
-  return 'stl';
-}
-
-function pickPreferredBackgroundView() {
-  if (plotImage.value) return 'plot';
-  if (stlUrl.value) return 'stl';
-  if (sketchImage.value) return 'sketch';
-  if (activeModulusData.value) return 'modulus';
-  return 'plot';
-}
-
 function toggleWorkspaceSidebar() {
   workspaceSidebarOpen.value = !workspaceSidebarOpen.value;
-}
-
-function setWorkspaceLayout(layout) {
-  workspaceLayout.value = layout === 'background' ? 'background' : 'split';
-  if (workspaceLayout.value === 'background') {
-    backgroundViewMode.value = pickPreferredBackgroundView();
-  } else {
-    viewMode.value = pickPreferredSplitView();
-  }
-}
-
-function setBackgroundView(mode) {
-  backgroundViewMode.value = mode;
 }
 
 const handleKeyDown = (e) => {
@@ -1211,12 +1462,23 @@ const handleKeyDown = (e) => {
     e.preventDefault();
     toggleWorkspaceSidebar();
   }
+  if (e.key === 'Escape' && workspacePresetMenuOpen.value) {
+    workspacePresetMenuOpen.value = false;
+  }
+};
+
+const handleDocumentPointerDown = (event) => {
+  if (!workspacePresetMenuOpen.value) return;
+  if (workspacePresetMenuRef.value?.contains?.(event.target)) return;
+  workspacePresetMenuOpen.value = false;
 };
 
 onMounted(() => {
   loadResponseTimeHistory();
   fetchOllamaModels();
   checkDevice();
+  syncWorkspaceLayoutFromPreset();
+  syncWorkspaceAutoView();
   editorSyncTimer = window.setInterval(() => {
     if (syncEditorContent()) {
       window.clearInterval(editorSyncTimer);
@@ -1226,6 +1488,7 @@ onMounted(() => {
   window.addEventListener('resize', checkDevice);
   window.addEventListener('keydown', handleEscapeKey);
   window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('pointerdown', handleDocumentPointerDown);
   window.addEventListener('mousemove', onDrag);
   window.addEventListener('mouseup', stopDrag);
   window.addEventListener('touchmove', onDragTouch, { passive: false });
@@ -1252,6 +1515,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', checkDevice);
   window.removeEventListener('keydown', handleEscapeKey);
   window.removeEventListener('keydown', handleKeyDown);
+  window.removeEventListener('pointerdown', handleDocumentPointerDown);
   window.removeEventListener('mousemove', onDrag);
   window.removeEventListener('mouseup', stopDrag);
   window.removeEventListener('touchmove', onDragTouch);
@@ -1288,16 +1552,28 @@ watch(
       const meta = parsed.meta;
       liveModulusData.value = runAcousticSimulation({
         prompt: meta.notes,
+        mode: meta.mode,
         primitive: meta.primitive,
         freq: meta.freq,
         source_x: meta.source[0],
         source_y: meta.source[1],
+        source_z: meta.source[2],
         probe_x: meta.probe[0],
         probe_y: meta.probe[1],
+        probe_z: meta.probe[2],
         obs_x: meta.obstacle[0],
         obs_y: meta.obstacle[1],
+        obs_z: meta.obstacle[2],
       });
     }, 36);
+  },
+  { immediate: true }
+);
+
+watch(
+  [plotImage, stlUrl, sketchImage, activeModulusData, summary, materialsText],
+  () => {
+    syncWorkspaceAutoView();
   },
   { immediate: true }
 );
@@ -1322,7 +1598,7 @@ function onDrag(e) {
   const dx = e.clientX - startX;
   const vw = window.innerWidth;
   const deltaPct = (dx / vw) * 100;
-  leftWidth.value = Math.min(80, Math.max(20, startLeft + deltaPct));
+  leftWidth.value = Math.min(58, Math.max(24, startLeft + deltaPct));
 }
 function stopDrag() { dragging = false; }
 function startDragTouch(e) {
@@ -1335,7 +1611,7 @@ function onDragTouch(e) {
   const dx = e.touches[0].clientX - startX;
   const vw = window.innerWidth;
   const deltaPct = (dx / vw) * 100;
-  leftWidth.value = Math.min(80, Math.max(20, startLeft + deltaPct));
+  leftWidth.value = Math.min(58, Math.max(24, startLeft + deltaPct));
 }
 
 const handleRandomPrompt = async () => {
@@ -1704,8 +1980,9 @@ async function loadCodeFromGallery(item) {
   plotImage.value = item.image_url ? resolveAssetUrl(item.image_url) : null;
   sketchImage.value = item.sketch_url ? resolveAssetUrl(item.sketch_url) : null;
   modulusData.value = item.modulus || null;
-  viewMode.value = pickPreferredSplitView();
-  backgroundViewMode.value = pickPreferredBackgroundView();
+  evaluatedAcousticSignature.value = acousticSignatureFromSimulation(item.modulus);
+  syncWorkspaceAutoView();
+  transitionKey.value += 1;
   showGallery.value = false;
 }
 
@@ -1916,6 +2193,7 @@ const handleEvaluate = async (selectedText) => {
     geometryCode.value = '';
     stlUrl.value = null;
     modulusData.value = null;
+    evaluatedAcousticSignature.value = '';
     materialsText.value = '';
     responseModel.value = '';
     responseElapsedMs.value = 0;
@@ -1924,10 +2202,11 @@ const handleEvaluate = async (selectedText) => {
     // Handle special Modulus response (if only modulus was requested)
     if (data.type === 'modulus') {
       modulusData.value = data.modulus;
+      evaluatedAcousticSignature.value = acousticSignatureFromSimulation(data.modulus);
       summary.value = data.summary;
       materialsText.value = data.materials;
-      viewMode.value = 'modulus';
-      backgroundViewMode.value = 'modulus';
+      syncWorkspaceAutoView();
+      transitionKey.value += 1;
 
       // Play sonic feedback
       if (modulusData.value && modulusData.value.results) {
@@ -1963,10 +2242,10 @@ const handleEvaluate = async (selectedText) => {
 
     if (data.summary) summary.value = data.summary;
     modulusData.value = data.modulus || null;
+    evaluatedAcousticSignature.value = acousticSignatureFromSimulation(data.modulus);
     responseModel.value = (data.llm_model || currentModel.value || '').trim();
     sketchModel.value = (data.sketch_model || data.gallery?.sketch_model || '').trim();
-    viewMode.value = pickPreferredSplitView();
-    backgroundViewMode.value = pickPreferredBackgroundView();
+    syncWorkspaceAutoView();
 
     // Play sonic feedback for standard generation if modulus data exists
     if (modulusData.value && modulusData.value.results) {
@@ -2001,7 +2280,7 @@ const handleEvaluate = async (selectedText) => {
       editorRef.value.addToEditor(codeBundle, 'code');
     }
 
-    transitionKey.value++;
+    transitionKey.value += 1;
   } catch (err) {
     console.error(err);
     error.value = err.message;
@@ -2526,12 +2805,225 @@ watch(
 }
 
 .results-panel {
-  height: 100%;
+  flex: 1;
+  height: auto;
   background: #000;
   display: flex;
   flex-direction: column;
   position: relative;
   overflow: hidden;
+  min-height: 0;
+}
+
+.results-panel--background {
+  background: transparent;
+}
+
+.results-panel--idle {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0)),
+    #000;
+}
+
+.workspace-preset-menu {
+  position: relative;
+}
+
+.workspace-preset-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 176px;
+  display: grid;
+  gap: 1px;
+  padding: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  z-index: 40;
+}
+
+.workspace-preset-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 0 10px;
+  background: #000;
+  border: none;
+  color: rgba(255, 255, 255, 0.62);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  text-align: left;
+}
+
+.workspace-preset-option:hover,
+.workspace-preset-option.active {
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.workspace-preset-option__icon,
+.workspace-preset-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.workspace-stage {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.results-panel--background .workspace-stage {
+  background: transparent;
+}
+
+.workspace-stage--fullscreen {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: 'a';
+}
+
+.workspace-stage--splitVertical {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: 'a b';
+}
+
+.workspace-stage--splitThree {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    'a b'
+    'a c';
+}
+
+.workspace-stage--splitFour {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-template-areas:
+    'a b'
+    'c d';
+}
+
+.workspace-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #000;
+}
+
+.results-panel--background .workspace-pane {
+  background: transparent;
+}
+
+.workspace-pane--a { grid-area: a; }
+.workspace-pane--b { grid-area: b; }
+.workspace-pane--c { grid-area: c; }
+.workspace-pane--d { grid-area: d; }
+
+.workspace-pane__header {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.78);
+  flex: 0 0 auto;
+}
+
+.results-panel--background .workspace-pane__header {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.32));
+}
+
+.workspace-pane__title {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.82);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.workspace-pane__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.workspace-pane__select {
+  min-width: 124px;
+  height: 24px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.72);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 0 8px;
+}
+
+.workspace-pane__select option {
+  background: #000;
+  color: #fff;
+}
+
+.workspace-pane__body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  position: relative;
+}
+
+.workspace-stage--fullscreen .workspace-pane__body {
+  padding-bottom: 56px;
+  box-sizing: border-box;
+}
+
+.sound-pane {
+  min-height: 100%;
+  padding: 14px 16px 72px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sound-pane__facts {
+  margin-bottom: 2px;
+}
+
+.workspace-pane__body .plot-image {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.results-panel--background .workspace-pane__body .plot-image {
+  padding: 18px 18px 72px;
+  box-sizing: border-box;
+}
+
+.results-panel--background .stl-viewer-container,
+.results-panel--background .modulus-results {
+  padding-bottom: 56px;
+  box-sizing: border-box;
 }
 
 .results-split {
@@ -2540,10 +3032,15 @@ watch(
   overflow-x: hidden;
   background: transparent;
   display: grid;
-  grid-template-rows: minmax(240px, 1.1fr) minmax(220px, 0.9fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(320px, 1.02fr) minmax(300px, 0.98fr);
+  grid-template-rows: minmax(250px, 0.94fr) minmax(320px, 1.06fr);
+  grid-template-areas:
+    'organogram text'
+    'visualizer visualizer';
   gap: 0;
-  padding: 0 0 88px 0;
+  padding: 0 0 88px;
   box-sizing: border-box;
+  align-content: stretch;
 }
 
 .panel {
@@ -2555,10 +3052,6 @@ watch(
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-.panel + .panel {
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .panel-placeholder {
@@ -2595,11 +3088,15 @@ watch(
 }
 
 .panel-organogram {
+  grid-area: organogram;
   justify-content: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .panel-visualizer {
+  grid-area: visualizer;
   min-height: 380px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .tab-header {
@@ -2609,6 +3106,13 @@ watch(
 .tabs {
   display: flex;
   gap: 16px;
+}
+
+.acoustic-mode-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 18px;
 }
 
 .modulus-mode-toggle {
@@ -2698,6 +3202,7 @@ watch(
 }
 
 .panel-text {
+  grid-area: text;
   overflow: auto;
 }
 
@@ -2743,6 +3248,14 @@ watch(
   border: 1px solid rgba(0, 246, 255, 0.16);
   background:
     radial-gradient(circle at top left, rgba(26, 36, 84, 0.32), rgba(5, 8, 20, 0.08) 60%),
+    transparent;
+}
+
+.modulus-volume-shell {
+  min-height: 360px;
+  border: 1px solid rgba(0, 246, 255, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(26, 36, 84, 0.22), rgba(5, 8, 20, 0.05) 60%),
     transparent;
 }
 
@@ -2980,6 +3493,11 @@ watch(
   height: min(70vh, 760px);
 }
 
+.background-stage__volume {
+  width: min(92vw, 1040px);
+  height: min(72vh, 780px);
+}
+
 .workspace-sidebar {
   position: fixed;
   top: 0;
@@ -3168,6 +3686,10 @@ watch(
   background: radial-gradient(circle at top left, rgba(26, 36, 84, 0.28), rgba(4, 8, 18, 0.06) 60%);
 }
 
+.acoustic-preview-volume {
+  min-height: 300px;
+}
+
 .command-domain + .command-domain,
 .acoustic-summary + .acoustic-summary,
 .session-summary,
@@ -3244,7 +3766,7 @@ watch(
   .left-column { padding-top: 50px !important; }
 
   .app-container {
-  font-family: 'IBM Plex Mono', monospace;
+    font-family: 'IBM Plex Mono', monospace;
     flex-direction: column;
   }
   
@@ -3253,9 +3775,42 @@ watch(
   }
   .left-column { height: 50vh !important; }
   .right-column { height: 50vh !important; }
+  .workspace-stage--splitVertical,
+  .workspace-stage--splitThree,
+  .workspace-stage--splitFour {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-areas:
+      'a'
+      'b'
+      'c'
+      'd';
+  }
+  .workspace-pane__header {
+    padding: 0 10px;
+  }
+  .workspace-pane__controls {
+    gap: 6px;
+  }
+  .workspace-pane__select {
+    min-width: 108px;
+  }
   .results-split {
-    grid-template-rows: minmax(180px, 1fr) minmax(180px, 0.95fr) minmax(220px, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(180px, 0.9fr) minmax(180px, 0.9fr) minmax(220px, 1fr);
+    grid-template-areas:
+      'organogram'
+      'text'
+      'visualizer';
     padding-bottom: 110px;
+  }
+  .panel-organogram,
+  .panel-visualizer {
+    border-right: none;
+  }
+  .panel-text,
+  .panel-visualizer {
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
   }
   .workspace-sidebar {
     width: 100vw;

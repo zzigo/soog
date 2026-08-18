@@ -1339,31 +1339,60 @@ def _coerce_float(value, default):
     return numeric if np.isfinite(numeric) else float(default)
 
 
-def _infer_modulus_primitive(prompt_text: str, fallback: str = 'circle') -> str:
+def _infer_modulus_mode(prompt_text: str, fallback: str = '2d') -> str:
     lowered = str(prompt_text or '').lower()
-    keyword_map = {
-        'circle': ('circle', 'circular', 'round', 'pipe', 'tube', 'aerophone'),
-        'square': ('square', 'box', 'boxed', 'casing'),
-        'triangle': ('triangle', 'triangular', 'reed cluster'),
-        'hexagon': ('hexagon', 'hexagonal', 'honeycomb', 'cellular'),
-    }
+    if fallback == '3d':
+        return '3d'
+    if any(keyword in lowered for keyword in ('3d', 'volumetric', 'volume', 'xyz', 'spatial', 'cavity volume')):
+        return '3d'
+    return '2d'
+
+
+def _infer_modulus_primitive(prompt_text: str, fallback: str = 'circle', mode: str = '2d') -> str:
+    lowered = str(prompt_text or '').lower()
+    if mode == '3d':
+        keyword_map = {
+            'sphere': ('sphere', 'spherical', 'ball', 'round body', 'globular'),
+            'cube': ('cube', 'cubic', 'box', 'boxed', 'chamber'),
+            'cylinder': ('cylinder', 'cylindrical', 'pipe', 'tube', 'tubular', 'duct'),
+        }
+    else:
+        keyword_map = {
+            'circle': ('circle', 'circular', 'round', 'pipe', 'tube', 'aerophone'),
+            'square': ('square', 'box', 'boxed', 'casing'),
+            'triangle': ('triangle', 'triangular', 'reed cluster'),
+            'hexagon': ('hexagon', 'hexagonal', 'honeycomb', 'cellular'),
+        }
     for primitive, keywords in keyword_map.items():
         if any(keyword in lowered for keyword in keywords):
             return primitive
-    return fallback if fallback in ('circle', 'square', 'triangle', 'hexagon') else 'circle'
+    allowed = ('sphere', 'cube', 'cylinder') if mode == '3d' else ('circle', 'square', 'triangle', 'hexagon')
+    return fallback if fallback in allowed else ('sphere' if mode == '3d' else 'circle')
 
 
 def _build_modulus_sim_params(refact_meta: dict, prompt_text: str):
-    primitive = str(refact_meta.get('primitive') or '').strip().lower()
-    primitive = _infer_modulus_primitive(prompt_text, primitive or 'circle')
+    raw_primitive = str(refact_meta.get('primitive') or '').strip().lower()
+    explicit_mode = str(refact_meta.get('mode') or '').strip().lower()
+    if raw_primitive in ('sphere', 'cube', 'cylinder') and explicit_mode not in ('2d', '3d'):
+        explicit_mode = '3d'
+    if explicit_mode in ('2d', '3d'):
+        mode = explicit_mode
+    else:
+        mode = _infer_modulus_mode(prompt_text, '3d' if explicit_mode == '3d' else '2d')
+    primitive = _infer_modulus_primitive(prompt_text, raw_primitive or ('sphere' if mode == '3d' else 'circle'), mode)
     return {
+        'solver': str(refact_meta.get('solver') or 'fd').strip().lower() or 'fd',
+        'mode': mode,
         'freq': _coerce_float(refact_meta.get('freq'), 440.0),
         'obs_x': _coerce_float(refact_meta.get('obs_x'), 0.15),
         'obs_y': _coerce_float(refact_meta.get('obs_y'), 0.0),
+        'obs_z': _coerce_float(refact_meta.get('obs_z'), 0.0),
         'source_x': _coerce_float(refact_meta.get('source_x'), -0.55),
         'source_y': _coerce_float(refact_meta.get('source_y'), 0.0),
+        'source_z': _coerce_float(refact_meta.get('source_z'), -0.28),
         'probe_x': _coerce_float(refact_meta.get('probe_x'), 0.55),
         'probe_y': _coerce_float(refact_meta.get('probe_y'), 0.0),
+        'probe_z': _coerce_float(refact_meta.get('probe_z'), 0.32),
         'primitive': primitive,
         'prompt': prompt_text,
     }
@@ -3325,7 +3354,7 @@ def generate():
 
     # SPECIAL HANDLER: NVIDIA Modulus Simulation Experiment
     if refact_meta.get('is_modulus'):
-        update_generation_progress(request_id, status='starting', stage='modulus_simulation', reasoning_preview='Running NVIDIA Modulus (Surrogate) Acoustical Simulation...')
+        update_generation_progress(request_id, status='starting', stage='modulus_simulation', reasoning_preview='Running SOT-A Phase 2 finite-difference acoustical simulation...')
         try:
             # Import the experimental script logic
             modeltrainer_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'modeltrainer'))
@@ -3370,9 +3399,15 @@ def generate():
                     f"Method: {sim_result.get('method')}\n"
                     f"Primitive: {sim_result.get('params', {}).get('primitive', sim_params['primitive'])}\n"
                     f"Frequency: {sim_result.get('params', {}).get('freq', sim_params['freq'])} Hz\n"
-                    f"Source: ({sim_params['source_x']:.2f}, {sim_params['source_y']:.2f})\n"
-                    f"Probe: ({sim_params['probe_x']:.2f}, {sim_params['probe_y']:.2f})\n"
-                    f"Obstacle: ({sim_params['obs_x']:.2f}, {sim_params['obs_y']:.2f})"
+                    f"Source: ({sim_params['source_x']:.2f}, {sim_params['source_y']:.2f}"
+                    + (f", {sim_params['source_z']:.2f}" if sim_params.get('mode') == '3d' else "")
+                    + ")\n"
+                    + f"Probe: ({sim_params['probe_x']:.2f}, {sim_params['probe_y']:.2f}"
+                    + (f", {sim_params['probe_z']:.2f}" if sim_params.get('mode') == '3d' else "")
+                    + ")\n"
+                    + f"Obstacle: ({sim_params['obs_x']:.2f}, {sim_params['obs_y']:.2f}"
+                    + (f", {sim_params['obs_z']:.2f}" if sim_params.get('mode') == '3d' else "")
+                    + ")"
                 ),
                 "materials": (
                     f"Primitive cavity: {sim_result.get('params', {}).get('primitive', sim_params['primitive'])}\n"
@@ -3549,7 +3584,7 @@ def generate():
         # ATTEMPT MODULUS SIMULATION FOR EVERY GENERATION
         modulus_sim = None
         try:
-            update_generation_progress(request_id, stage='modulus_simulation', status='running', reasoning_preview='Calculating Acoustical PINN Surrogate...')
+            update_generation_progress(request_id, stage='modulus_simulation', status='running', reasoning_preview='Calculating SOT-A Phase 2 finite-difference field...')
             modeltrainer_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'modeltrainer'))
             if modeltrainer_path not in sys.path:
                 sys.path.append(modeltrainer_path)
