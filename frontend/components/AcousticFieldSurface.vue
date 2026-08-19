@@ -5,6 +5,12 @@
 <script setup>
 import { onMounted, onUnmounted, ref, watch } from 'vue';
 import { sampleAcousticPalette } from '~/utils/acousticPalette';
+import {
+  normalizePlaneKey,
+  phaseDistance2d,
+  projectMarkerToPlane,
+  temporalFieldValue,
+} from '~/utils/acousticTemporal';
 
 const props = defineProps({
   data: {
@@ -14,6 +20,14 @@ const props = defineProps({
   markers: {
     type: Array,
     default: () => [],
+  },
+  plane: {
+    type: String,
+    default: 'xy',
+  },
+  phase: {
+    type: Number,
+    default: 0,
   },
   heightScale: {
     type: Number,
@@ -74,13 +88,14 @@ async function ensureThree() {
   return { THREE, OrbitControls };
 }
 
-function markerHeightAt(data, x, y, heightScale) {
+function markerHeightAt(data, x, y, heightScale, phase, plane, markers) {
   if (!Array.isArray(data) || !data.length || !Array.isArray(data[0]) || !data[0].length) return 0;
   const rows = data.length;
   const cols = data[0].length;
   const col = Math.min(cols - 1, Math.max(0, Math.round(((x + 1) * 0.5) * (cols - 1))));
   const row = Math.min(rows - 1, Math.max(0, Math.round((1 - ((y + 1) * 0.5)) * (rows - 1))));
-  return Number(data[row]?.[col] || 0) * heightScale;
+  const distance = phaseDistance2d(row, col, rows, cols, markers, plane);
+  return temporalFieldValue(data[row]?.[col], phase, distance) * heightScale;
 }
 
 async function buildScene() {
@@ -163,16 +178,30 @@ async function renderSurface() {
 
   const rows = props.data.length;
   const cols = props.data[0].length;
+  const planeKey = normalizePlaneKey(props.plane);
   const geometry = new THREE.PlaneGeometry(2.2, 2.2, cols - 1, rows - 1);
   const position = geometry.attributes.position;
   const colors = [];
+  const values = [];
+  let maxAbs = 0;
+
+  for (let row = 0; row < rows; row += 1) {
+    values[row] = [];
+    for (let col = 0; col < cols; col += 1) {
+      const distance = phaseDistance2d(row, col, rows, cols, props.markers, planeKey);
+      const value = temporalFieldValue(props.data[row]?.[col], props.phase, distance);
+      values[row][col] = value;
+      maxAbs = Math.max(maxAbs, Math.abs(value));
+    }
+  }
+  maxAbs = maxAbs || 1;
 
   let pointer = 0;
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
-      const value = Number(props.data[row]?.[col] || 0);
+      const value = Number(values[row]?.[col] || 0);
       position.setZ(pointer, value * props.heightScale);
-      const color = sampleAcousticPalette(value, 1);
+      const color = sampleAcousticPalette(value / maxAbs, 1);
       colors.push(color.r / 255, color.g / 255, color.b / 255);
       pointer += 1;
     }
@@ -211,8 +240,9 @@ async function renderSurface() {
   markerGroup = new THREE.Group();
   const sphereGeometry = new THREE.SphereGeometry(0.028, 16, 16);
   for (const marker of props.markers || []) {
-    const x = Number(marker?.x);
-    const y = Number(marker?.y);
+    const projected = projectMarkerToPlane(marker, planeKey);
+    const x = Number(projected.u);
+    const y = Number(projected.v);
     if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
 
     const palette = {
@@ -229,7 +259,11 @@ async function renderSurface() {
     });
 
     const mesh = new THREE.Mesh(sphereGeometry, markerMaterial);
-    mesh.position.set(x * 1.1, markerHeightAt(props.data, x, y, props.heightScale) + 0.08, y * 1.1);
+    mesh.position.set(
+      x * 1.1,
+      markerHeightAt(props.data, x, y, props.heightScale, props.phase, planeKey, props.markers) + 0.08,
+      y * 1.1
+    );
     markerGroup.add(mesh);
   }
   scene.add(markerGroup);
@@ -247,6 +281,14 @@ watch(() => props.data, () => {
 watch(() => props.markers, () => {
   if (!process.server) renderSurface();
 }, { deep: true });
+
+watch(() => props.plane, () => {
+  if (!process.server) renderSurface();
+});
+
+watch(() => props.phase, () => {
+  if (!process.server) renderSurface();
+});
 
 onUnmounted(() => {
   stopLoop();

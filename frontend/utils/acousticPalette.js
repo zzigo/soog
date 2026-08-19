@@ -20,11 +20,13 @@ function rgbToCss({ r, g, b }, alpha = 1) {
 }
 
 const stops = [
-  { at: 0.0, color: { r: 8, g: 10, b: 24 } },
-  { at: 0.24, color: { r: 13, g: 32, b: 78 } },
-  { at: 0.5, color: { r: 0, g: 238, b: 255 } },
-  { at: 0.72, color: { r: 218, g: 70, b: 255 } },
-  { at: 1.0, color: { r: 255, g: 117, b: 24 } },
+  { at: 0.0, color: { r: 10, g: 18, b: 44 } },
+  { at: 0.16, color: { r: 25, g: 66, b: 148 } },
+  { at: 0.34, color: { r: 32, g: 140, b: 214 } },
+  { at: 0.5, color: { r: 102, g: 188, b: 183 } },
+  { at: 0.66, color: { r: 223, g: 212, b: 96 } },
+  { at: 0.84, color: { r: 236, g: 132, b: 52 } },
+  { at: 1.0, color: { r: 177, g: 38, b: 28 } },
 ];
 
 export function sampleAcousticPalette(value, alpha = 1) {

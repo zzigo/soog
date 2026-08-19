@@ -40,7 +40,7 @@
         <div class="hud-group hud-group--workspace">
           <div ref="workspacePresetMenuRef" class="workspace-preset-menu">
             <button
-              class="icon-button"
+              class="icon-button workspace-preset-trigger"
               :class="{ active: workspacePresetMenuOpen }"
               @click="toggleWorkspacePresetMenu"
               title="Workspace presets"
@@ -58,6 +58,10 @@
                   <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
                   <path d="M4 12H20" stroke="currentColor" stroke-width="1.5" />
                 </template>
+              </svg>
+              <span class="workspace-preset-trigger__label">{{ workspaceModeLabel }}</span>
+              <svg class="workspace-preset-trigger__chevron" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="currentColor" d="M7 10L12 15L17 10H7Z" />
               </svg>
             </button>
             <div v-if="workspacePresetMenuOpen" class="workspace-preset-dropdown">
@@ -82,7 +86,10 @@
                     <path d="M4 12H20" stroke="currentColor" stroke-width="1.5" />
                   </template>
                 </svg>
-                <span>{{ preset.label }}</span>
+                <span class="workspace-preset-option__copy">
+                  <strong>{{ preset.label }}</strong>
+                  <small>{{ preset.summary }}</small>
+                </span>
               </button>
             </div>
           </div>
@@ -197,7 +204,7 @@
             'results-panel--idle': !hasResults,
             'results-panel--background': workspaceLayout === 'background'
           }"
-          :key="`${transitionKey}-${workspacePreset}`"
+          :key="workspacePreset"
         >
           <div class="workspace-stage" :class="`workspace-stage--${workspacePreset}`">
             <section
@@ -224,21 +231,35 @@
                   >
                     {{ loading ? '...' : 'GENERATE' }}
                   </button>
-                  <template v-if="pane.view === 'acoustic' && activeAcousticMode === '2d' && acousticHasPlane">
+                  <template v-if="pane.view === 'acoustic' && acousticViewUsesPlane && activeAcousticPlaneData">
                     <div class="modulus-mode-toggle">
                       <button
                         class="modulus-mode-btn"
                         :class="{ active: modulusRenderMode === '2d' }"
                         @click="modulusRenderMode = '2d'"
                       >
-                        2D
+                        MAP
                       </button>
                       <button
                         class="modulus-mode-btn"
                         :class="{ active: modulusRenderMode === '3d' }"
                         @click="modulusRenderMode = '3d'"
                       >
-                        3D
+                        SURF
+                      </button>
+                    </div>
+                  </template>
+                  <template v-if="pane.view === 'acoustic' && activeModulusData">
+                    <div class="acoustic-view-toggle">
+                      <button
+                        v-for="option in acousticViewModeOptions"
+                        :key="option.key"
+                        class="acoustic-view-btn"
+                        :class="{ active: activeAcousticViewMode === option.key }"
+                        :title="option.detail"
+                        @click="setAcousticViewMode(option.key)"
+                      >
+                        {{ option.label }}
                       </button>
                     </div>
                   </template>
@@ -293,43 +314,86 @@
 
                 <template v-else-if="pane.view === 'acoustic'">
                   <div v-if="activeModulusData" class="modulus-results">
-                    <div v-if="activeAcousticMode === '3d' && acousticHasVolume" class="modulus-stack">
-                      <ClientOnly>
+                    <div class="modulus-stack">
+                      <div class="acoustic-temporal-bar">
+                        <div class="acoustic-temporal-group">
+                          <button class="modulus-mode-btn" @click="toggleAcousticTemporalPlayback">
+                            {{ acousticTemporalPlaying ? 'PAUSE' : 'PLAY' }}
+                          </button>
+                          <span class="acoustic-temporal-readout">{{ activeAcousticViewDetail }} · {{ acousticTemporalPhaseLabel }}</span>
+                        </div>
+                        <label class="acoustic-temporal-slider">
+                          <span>Phase</span>
+                          <input
+                            type="range"
+                            min="0"
+                            :max="acousticTemporalMax"
+                            step="0.01"
+                            :value="acousticTemporalPhase"
+                            @input="acousticTemporalPhase = Number($event.target.value)"
+                          >
+                        </label>
+                        <label class="acoustic-temporal-slider acoustic-temporal-slider--speed">
+                          <span>Speed {{ acousticTemporalSpeedLabel }}</span>
+                          <input
+                            type="range"
+                            min="0.2"
+                            max="2.4"
+                            step="0.05"
+                            :value="acousticTemporalSpeed"
+                            @input="acousticTemporalSpeed = Number($event.target.value)"
+                          >
+                        </label>
+                      </div>
+
+                      <ClientOnly v-if="activeAcousticViewMode === 'volume' && acousticHasVolume">
                         <div class="modulus-volume-shell">
                           <AcousticVolumeViewer
                             :volume="activeModulusData.results.pressure_volume"
                             :markers="modulusMarkers"
                             :primitive="activeModulusData.params?.primitive || 'sphere'"
+                            :phase="acousticTemporalPhase"
                           />
                         </div>
                       </ClientOnly>
-                      <div class="modulus-readout">
-                        <span>Probe {{ acousticProbeResponseText }}</span>
-                        <span>Peaks {{ acousticPeakSummary }}</span>
-                        <span>{{ activeModulusSource === 'preview' ? 'Preview volume' : 'Evaluated volume' }}</span>
-                      </div>
-                    </div>
-                    <div v-else-if="acousticHasPlane" class="modulus-stack">
-                      <ModulusHeatmap
-                        v-if="modulusRenderMode === '2d'"
-                        :data="activeModulusData.results.pressure_map"
-                        :markers="modulusMarkers"
-                      />
-                      <ClientOnly v-else>
-                        <div class="modulus-surface-shell">
-                          <AcousticFieldSurface
-                            :data="activeModulusData.results.pressure_map"
+                      <ClientOnly v-else-if="activeAcousticViewMode === 'iso' && acousticHasVolume">
+                        <div class="modulus-volume-shell modulus-volume-shell--iso">
+                          <AcousticIsoSurfaceViewer
+                            :volume="activeModulusData.results.pressure_volume"
                             :markers="modulusMarkers"
+                            :primitive="activeModulusData.params?.primitive || 'sphere'"
+                            :phase="acousticTemporalPhase"
                           />
                         </div>
                       </ClientOnly>
+                      <template v-else-if="activeAcousticPlaneData">
+                        <ModulusHeatmap
+                          v-if="modulusRenderMode === '2d'"
+                          :data="activeAcousticPlaneData"
+                          :markers="modulusMarkers"
+                          :plane="activeAcousticPlaneKey"
+                          :phase="acousticTemporalPhase"
+                        />
+                        <ClientOnly v-else>
+                          <div class="modulus-surface-shell">
+                            <AcousticFieldSurface
+                              :data="activeAcousticPlaneData"
+                              :markers="modulusMarkers"
+                              :plane="activeAcousticPlaneKey"
+                              :phase="acousticTemporalPhase"
+                            />
+                          </div>
+                        </ClientOnly>
+                      </template>
+                      <pre v-else class="modulus-json">{{ JSON.stringify(activeModulusData.results || activeModulusData, null, 2) }}</pre>
+
                       <div class="modulus-readout">
                         <span>Probe {{ acousticProbeResponseText }}</span>
                         <span>Peaks {{ acousticPeakSummary }}</span>
+                        <span>{{ activeAcousticViewDetail }}</span>
                         <span>{{ activeModulusSource === 'preview' ? 'Live surrogate preview' : 'Evaluated phase 2 field' }}</span>
                       </div>
                     </div>
-                    <pre v-else class="modulus-json">{{ JSON.stringify(activeModulusData.results || activeModulusData, null, 2) }}</pre>
                   </div>
                   <div v-else class="panel-placeholder">No acoustical simulation data for this response.</div>
                 </template>
@@ -432,8 +496,33 @@
           <template v-else>
             <div class="acoustic-actions">
               <button class="sidebar-action" @click="evaluateCurrentAcousticCommand">Evaluate SOT-A</button>
-              <button v-if="activeAcousticMode === '2d'" class="sidebar-action" @click="modulusRenderMode = modulusRenderMode === '2d' ? '3d' : '2d'">
-                {{ modulusRenderMode === '2d' ? 'Switch to 3D' : 'Switch to 2D' }}
+              <div v-if="acousticViewUsesPlane && activeAcousticPlaneData" class="modulus-mode-toggle">
+                <button
+                  class="modulus-mode-btn"
+                  :class="{ active: modulusRenderMode === '2d' }"
+                  @click="modulusRenderMode = '2d'"
+                >
+                  MAP
+                </button>
+                <button
+                  class="modulus-mode-btn"
+                  :class="{ active: modulusRenderMode === '3d' }"
+                  @click="modulusRenderMode = '3d'"
+                >
+                  SURF
+                </button>
+              </div>
+            </div>
+            <div class="acoustic-view-toggle acoustic-view-toggle--sidebar">
+              <button
+                v-for="option in acousticViewModeOptions"
+                :key="option.key"
+                class="acoustic-view-btn"
+                :class="{ active: activeAcousticViewMode === option.key }"
+                :title="option.detail"
+                @click="setAcousticViewMode(option.key)"
+              >
+                {{ option.label }}
               </button>
             </div>
             <div class="acoustic-mode-row">
@@ -522,27 +611,72 @@
                 <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.obstacleZ" @input="updateAcousticSliderValue('obstacle', 2, Number($event.target.value))">
               </label>
             </div>
+            <div class="acoustic-temporal-bar acoustic-temporal-bar--sidebar">
+              <div class="acoustic-temporal-group">
+                <button class="modulus-mode-btn" @click="toggleAcousticTemporalPlayback">
+                  {{ acousticTemporalPlaying ? 'PAUSE' : 'PLAY' }}
+                </button>
+                <span class="acoustic-temporal-readout">{{ acousticTemporalPhaseLabel }}</span>
+              </div>
+              <label class="acoustic-temporal-slider">
+                <span>Phase</span>
+                <input
+                  type="range"
+                  min="0"
+                  :max="acousticTemporalMax"
+                  step="0.01"
+                  :value="acousticTemporalPhase"
+                  @input="acousticTemporalPhase = Number($event.target.value)"
+                >
+              </label>
+              <label class="acoustic-temporal-slider acoustic-temporal-slider--speed">
+                <span>Speed {{ acousticTemporalSpeedLabel }}</span>
+                <input
+                  type="range"
+                  min="0.2"
+                  max="2.4"
+                  step="0.05"
+                  :value="acousticTemporalSpeed"
+                  @input="acousticTemporalSpeed = Number($event.target.value)"
+                >
+              </label>
+            </div>
             <div class="acoustic-preview-shell">
-              <ClientOnly v-if="activeAcousticMode === '3d' && acousticHasVolume">
+              <ClientOnly v-if="activeAcousticViewMode === 'volume' && acousticHasVolume">
                 <div class="acoustic-preview-surface acoustic-preview-volume">
                   <AcousticVolumeViewer
                     :volume="activeModulusData.results.pressure_volume"
                     :markers="modulusMarkers"
                     :primitive="activeModulusData.params?.primitive || 'sphere'"
+                    :phase="acousticTemporalPhase"
+                  />
+                </div>
+              </ClientOnly>
+              <ClientOnly v-else-if="activeAcousticViewMode === 'iso' && acousticHasVolume">
+                <div class="acoustic-preview-surface acoustic-preview-volume">
+                  <AcousticIsoSurfaceViewer
+                    :volume="activeModulusData.results.pressure_volume"
+                    :markers="modulusMarkers"
+                    :primitive="activeModulusData.params?.primitive || 'sphere'"
+                    :phase="acousticTemporalPhase"
                   />
                 </div>
               </ClientOnly>
               <ModulusHeatmap
-                v-else-if="modulusRenderMode === '2d' && activeModulusData?.results?.pressure_map"
-                :data="activeModulusData.results.pressure_map"
+                v-else-if="modulusRenderMode === '2d' && activeAcousticPlaneData"
+                :data="activeAcousticPlaneData"
                 :size="280"
                 :markers="modulusMarkers"
+                :plane="activeAcousticPlaneKey"
+                :phase="acousticTemporalPhase"
               />
-              <ClientOnly v-else-if="activeModulusData?.results?.pressure_map">
+              <ClientOnly v-else-if="activeAcousticPlaneData">
                 <div class="acoustic-preview-surface">
                   <AcousticFieldSurface
-                    :data="activeModulusData.results.pressure_map"
+                    :data="activeAcousticPlaneData"
                     :markers="modulusMarkers"
+                    :plane="activeAcousticPlaneKey"
+                    :phase="acousticTemporalPhase"
                   />
                 </div>
               </ClientOnly>
@@ -647,6 +781,7 @@ import StlViewer from '~/components/StlViewer.vue';
 import ModulusHeatmap from '~/components/ModulusHeatmap.vue';
 import AcousticFieldSurface from '~/components/AcousticFieldSurface.vue';
 import AcousticVolumeViewer from '~/components/AcousticVolumeViewer.vue';
+import AcousticIsoSurfaceViewer from '~/components/AcousticIsoSurfaceViewer.vue';
 import SorganoidWorld from '~/components/SorganoidWorld.vue';
 import AuthGateModal from '~/components/AuthGateModal.vue';
 import UsageDashboard from '~/components/UsageDashboard.vue';
@@ -656,6 +791,7 @@ import { useAcousticSonification } from '~/composables/useAcousticSonification';
 import { useApi } from '~/composables/useApi';
 import { useSoogAuth } from '~/composables/useSoogAuth';
 import { runAcousticSimulation } from '~/utils/acousticSimulation';
+import { phaseTurnsLabel, wrapPhase } from '~/utils/acousticTemporal';
 
 // Configure marked
 marked.setOptions({
@@ -713,6 +849,10 @@ const generationRequestId = ref('');
 const reasoningPreview = ref('');
 const progressStage = ref('');
 const modulusRenderMode = ref('2d');
+const acousticViewMode = ref('auto');
+const acousticTemporalPlaying = ref(true);
+const acousticTemporalPhase = ref(0);
+const acousticTemporalSpeed = ref(1);
 const workspaceLayout = ref('background'); // 'split' or 'background'
 const workspacePreset = ref('fullscreen');
 const workspacePresetMenuOpen = ref(false);
@@ -726,11 +866,14 @@ const evaluatedAcousticSignature = ref('');
 const editorContent = ref('');
 const liveModulusData = ref(null);
 const targetBasename = ref('');
+const acousticTemporalMax = Math.PI * 2;
 let progressPollInterval = null;
 let editorSyncBound = false;
 let editorSessionChangeHandler = null;
 let livePreviewTimer = null;
 let editorSyncTimer = null;
+let acousticTemporalInterval = null;
+let acousticTemporalLastTick = 0;
 
 const summaryHtml = computed(() => {
   if (!summary.value) return '';
@@ -744,7 +887,6 @@ const authActionLoading = ref(false);
 const authGateError = ref('');
 const pendingRenderPrompt = ref('');
 const profileRefreshAttempted = ref(false);
-const transitionKey = ref(0);
 const isMobileOrTablet = ref(false);
 const showLightbox = ref(false);
 const RESPONSE_TIMES_KEY = 'soog_response_times_ms';
@@ -753,21 +895,25 @@ const PENDING_RENDER_KEY = 'soog.pending-render.v1';
 const WORKSPACE_PRESET_CONFIG = {
   fullscreen: {
     label: 'Fullscreen',
+    summary: 'Single immersive viewport with routed render focus.',
     areas: ['a'],
     defaults: ['auto'],
   },
   splitVertical: {
     label: 'Split Vertical',
+    summary: 'Two equal panes for paired visual inspection.',
     areas: ['a', 'b'],
     defaults: ['organogram', 'geometry'],
   },
   splitThree: {
     label: 'Split 3',
+    summary: 'Main left viewport with two stacked analytical panes.',
     areas: ['a', 'b', 'c'],
     defaults: ['organogram', 'sound', 'acoustic'],
   },
   splitFour: {
     label: 'Split 4',
+    summary: 'Four-way dock for organogram, text, object, and field.',
     areas: ['a', 'b', 'c', 'd'],
     defaults: ['organogram', 'sound', 'geometry', 'acoustic'],
   },
@@ -856,10 +1002,47 @@ const acousticPrimitiveOptions = computed(() => (
 ));
 const acousticHasPlane = computed(() => Boolean(activeModulusData.value?.results?.pressure_map));
 const acousticHasVolume = computed(() => Boolean(activeModulusData.value?.results?.pressure_volume));
+const acousticViewModeOptions = computed(() => (
+  activeAcousticMode.value === '3d'
+    ? [
+        { key: 'volume', label: 'VOL', detail: 'Volumetric cloud' },
+        { key: 'iso', label: 'ISO', detail: 'Iso-shell' },
+        { key: 'xy', label: 'XY', detail: 'Probe slice XY' },
+        { key: 'xz', label: 'XZ', detail: 'Probe slice XZ' },
+        { key: 'yz', label: 'YZ', detail: 'Probe slice YZ' },
+      ]
+    : [
+        { key: 'xy', label: 'XY', detail: 'Planar field' },
+      ]
+));
+const activeAcousticViewMode = computed(() => {
+  const allowed = acousticViewModeOptions.value.map((option) => option.key);
+  if (allowed.includes(acousticViewMode.value)) return acousticViewMode.value;
+  return activeAcousticMode.value === '3d' ? 'volume' : 'xy';
+});
+const acousticViewUsesPlane = computed(() => ['xy', 'xz', 'yz'].includes(activeAcousticViewMode.value));
+const activeAcousticPlaneKey = computed(() => (
+  activeAcousticViewMode.value === 'xz' || activeAcousticViewMode.value === 'yz'
+    ? activeAcousticViewMode.value
+    : 'xy'
+));
+const activeAcousticPlaneData = computed(() => {
+  const results = activeModulusData.value?.results || {};
+  if (activeAcousticPlaneKey.value === 'xz') return results.slice_xz || null;
+  if (activeAcousticPlaneKey.value === 'yz') return results.slice_yz || null;
+  return results.slice_xy || results.pressure_map || null;
+});
+const activeAcousticViewDetail = computed(() => {
+  const entry = acousticViewModeOptions.value.find((option) => option.key === activeAcousticViewMode.value);
+  return entry?.detail || 'Acoustic field';
+});
+const acousticTemporalPhaseLabel = computed(() => phaseTurnsLabel(acousticTemporalPhase.value));
+const acousticTemporalSpeedLabel = computed(() => `${acousticTemporalSpeed.value.toFixed(2)}x`);
 const hasResults = computed(() => !!(plotImage.value || sketchImage.value || summary.value || materialsText.value || stlUrl.value || activeModulusData.value));
 const workspacePresetOptions = computed(() => Object.entries(WORKSPACE_PRESET_CONFIG).map(([key, value]) => ({
   key,
   label: value.label,
+  summary: value.summary,
 })));
 const workspaceViewOptions = computed(() => WORKSPACE_VIEW_CATALOG);
 const activeWorkspacePreset = computed(() => WORKSPACE_PRESET_CONFIG[workspacePreset.value] || WORKSPACE_PRESET_CONFIG.fullscreen);
@@ -997,7 +1180,7 @@ const commandDomains = [
       { syntax: 'preview vs evaluate', detail: 'Sliders and edits keep a local surrogate preview; Evaluate swaps in the backend phase 2 finite-difference field when the command matches.' },
       { syntax: 'primitive=<circle|square|triangle|hexagon|sphere|cube|cylinder>', detail: 'Choose planar or volumetric primitive families for the current acoustic test.' },
       { syntax: 'SOT-A sliders', detail: 'The right sidebar edits the @acoustic command directly, including XYZ when mode=3d.' },
-      { syntax: 'surface / volumetric', detail: '2D fields can switch heatmap vs surface; 3D fields render as a volumetric point cloud.' },
+      { syntax: 'map / surf / vol / iso / xy-xz-yz', detail: 'Plane fields can switch between heatmap and relief surface; 3D studies can flip between cloud, iso-shell, and probe slices.' },
       { syntax: 'follow-up lines', detail: 'Any lines after the command are passed as contextual notes to the solver.' }
     ]
   },
@@ -1355,6 +1538,34 @@ function setAcousticMode(mode) {
   updateAcousticCommandInEditor({ mode });
 }
 
+function setAcousticViewMode(mode) {
+  acousticViewMode.value = mode;
+}
+
+function stopAcousticTemporalLoop() {
+  if (acousticTemporalInterval) {
+    clearInterval(acousticTemporalInterval);
+    acousticTemporalInterval = null;
+  }
+  acousticTemporalLastTick = 0;
+}
+
+function startAcousticTemporalLoop() {
+  stopAcousticTemporalLoop();
+  if (typeof window === 'undefined' || !acousticTemporalPlaying.value) return;
+  acousticTemporalLastTick = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  acousticTemporalInterval = window.setInterval(() => {
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const deltaSec = Math.max(0.05, (now - acousticTemporalLastTick) / 1000);
+    acousticTemporalLastTick = now;
+    acousticTemporalPhase.value = wrapPhase(acousticTemporalPhase.value + (deltaSec * acousticTemporalSpeed.value * 2.15));
+  }, 85);
+}
+
+function toggleAcousticTemporalPlayback() {
+  acousticTemporalPlaying.value = !acousticTemporalPlaying.value;
+}
+
 function insertStarterAcousticCommand() {
   const editor = editorRef.value?.aceEditor?.();
   if (!editor) return;
@@ -1479,6 +1690,7 @@ onMounted(() => {
   checkDevice();
   syncWorkspaceLayoutFromPreset();
   syncWorkspaceAutoView();
+  startAcousticTemporalLoop();
   editorSyncTimer = window.setInterval(() => {
     if (syncEditorContent()) {
       window.clearInterval(editorSyncTimer);
@@ -1498,6 +1710,7 @@ onMounted(() => {
 onUnmounted(() => {
   clearInterval(progressInterval);
   stopReasoningPolling();
+  stopAcousticTemporalLoop();
   if (editorSyncTimer) {
     clearInterval(editorSyncTimer);
     editorSyncTimer = null;
@@ -1527,6 +1740,28 @@ watch(editorRef, () => {
     syncEditorContent();
   });
 });
+
+watch(acousticTemporalPlaying, (playing) => {
+  if (playing) {
+    startAcousticTemporalLoop();
+  } else {
+    stopAcousticTemporalLoop();
+  }
+});
+
+watch(
+  () => [activeAcousticMode.value, acousticViewModeOptions.value.map((option) => option.key).join('|')],
+  () => {
+    const allowed = acousticViewModeOptions.value.map((option) => option.key);
+    if (!allowed.includes(acousticViewMode.value)) {
+      acousticViewMode.value = activeAcousticMode.value === '3d' ? 'volume' : 'xy';
+    }
+    if (activeAcousticMode.value !== '3d' && modulusRenderMode.value !== '2d' && !activeAcousticPlaneData.value) {
+      modulusRenderMode.value = '2d';
+    }
+  },
+  { immediate: true }
+);
 
 watch(
   () => {
@@ -1982,7 +2217,6 @@ async function loadCodeFromGallery(item) {
   modulusData.value = item.modulus || null;
   evaluatedAcousticSignature.value = acousticSignatureFromSimulation(item.modulus);
   syncWorkspaceAutoView();
-  transitionKey.value += 1;
   showGallery.value = false;
 }
 
@@ -2181,37 +2415,69 @@ const handleEvaluate = async (selectedText) => {
     return Array.from(found.values());
   }
 
+  function deriveMaterialsText(materialsValue, summaryValue) {
+    if (typeof materialsValue === 'string' && materialsValue.trim()) {
+      return materialsValue.trim();
+    }
+    if (Array.isArray(materialsValue) && materialsValue.length) {
+      return materialsValue.map(x => (typeof x === 'string' ? x : (x.name || ''))).filter(Boolean).join('\n');
+    }
+    if (summaryValue) {
+      return extractMaterials(summaryValue).map(m => `- ${m.name}`).join('\n');
+    }
+    return '';
+  }
+
+  function applyGenerationState(nextState) {
+    plotImage.value = nextState.plotImage;
+    sketchImage.value = nextState.sketchImage;
+    summary.value = nextState.summary;
+    organogramCode.value = nextState.organogramCode;
+    geometryCode.value = nextState.geometryCode;
+    stlUrl.value = nextState.stlUrl;
+    modulusData.value = nextState.modulusData;
+    evaluatedAcousticSignature.value = nextState.evaluatedAcousticSignature;
+    materialsText.value = nextState.materialsText;
+    responseModel.value = nextState.responseModel;
+    responseElapsedMs.value = nextState.responseElapsedMs;
+    sketchModel.value = nextState.sketchModel;
+    syncWorkspaceAutoView();
+  }
+
   try {
     const data = await callOnce();
     void refreshProfile(apiBase.value).catch(() => {});
-
-    // Reset results
-    plotImage.value = null;
-    sketchImage.value = null;
-    summary.value = null;
-    organogramCode.value = '';
-    geometryCode.value = '';
-    stlUrl.value = null;
-    modulusData.value = null;
-    evaluatedAcousticSignature.value = '';
-    materialsText.value = '';
-    responseModel.value = '';
-    responseElapsedMs.value = 0;
-    sketchModel.value = '';
+    const requestEndedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const clientElapsed = Math.max(0, requestEndedAt - requestStartedAt);
+    const stagedElapsedMs = Number.isFinite(Number(data.elapsed_ms))
+      ? Number(data.elapsed_ms)
+      : Math.round(clientElapsed);
+    const stagedResponseModel = (data.llm_model || currentModel.value || '').trim();
 
     // Handle special Modulus response (if only modulus was requested)
     if (data.type === 'modulus') {
-      modulusData.value = data.modulus;
-      evaluatedAcousticSignature.value = acousticSignatureFromSimulation(data.modulus);
-      summary.value = data.summary;
-      materialsText.value = data.materials;
-      syncWorkspaceAutoView();
-      transitionKey.value += 1;
+      const stagedSummary = data.summary || summary.value || '';
+      const stagedMaterials = deriveMaterialsText(data.materials, stagedSummary);
+      const stagedModulus = data.modulus || null;
+      applyGenerationState({
+        plotImage: plotImage.value,
+        sketchImage: sketchImage.value,
+        summary: stagedSummary,
+        organogramCode: organogramCode.value,
+        geometryCode: geometryCode.value,
+        stlUrl: stlUrl.value,
+        modulusData: stagedModulus,
+        evaluatedAcousticSignature: acousticSignatureFromSimulation(stagedModulus),
+        materialsText: stagedMaterials,
+        responseModel: stagedResponseModel,
+        responseElapsedMs: stagedElapsedMs,
+        sketchModel: sketchModel.value,
+      });
 
       // Play sonic feedback
-      if (modulusData.value && modulusData.value.results) {
-        const freq = Number(modulusData.value.params?.freq) || 440;
-        const amp = Number(modulusData.value.results.mic_response) || 0.5;
+      if (stagedModulus?.results) {
+        const freq = Number(stagedModulus.params?.freq) || 440;
+        const amp = Number(stagedModulus.results.mic_response) || 0.5;
         playResponse(freq, amp);
       }
 
@@ -2227,60 +2493,56 @@ const handleEvaluate = async (selectedText) => {
 
     const imageUrl = data.image_url || data.gallery?.image_url || null;
     const sketchUrl = data.sketch_url || data.gallery?.sketch_url || null;
+    let stagedPlotImage = null;
     if (data.image) {
-      plotImage.value = `data:image/png;base64,${data.image}`;
+      stagedPlotImage = `data:image/png;base64,${data.image}`;
     } else if (imageUrl) {
-      plotImage.value = resolveAssetUrl(imageUrl);
+      stagedPlotImage = resolveAssetUrl(imageUrl);
     } else {
       throw new Error('Backend did not return an organogram image. Generation aborted.');
     }
+    let stagedSketchImage = null;
     if (data.sketch) {
-      sketchImage.value = `data:image/png;base64,${data.sketch}`;
+      stagedSketchImage = `data:image/png;base64,${data.sketch}`;
     } else if (sketchUrl) {
-      sketchImage.value = resolveAssetUrl(sketchUrl);
+      stagedSketchImage = resolveAssetUrl(sketchUrl);
     }
 
-    if (data.summary) summary.value = data.summary;
-    modulusData.value = data.modulus || null;
-    evaluatedAcousticSignature.value = acousticSignatureFromSimulation(data.modulus);
-    responseModel.value = (data.llm_model || currentModel.value || '').trim();
-    sketchModel.value = (data.sketch_model || data.gallery?.sketch_model || '').trim();
-    syncWorkspaceAutoView();
+    const stagedSummary = data.summary || '';
+    const stagedModulus = data.modulus || null;
+    const stagedOrganogramCode = (data.plot_code || data.content || '').trim();
+    const stagedGeometryCode = (data.stl_code || '').trim();
+    const stagedStlUrl = data.gallery?.stl_url ? resolveAssetUrl(data.gallery.stl_url) : null;
+    const stagedSketchModel = (data.sketch_model || data.gallery?.sketch_model || '').trim();
+    const stagedMaterialsText = deriveMaterialsText(data.materials, stagedSummary);
+
+    applyGenerationState({
+      plotImage: stagedPlotImage,
+      sketchImage: stagedSketchImage,
+      summary: stagedSummary,
+      organogramCode: stagedOrganogramCode,
+      geometryCode: stagedGeometryCode,
+      stlUrl: stagedStlUrl,
+      modulusData: stagedModulus,
+      evaluatedAcousticSignature: acousticSignatureFromSimulation(stagedModulus),
+      materialsText: stagedMaterialsText,
+      responseModel: stagedResponseModel,
+      responseElapsedMs: stagedElapsedMs,
+      sketchModel: stagedSketchModel,
+    });
 
     // Play sonic feedback for standard generation if modulus data exists
-    if (modulusData.value && modulusData.value.results) {
-      const freq = Number(modulusData.value.params?.freq) || 440;
-      const amp = Number(modulusData.value.results.mic_response) || 0.5;
+    if (stagedModulus?.results) {
+      const freq = Number(stagedModulus.params?.freq) || 440;
+      const amp = Number(stagedModulus.results.mic_response) || 0.5;
       playResponse(freq, amp);
     }
 
-    const requestEndedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-    const clientElapsed = Math.max(0, requestEndedAt - requestStartedAt);
-    responseElapsedMs.value = Number.isFinite(Number(data.elapsed_ms))
-      ? Number(data.elapsed_ms)
-      : Math.round(clientElapsed);
-
-    organogramCode.value = (data.plot_code || data.content || '').trim();
-    geometryCode.value = (data.stl_code || '').trim();
-
-    stlUrl.value = data.gallery?.stl_url ? resolveAssetUrl(data.gallery.stl_url) : null;
-
-    if (typeof data.materials === 'string' && data.materials.trim()) {
-      materialsText.value = data.materials.trim();
-    } else if (Array.isArray(data.materials) && data.materials.length) {
-      materialsText.value = data.materials.map(x => (typeof x === 'string' ? x : (x.name || ''))).filter(Boolean).join('\n');
-    } else if (summary.value) {
-      const list = extractMaterials(summary.value).map(m => `- ${m.name}`);
-      materialsText.value = list.join('\n');
-    }
-
     // Append structured code sections in editor (left panel)
-    const codeBundle = formatGeneratedCode(organogramCode.value, geometryCode.value);
+    const codeBundle = formatGeneratedCode(stagedOrganogramCode, stagedGeometryCode);
     if (showCode.value && codeBundle && editorRef.value) {
       editorRef.value.addToEditor(codeBundle, 'code');
     }
-
-    transitionKey.value += 1;
   } catch (err) {
     console.error(err);
     error.value = err.message;
@@ -2540,8 +2802,10 @@ watch(
   align-items: center;
   flex-wrap: wrap;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  position: relative;
-  z-index: 12;
+  position: sticky;
+  top: 0;
+  z-index: 120;
+  background: rgba(0, 0, 0, 0.92);
 }
 
 .right-column--background .hud {
@@ -2829,26 +3093,48 @@ watch(
   position: relative;
 }
 
+.workspace-preset-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 8px 6px;
+}
+
+.workspace-preset-trigger__label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.76);
+  white-space: nowrap;
+}
+
+.workspace-preset-trigger__chevron {
+  width: 14px;
+  height: 14px;
+  color: rgba(255, 255, 255, 0.48);
+  flex: 0 0 auto;
+}
+
 .workspace-preset-dropdown {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  min-width: 176px;
+  min-width: 228px;
   display: grid;
   gap: 1px;
   padding: 1px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  z-index: 40;
+  background: rgba(119, 139, 169, 0.22);
+  border: 1px solid rgba(119, 139, 169, 0.28);
+  z-index: 140;
 }
 
 .workspace-preset-option {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
-  min-height: 32px;
-  padding: 0 10px;
-  background: #000;
+  min-height: 44px;
+  padding: 7px 10px;
+  background: rgba(2, 6, 13, 0.96);
   border: none;
   color: rgba(255, 255, 255, 0.62);
   font-family: 'IBM Plex Mono', monospace;
@@ -2868,6 +3154,24 @@ watch(
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
+}
+
+.workspace-preset-option__copy {
+  display: grid;
+  gap: 3px;
+}
+
+.workspace-preset-option__copy strong {
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.workspace-preset-option__copy small {
+  font-size: 10px;
+  line-height: 1.35;
+  letter-spacing: 0.03em;
+  color: rgba(188, 202, 220, 0.58);
 }
 
 .workspace-stage {
@@ -3121,6 +3425,33 @@ watch(
   gap: 4px;
 }
 
+.acoustic-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.acoustic-view-toggle--sidebar {
+  margin: 12px 0 0;
+}
+
+.acoustic-view-btn {
+  border: 1px solid rgba(132, 160, 188, 0.18);
+  background: rgba(7, 12, 30, 0.28);
+  color: rgba(204, 214, 225, 0.56);
+  padding: 2px 7px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.acoustic-view-btn.active,
+.acoustic-view-btn:hover {
+  border-color: rgba(95, 195, 255, 0.68);
+  color: rgba(238, 244, 250, 0.92);
+}
+
 .modulus-mode-btn {
   border: 1px solid rgba(0, 246, 255, 0.16);
   background: rgba(7, 12, 30, 0.35);
@@ -3243,20 +3574,70 @@ watch(
   min-height: 100%;
 }
 
+.acoustic-temporal-bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(140px, 220px);
+  gap: 10px;
+  align-items: center;
+}
+
+.acoustic-temporal-bar--sidebar {
+  margin-top: 14px;
+  grid-template-columns: 1fr;
+}
+
+.acoustic-temporal-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.acoustic-temporal-readout {
+  color: rgba(213, 223, 234, 0.72);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.acoustic-temporal-slider {
+  display: grid;
+  gap: 4px;
+  color: rgba(185, 198, 214, 0.7);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.acoustic-temporal-slider--speed {
+  min-width: 150px;
+}
+
 .modulus-surface-shell {
   min-height: 320px;
-  border: 1px solid rgba(0, 246, 255, 0.16);
+  border: 1px solid rgba(132, 160, 188, 0.18);
   background:
-    radial-gradient(circle at top left, rgba(26, 36, 84, 0.32), rgba(5, 8, 20, 0.08) 60%),
-    transparent;
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.035) 1px, transparent 1px, transparent 18px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.028) 1px, transparent 1px, transparent 18px),
+    radial-gradient(circle at top left, rgba(88, 117, 154, 0.24), rgba(6, 11, 19, 0.08) 60%),
+    linear-gradient(180deg, rgba(6, 10, 18, 0.96), rgba(10, 15, 24, 0.58));
 }
 
 .modulus-volume-shell {
   min-height: 360px;
-  border: 1px solid rgba(0, 246, 255, 0.16);
+  border: 1px solid rgba(132, 160, 188, 0.18);
   background:
-    radial-gradient(circle at top left, rgba(26, 36, 84, 0.22), rgba(5, 8, 20, 0.05) 60%),
-    transparent;
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.032) 1px, transparent 1px, transparent 20px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.024), rgba(255, 255, 255, 0.024) 1px, transparent 1px, transparent 20px),
+    radial-gradient(circle at 22% 18%, rgba(95, 126, 165, 0.2), rgba(8, 12, 19, 0.08) 48%),
+    linear-gradient(180deg, rgba(6, 10, 18, 0.94), rgba(10, 15, 23, 0.52));
+}
+
+.modulus-volume-shell--iso {
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.026), rgba(255, 255, 255, 0.026) 1px, transparent 1px, transparent 16px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.02) 1px, transparent 1px, transparent 16px),
+    radial-gradient(circle at 70% 12%, rgba(84, 118, 164, 0.2), rgba(8, 12, 19, 0.08) 44%),
+    linear-gradient(180deg, rgba(7, 11, 20, 0.95), rgba(11, 16, 25, 0.56));
 }
 
 .modulus-readout {
@@ -3264,13 +3645,13 @@ watch(
   flex-wrap: wrap;
   gap: 10px;
   font-size: 11px;
-  color: rgba(194, 214, 255, 0.56);
+  color: rgba(204, 214, 225, 0.62);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .modulus-readout span {
-  border-top: 1px solid rgba(0, 246, 255, 0.16);
+  border-top: 1px solid rgba(132, 160, 188, 0.18);
   padding-top: 6px;
 }
 
@@ -3500,14 +3881,14 @@ watch(
 
 .workspace-sidebar {
   position: fixed;
-  top: 0;
+  top: 42px;
   right: 0;
   bottom: 44px;
   width: 360px;
   display: flex;
   transform: translateX(316px);
   transition: transform 0.24s ease;
-  z-index: 80;
+  z-index: 90;
   border-left: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(0, 0, 0, 0.18);
   backdrop-filter: blur(14px);
@@ -3550,6 +3931,8 @@ watch(
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden;
+  background: rgba(5, 8, 13, 0.9);
 }
 
 .workspace-sidebar__header {
@@ -3562,6 +3945,10 @@ watch(
   font-size: 11px;
   letter-spacing: 0.16em;
   color: rgba(255, 255, 255, 0.82);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(5, 8, 13, 0.94);
 }
 
 .workspace-sidebar__close {
@@ -3572,6 +3959,7 @@ watch(
   flex: 1;
   overflow: auto;
   padding: 14px 16px 68px;
+  overscroll-behavior: contain;
 }
 
 .acoustic-actions {
@@ -3682,8 +4070,11 @@ watch(
 
 .acoustic-preview-surface {
   min-height: 280px;
-  border: 1px solid rgba(0, 246, 255, 0.16);
-  background: radial-gradient(circle at top left, rgba(26, 36, 84, 0.28), rgba(4, 8, 18, 0.06) 60%);
+  border: 1px solid rgba(132, 160, 188, 0.18);
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.032) 1px, transparent 1px, transparent 18px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.024), rgba(255, 255, 255, 0.024) 1px, transparent 1px, transparent 18px),
+    radial-gradient(circle at top left, rgba(90, 120, 160, 0.22), rgba(4, 8, 18, 0.06) 60%);
 }
 
 .acoustic-preview-volume {
@@ -3791,9 +4182,17 @@ watch(
   }
   .workspace-pane__controls {
     gap: 6px;
+    flex-wrap: wrap;
   }
   .workspace-pane__select {
     min-width: 108px;
+  }
+  .acoustic-temporal-bar {
+    grid-template-columns: 1fr;
+  }
+  .acoustic-view-toggle {
+    margin-left: 0;
+    flex-wrap: wrap;
   }
   .results-split {
     grid-template-columns: minmax(0, 1fr);
@@ -3813,6 +4212,7 @@ watch(
     border-top: 1px solid rgba(255, 255, 255, 0.12);
   }
   .workspace-sidebar {
+    top: 50px;
     width: 100vw;
     transform: translateX(calc(100vw - 44px));
   }

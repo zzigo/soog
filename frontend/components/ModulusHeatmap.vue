@@ -12,6 +12,12 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue';
 import { acousticLegendGradient, sampleAcousticPalette } from '~/utils/acousticPalette';
+import {
+  normalizePlaneKey,
+  projectMarkerToPlane,
+  phaseDistance2d,
+  temporalFieldValue,
+} from '~/utils/acousticTemporal';
 
 const props = defineProps({
   data: {
@@ -25,6 +31,14 @@ const props = defineProps({
   markers: {
     type: Array,
     default: () => []
+  },
+  plane: {
+    type: String,
+    default: 'xy'
+  },
+  phase: {
+    type: Number,
+    default: 0
   }
 });
 
@@ -89,6 +103,7 @@ const drawHeatmap = () => {
   const cols = props.data[0].length;
   const cellW = canvas.width / cols;
   const cellH = canvas.height / rows;
+  const planeKey = normalizePlaneKey(props.plane);
 
   const backgroundGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
   backgroundGradient.addColorStop(0, 'rgba(4, 10, 24, 0.72)');
@@ -97,18 +112,21 @@ const drawHeatmap = () => {
   ctx.fillStyle = backgroundGradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Find max absolute value for normalization
+  const transformed = Array.from({ length: rows }, () => new Array(cols).fill(0));
   let maxVal = 0;
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      maxVal = Math.max(maxVal, Math.abs(props.data[r][c]));
+      const distance = phaseDistance2d(r, c, rows, cols, props.markers, planeKey);
+      const value = temporalFieldValue(props.data[r][c], props.phase, distance);
+      transformed[r][c] = value;
+      maxVal = Math.max(maxVal, Math.abs(value));
     }
   }
   if (maxVal === 0) maxVal = 1;
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const val = props.data[r][c];
+      const val = transformed[r][c];
       const norm = val / maxVal; // -1 to 1
       const color = sampleAcousticPalette(norm, 0.92);
       ctx.fillStyle = color.css;
@@ -132,8 +150,9 @@ const drawHeatmap = () => {
   }
 
   for (const marker of props.markers || []) {
-    const x = projectCoord(marker?.x, canvas.width);
-    const y = canvas.height - projectCoord(marker?.y, canvas.height);
+    const projected = projectMarkerToPlane(marker, planeKey);
+    const x = projectCoord(projected.u, canvas.width);
+    const y = canvas.height - projectCoord(projected.v, canvas.height);
     strokeMarker(ctx, marker, x, y);
   }
 
@@ -146,6 +165,8 @@ const drawHeatmap = () => {
 onMounted(drawHeatmap);
 watch(() => props.data, drawHeatmap, { deep: true });
 watch(() => props.markers, drawHeatmap, { deep: true });
+watch(() => props.plane, drawHeatmap);
+watch(() => props.phase, drawHeatmap);
 </script>
 
 <style scoped>

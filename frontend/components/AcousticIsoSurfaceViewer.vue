@@ -1,11 +1,11 @@
 <template>
-  <div ref="containerRef" class="volume-container"></div>
+  <div ref="containerRef" class="iso-container"></div>
 </template>
 
 <script setup>
 import { onMounted, onUnmounted, ref, watch } from 'vue';
 import { sampleAcousticPalette } from '~/utils/acousticPalette';
-import { wrapPhase } from '~/utils/acousticTemporal';
+import { phaseDistance3d, temporalBandWeight, temporalFieldValue, wrapPhase } from '~/utils/acousticTemporal';
 
 const props = defineProps({
   volume: {
@@ -20,13 +20,13 @@ const props = defineProps({
     type: String,
     default: 'sphere',
   },
-  pointSize: {
-    type: Number,
-    default: 0.042,
-  },
   phase: {
     type: Number,
     default: 0,
+  },
+  pointSize: {
+    type: Number,
+    default: 0.074,
   },
 });
 
@@ -36,15 +36,12 @@ let scene;
 let camera;
 let renderer;
 let controls;
-let pointCloud;
-let highlightCloud;
+let shellCloud;
 let markerGroup;
 let outlineMesh;
 let frameId = null;
 let resizeHandler = null;
 let blobTexture = null;
-let basePointSize = props.pointSize;
-let highlightPointSize = props.pointSize * 2.4;
 
 function disposeObject(object3d) {
   if (!object3d) return;
@@ -64,15 +61,10 @@ function stopLoop() {
 }
 
 function clearScene() {
-  if (pointCloud) {
-    scene?.remove(pointCloud);
-    disposeObject(pointCloud);
-    pointCloud = null;
-  }
-  if (highlightCloud) {
-    scene?.remove(highlightCloud);
-    disposeObject(highlightCloud);
-    highlightCloud = null;
+  if (shellCloud) {
+    scene?.remove(shellCloud);
+    disposeObject(shellCloud);
+    shellCloud = null;
   }
   if (markerGroup) {
     scene?.remove(markerGroup);
@@ -98,104 +90,15 @@ function makeBlobTexture() {
   canvas.width = 96;
   canvas.height = 96;
   const ctx = canvas.getContext('2d');
-  const gradient = ctx.createRadialGradient(48, 48, 4, 48, 48, 48);
+  const gradient = ctx.createRadialGradient(48, 48, 6, 48, 48, 48);
   gradient.addColorStop(0, 'rgba(255,255,255,1)');
-  gradient.addColorStop(0.3, 'rgba(255,255,255,0.94)');
-  gradient.addColorStop(0.62, 'rgba(255,255,255,0.38)');
+  gradient.addColorStop(0.28, 'rgba(255,255,255,0.92)');
+  gradient.addColorStop(0.62, 'rgba(255,255,255,0.36)');
   gradient.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 96, 96);
   blobTexture = canvas;
   return blobTexture;
-}
-
-async function buildScene() {
-  if (!containerRef.value) return;
-  const { THREE, OrbitControls } = await ensureThree();
-
-  scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x09111d, 0.18);
-  camera = new THREE.PerspectiveCamera(44, 1, 0.1, 100);
-  camera.position.set(2.06, 1.76, 2.62);
-
-  renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    alpha: true,
-    powerPreference: 'high-performance',
-  });
-  renderer.setClearColor(0x000000, 0);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.04;
-  containerRef.value.appendChild(renderer.domElement);
-
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.autoRotate = true;
-  controls.autoRotateSpeed = 0.24;
-  controls.minDistance = 1.5;
-  controls.maxDistance = 6.5;
-  controls.target.set(0, 0, 0);
-
-  scene.add(new THREE.AmbientLight(0x9baecc, 0.42));
-
-  const coolKey = new THREE.PointLight(0x7dc5ff, 1.5, 14, 2);
-  coolKey.position.set(-1.7, 1.8, 2.5);
-  scene.add(coolKey);
-
-  const warmKey = new THREE.PointLight(0xffb14a, 1.34, 12, 2);
-  warmKey.position.set(2.35, 1.58, -1.2);
-  scene.add(warmKey);
-
-  const rim = new THREE.PointLight(0x58dcc2, 1.18, 10, 2);
-  rim.position.set(0.35, -1.24, 1.96);
-  scene.add(rim);
-
-  const box = new THREE.Box3Helper(new THREE.Box3(
-    new THREE.Vector3(-1.1, -1.1, -1.1),
-    new THREE.Vector3(1.1, 1.1, 1.1)
-  ), 0x546e8e);
-  box.material.transparent = true;
-  box.material.opacity = 0.28;
-  scene.add(box);
-
-  resizeHandler = () => {
-    if (!containerRef.value || !renderer || !camera) return;
-    const width = containerRef.value.clientWidth || 320;
-    const height = containerRef.value.clientHeight || 240;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.25));
-    renderer.setSize(width, height);
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-  };
-
-  window.addEventListener('resize', resizeHandler);
-  resizeHandler();
-
-  await renderVolume();
-
-  const animate = () => {
-    frameId = requestAnimationFrame(animate);
-    const now = performance.now() * 0.001;
-    const phase = wrapPhase(props.phase);
-    const phaseMix = 0.5 + 0.5 * Math.sin(phase);
-    if (pointCloud?.material) {
-      pointCloud.material.opacity = 0.46 + phaseMix * 0.16 + Math.sin(now * 1.35) * 0.04;
-      pointCloud.material.size = basePointSize * (1 + Math.sin(now * 1.18 + phase) * 0.05);
-    }
-    if (highlightCloud?.material) {
-      highlightCloud.material.opacity = 0.2 + phaseMix * 0.18 + (Math.sin(now * 2.25 + phase) + 1) * 0.08;
-      highlightCloud.material.size = highlightPointSize * (1 + Math.sin(now * 2.02 + phase) * 0.16);
-    }
-    if (outlineMesh) {
-      outlineMesh.rotation.y = Math.sin(phase * 0.5) * 0.08;
-      outlineMesh.rotation.x = props.primitive === 'cylinder' ? (Math.PI / 2) + Math.cos(phase * 0.35) * 0.03 : Math.cos(phase * 0.35) * 0.03;
-    }
-    controls?.update();
-    renderer?.render(scene, camera);
-  };
-  animate();
 }
 
 async function buildPrimitiveOutline(THREE) {
@@ -210,9 +113,9 @@ async function buildPrimitiveOutline(THREE) {
 
   const wireGeometry = new THREE.WireframeGeometry(geometry);
   const material = new THREE.LineBasicMaterial({
-    color: 0x84a9c7,
+    color: 0x8da8c6,
     transparent: true,
-    opacity: 0.18,
+    opacity: 0.16,
   });
   outlineMesh = new THREE.LineSegments(wireGeometry, material);
   if (props.primitive === 'cylinder') {
@@ -222,7 +125,7 @@ async function buildPrimitiveOutline(THREE) {
   geometry.dispose?.();
 }
 
-async function renderVolume() {
+async function renderShell() {
   if (!scene || !Array.isArray(props.volume) || !props.volume.length || !Array.isArray(props.volume[0])) return;
   const { THREE } = await ensureThree();
   clearScene();
@@ -245,30 +148,32 @@ async function renderVolume() {
 
   const positions = [];
   const colors = [];
-  const highlightPositions = [];
-  const highlightColors = [];
+  const phases = [];
   const cellCount = depth * rows * cols;
-  const threshold = maxAbs * 0.028;
-  const highlightThreshold = maxAbs * 0.38;
   const stride = cellCount > 140000 ? 3 : cellCount > 72000 ? 2 : 1;
+  const phase = wrapPhase(props.phase);
+  const bandCenter = 0.36 + 0.14 * Math.sin(phase * 0.5);
+  const bandWidth = 0.07;
 
   for (let z = 0; z < depth; z += 1) {
     for (let y = 0; y < rows; y += 1) {
       for (let x = 0; x < cols; x += 1) {
         if (((x + y + z) % stride) !== 0) continue;
         const value = Number(props.volume[z]?.[y]?.[x] || 0);
-        if (Math.abs(value) < threshold) continue;
+        if (!value) continue;
         const px = ((x / Math.max(cols - 1, 1)) * 2 - 1) * 1.05;
         const py = ((y / Math.max(rows - 1, 1)) * 2 - 1) * 1.05;
         const pz = ((z / Math.max(depth - 1, 1)) * 2 - 1) * 1.05;
-        const color = sampleAcousticPalette(value / maxAbs, 0.88);
+        const distance = phaseDistance3d(px, py, pz, props.markers);
+        const bandValue = temporalBandWeight(value, phase, distance) / maxAbs;
+        if (bandValue < 0.12) continue;
+        if (Math.abs(bandValue - bandCenter) > bandWidth) continue;
+
+        const signedValue = temporalFieldValue(value, phase, distance) / maxAbs;
+        const color = sampleAcousticPalette(signedValue, 0.94);
         positions.push(px, py, pz);
         colors.push(color.r / 255, color.g / 255, color.b / 255);
-
-        if (Math.abs(value) >= highlightThreshold) {
-          highlightPositions.push(px, py, pz);
-          highlightColors.push(color.r / 255, color.g / 255, color.b / 255);
-        }
+        phases.push(distance);
       }
     }
   }
@@ -279,45 +184,23 @@ async function renderVolume() {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  basePointSize = props.pointSize * (stride === 1 ? 1.08 : 1.24);
+  geometry.setAttribute('phaseOffset', new THREE.Float32BufferAttribute(phases, 1));
 
   const material = new THREE.PointsMaterial({
-    size: basePointSize,
+    size: props.pointSize * (stride === 1 ? 1.08 : 1.22),
     vertexColors: true,
     transparent: true,
-    opacity: 0.64,
+    opacity: 0.84,
     sizeAttenuation: true,
     depthWrite: false,
     map: spriteTexture,
     alphaMap: spriteTexture,
-    alphaTest: 0.04,
+    alphaTest: 0.05,
+    blending: THREE.AdditiveBlending,
   });
 
-  pointCloud = new THREE.Points(geometry, material);
-  scene.add(pointCloud);
-
-  if (highlightPositions.length) {
-    const highlightGeometry = new THREE.BufferGeometry();
-    highlightGeometry.setAttribute('position', new THREE.Float32BufferAttribute(highlightPositions, 3));
-    highlightGeometry.setAttribute('color', new THREE.Float32BufferAttribute(highlightColors, 3));
-    highlightPointSize = basePointSize * 2.75;
-
-    const highlightMaterial = new THREE.PointsMaterial({
-      size: highlightPointSize,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.34,
-      sizeAttenuation: true,
-      depthWrite: false,
-      map: spriteTexture,
-      alphaMap: spriteTexture,
-      alphaTest: 0.02,
-      blending: THREE.AdditiveBlending,
-    });
-
-    highlightCloud = new THREE.Points(highlightGeometry, highlightMaterial);
-    scene.add(highlightCloud);
-  }
+  shellCloud = new THREE.Points(geometry, material);
+  scene.add(shellCloud);
 
   markerGroup = new THREE.Group();
   const sphereGeometry = new THREE.SphereGeometry(0.038, 18, 18);
@@ -338,7 +221,7 @@ async function renderVolume() {
       emissive: color,
       emissiveIntensity: 0.92,
       transparent: true,
-      opacity: 0.96,
+      opacity: 0.94,
     });
     const mesh = new THREE.Mesh(sphereGeometry, markerMaterial);
     mesh.position.set(x * 1.05, y * 1.05, z * 1.05);
@@ -347,27 +230,101 @@ async function renderVolume() {
   scene.add(markerGroup);
 }
 
+async function buildScene() {
+  if (!containerRef.value) return;
+  const { THREE, OrbitControls } = await ensureThree();
+
+  scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x09111d, 0.16);
+  camera = new THREE.PerspectiveCamera(44, 1, 0.1, 100);
+  camera.position.set(2.12, 1.88, 2.78);
+
+  renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: true,
+    powerPreference: 'high-performance',
+  });
+  renderer.setClearColor(0x000000, 0);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.02;
+  containerRef.value.appendChild(renderer.domElement);
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 0.22;
+  controls.minDistance = 1.5;
+  controls.maxDistance = 6.5;
+  controls.target.set(0, 0, 0);
+
+  scene.add(new THREE.AmbientLight(0xa2b6d8, 0.4));
+
+  const coolKey = new THREE.PointLight(0x80c7ff, 1.44, 14, 2);
+  coolKey.position.set(-1.6, 1.6, 2.2);
+  scene.add(coolKey);
+
+  const warmKey = new THREE.PointLight(0xffb65a, 1.28, 12, 2);
+  warmKey.position.set(2.2, 1.54, -1.14);
+  scene.add(warmKey);
+
+  const rim = new THREE.PointLight(0x59d4c0, 1.08, 10, 2);
+  rim.position.set(0.1, -1.12, 1.88);
+  scene.add(rim);
+
+  resizeHandler = () => {
+    if (!containerRef.value || !renderer || !camera) return;
+    const width = containerRef.value.clientWidth || 320;
+    const height = containerRef.value.clientHeight || 240;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.25));
+    renderer.setSize(width, height);
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  };
+
+  window.addEventListener('resize', resizeHandler);
+  resizeHandler();
+
+  await renderShell();
+
+  const animate = () => {
+    frameId = requestAnimationFrame(animate);
+    const now = performance.now() * 0.001;
+    const phase = wrapPhase(props.phase);
+    if (shellCloud?.material) {
+      shellCloud.material.opacity = 0.64 + (0.5 + 0.5 * Math.sin(phase + now * 0.4)) * 0.2;
+      shellCloud.material.size = props.pointSize * (1.08 + Math.sin(phase + now * 0.8) * 0.08);
+    }
+    if (outlineMesh) {
+      outlineMesh.rotation.y = Math.sin(phase * 0.6) * 0.1;
+      outlineMesh.rotation.x = props.primitive === 'cylinder' ? (Math.PI / 2) : Math.cos(phase * 0.36) * 0.05;
+    }
+    controls?.update();
+    renderer?.render(scene, camera);
+  };
+  animate();
+}
+
 onMounted(() => {
   if (process.server) return;
   buildScene();
 });
 
 watch(() => props.volume, () => {
-  if (!process.server) renderVolume();
+  if (!process.server) renderShell();
 }, { deep: true });
 
 watch(() => props.markers, () => {
-  if (!process.server) renderVolume();
+  if (!process.server) renderShell();
 }, { deep: true });
 
 watch(() => props.primitive, () => {
-  if (!process.server) renderVolume();
+  if (!process.server) renderShell();
 });
 
-watch(() => props.pointSize, (nextSize) => {
-  basePointSize = nextSize;
-  highlightPointSize = nextSize * 2.4;
-  if (!process.server) renderVolume();
+watch(() => props.phase, () => {
+  if (!process.server) renderShell();
 });
 
 onUnmounted(() => {
@@ -389,13 +346,16 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.volume-container {
+.iso-container {
   width: 100%;
   height: 100%;
-  min-height: 320px;
-  background:
-    radial-gradient(circle at 22% 18%, rgba(96, 136, 182, 0.22), rgba(8, 14, 24, 0.06) 44%),
-    radial-gradient(circle at 78% 74%, rgba(248, 172, 77, 0.08), rgba(8, 14, 24, 0) 42%),
-    linear-gradient(180deg, rgba(5, 9, 16, 0.82), rgba(7, 11, 18, 0.32));
+  min-height: 260px;
+  background: transparent;
+}
+
+.iso-container :deep(canvas) {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 </style>
