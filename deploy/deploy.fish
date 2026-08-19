@@ -13,6 +13,18 @@ set -l BACKUP_ROOT /var/tmp/soog-deploy-backups
 set -l TS (date "+%Y%m%d-%H%M%S")
 set -l BACKUP_DIR "$BACKUP_ROOT/deploy-backup-$TS"
 
+function run_pm2_candidate
+    set -l candidate $argv[1]
+    set -l candidate_home $argv[2]
+    set -e argv[1..2]
+
+    if test "$candidate" = (whoami)
+        $PM2_BIN $argv
+    else
+        sudo -u $candidate -H env PM2_HOME="$candidate_home/.pm2" PATH="/usr/local/bin:/usr/bin:/bin" $PM2_BIN $argv
+    end
+end
+
 cd $REPO_DIR; or exit 1
 
 # 1) Backup local generated artifacts (gallery/STL/audio) before syncing code
@@ -121,41 +133,36 @@ if command -sq pm2
             set CANDIDATE_HOME "/home/$candidate"
         end
 
-        set -l CANDIDATE_PREFIX
-        if test "$candidate" != (whoami)
-            set CANDIDATE_PREFIX sudo -u $candidate -H env PM2_HOME="$CANDIDATE_HOME/.pm2" PATH="/usr/local/bin:/usr/bin:/bin"
-        end
-
-        if $CANDIDATE_PREFIX $PM2_BIN describe soog-backend >/dev/null 2>/dev/null
+        if run_pm2_candidate $candidate $CANDIDATE_HOME describe soog-backend >/dev/null 2>/dev/null
             set PM2_APP_USER $candidate
-            set PM2_PREFIX $CANDIDATE_PREFIX
+            set PM2_PREFIX $CANDIDATE_HOME
             break
         end
 
-        if $CANDIDATE_PREFIX $PM2_BIN describe soog-frontend >/dev/null 2>/dev/null
+        if run_pm2_candidate $candidate $CANDIDATE_HOME describe soog-frontend >/dev/null 2>/dev/null
             set PM2_APP_USER $candidate
-            set PM2_PREFIX $CANDIDATE_PREFIX
+            set PM2_PREFIX $CANDIDATE_HOME
             break
         end
     end
 
     if test -n "$PM2_APP_USER"
-        if $PM2_PREFIX $PM2_BIN describe soog-backend >/dev/null 2>/dev/null
+        if run_pm2_candidate $PM2_APP_USER $PM2_PREFIX describe soog-backend >/dev/null 2>/dev/null
             echo "  - Restarting PM2 app ($PM2_APP_USER): soog-backend"
-            $PM2_PREFIX $PM2_BIN restart soog-backend --update-env; or exit 1
+            run_pm2_candidate $PM2_APP_USER $PM2_PREFIX restart soog-backend --update-env; or exit 1
             set USED_PM2 1
         end
 
-        if $PM2_PREFIX $PM2_BIN describe soog-frontend >/dev/null 2>/dev/null
+        if run_pm2_candidate $PM2_APP_USER $PM2_PREFIX describe soog-frontend >/dev/null 2>/dev/null
             echo "  - Restarting PM2 app ($PM2_APP_USER): soog-frontend"
-            $PM2_PREFIX $PM2_BIN restart soog-frontend --update-env; or exit 1
+            run_pm2_candidate $PM2_APP_USER $PM2_PREFIX restart soog-frontend --update-env; or exit 1
             set USED_PM2 1
         end
     end
 
     if test $USED_PM2 -eq 1
         echo "  - Saving PM2 process list for $PM2_APP_USER"
-        $PM2_PREFIX $PM2_BIN save; or exit 1
+        run_pm2_candidate $PM2_APP_USER $PM2_PREFIX save; or exit 1
     end
 end
 
@@ -178,8 +185,30 @@ end
 
 # 7) Health checks
 echo "→ Verifying local endpoints"
-sleep 3
-curl -fsS http://127.0.0.1:10000/api/ollama/verify >/dev/null; or exit 1
-curl -fsSI http://127.0.0.1:3000 >/dev/null; or exit 1
+set -l BACKEND_OK 0
+for _ in (seq 1 20)
+    if curl -fsS http://127.0.0.1:10000/api/ollama/verify >/dev/null 2>/dev/null
+        set BACKEND_OK 1
+        break
+    end
+    sleep 2
+end
+if test $BACKEND_OK -ne 1
+    echo "✖ Backend health check failed after retries"
+    exit 1
+end
+
+set -l FRONTEND_OK 0
+for _ in (seq 1 15)
+    if curl -fsSI http://127.0.0.1:3000 >/dev/null 2>/dev/null
+        set FRONTEND_OK 1
+        break
+    end
+    sleep 2
+end
+if test $FRONTEND_OK -ne 1
+    echo "✖ Frontend health check failed after retries"
+    exit 1
+end
 
 echo "=== SOOG DEPLOY DONE ==="
