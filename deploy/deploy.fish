@@ -198,7 +198,7 @@ end
 # 7) Health checks
 echo "→ Verifying local endpoints"
 set -l BACKEND_OK 0
-for _ in (seq 1 20)
+for attempt in (seq 1 20)
     if curl -fsS http://127.0.0.1:10000/api/ollama/verify >/dev/null 2>/dev/null
         set BACKEND_OK 1
         break
