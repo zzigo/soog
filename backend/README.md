@@ -4,7 +4,6 @@ A Flask-based API that powers SOOG. It provides:
 
 - `/api/generate`: Calls Ollama chat completion and optionally returns code or a rendered matplotlib plot.
 - `/api/predict`: Runs a small multimodal model (DistilBERT + CLIP + attention head) on text + image.
-- `/api/somap/graph`: Builds a knowledge graph from markdown notes in `backend/soopub` (folders, notes, tags, wikilinks).
 - `/api/version`: Returns backend version from `version.txt`.
 - `/api/health`: Lightweight health check with version and device info.
 - `/api/ollama/verify`: Verifies Ollama connectivity and model availability.

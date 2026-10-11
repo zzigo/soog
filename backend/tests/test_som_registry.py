@@ -102,5 +102,33 @@ class ReadNoteTest(unittest.TestCase):
         self.assertLessEqual(len(note['body']), som_registry.MAX_NOTE_CHARS)
 
 
+class RegistryContextTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.base = self.tmp.name
+        som_registry._cache.update(signature=None, graph=None)
+        som_registry._context_cache.update(graph=None, docs=[])
+        write(self.base, '1mat/Wood.md',
+              '---\nid: wood\ntitle: Wood\ncategory: 1mat\n---\nSpruce soundboard resonance and grain stiffness.\n')
+        write(self.base, '1mat/Steel.md',
+              '---\nid: steel\ntitle: Steel\ncategory: 1mat\n---\nAlloy strings with high tension.\n')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_ranks_notes_by_overlap(self):
+        out = som_registry.registry_context('spruce soundboard resonance', base=self.base)
+        self.assertIn('[1mat/Wood]', out)
+        self.assertNotIn('Steel', out)
+        self.assertNotIn('id: wood', out)
+
+    def test_empty_when_no_overlap_or_no_query(self):
+        self.assertEqual(som_registry.registry_context('', base=self.base), '')
+        self.assertEqual(som_registry.registry_context('zzzz qqqq', base=self.base), '')
+
+    def test_missing_checkout_returns_empty(self):
+        self.assertEqual(som_registry.registry_context('wood', base=os.path.join(self.base, 'nope')), '')
+
+
 if __name__ == '__main__':
     unittest.main()
