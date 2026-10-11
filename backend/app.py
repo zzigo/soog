@@ -1511,12 +1511,53 @@ def split_summary_and_materials(text_no_code: str):
     return text_no_code.strip(), None
 
 
-def fetch_ollama_models():
+MODEL_LIST_TTL_SEC = 15
+_MODEL_LIST_CACHE = {'at': 0.0, 'key': None, 'value': None}
+_MODEL_CAPS_CACHE = {}
+
+
+def _hidden_models():
+    raw = os.getenv('SOOG_MODEL_HIDE', '')
+    return {m.strip() for m in raw.split(',') if m.strip()}
+
+
+def _model_can_generate(base_url, name, headers):
+    """True when Ollama reports the model can generate text (not embedding-only).
+
+    Capabilities are cached per model name and digest-less; a failed lookup keeps the model listed.
+    """
+    if name in _MODEL_CAPS_CACHE:
+        return _MODEL_CAPS_CACHE[name]
+    try:
+        r = requests.post(f"{base_url}/api/show", json={'model': name}, headers=headers, timeout=10)
+        if r.status_code != 200:
+            return True
+        caps = r.json().get('capabilities')
+        if not isinstance(caps, list):
+            return True
+        ok = 'completion' in caps
+        _MODEL_CAPS_CACHE[name] = ok
+        return ok
+    except Exception:
+        return True
+
+
+def filter_generating_models(base_url, names, headers):
+    hidden = _hidden_models()
+    return [n for n in names if n not in hidden and _model_can_generate(base_url, n, headers)]
+
+
+def fetch_ollama_models(force=False):
     """Return installed Ollama models and endpoint metadata."""
     base_url, configured_model, _ = get_ollama_config()
     headers = get_ollama_headers()
     last_status = None
     last_error = None
+
+    cached = _MODEL_LIST_CACHE
+    if (not force and cached['value'] is not None and cached['key'] == base_url
+            and time.time() - cached['at'] < MODEL_LIST_TTL_SEC):
+        return dict(cached['value'], configured_model=configured_model)
 
     for path in ('/api/tags', '/v1/models'):
         url = f"{base_url}{path}"
@@ -1551,7 +1592,8 @@ def fetch_ollama_models():
                     elif isinstance(model_item, str):
                         models.append(model_item)
 
-            return {
+            models = filter_generating_models(base_url, sorted(set(models)), headers)
+            result = {
                 'ok': True,
                 'endpoint': url,
                 'base_url': base_url,
@@ -1559,6 +1601,8 @@ def fetch_ollama_models():
                 'models': models,
                 'model_count': len(models)
             }
+            cached.update(at=time.time(), key=base_url, value=result)
+            return result
 
         if r.status_code == 401:
             return {'ok': False, 'status': 401, 'error': 'Unauthorized', 'base_url': base_url}
@@ -3614,8 +3658,9 @@ def ollama_verify():
 @log_activity('ollama-models')
 def ollama_models():
     """List installed Ollama models and current active model."""
+    global OLLAMA_MODEL_OVERRIDE
     try:
-        res = fetch_ollama_models()
+        res = fetch_ollama_models(force=request.args.get('refresh') == '1')
         if not res.get('ok'):
             return jsonify({
                 'ok': False,
@@ -3624,6 +3669,9 @@ def ollama_models():
             }), 502
 
         models = res.get('models', [])
+        if OLLAMA_MODEL_OVERRIDE and OLLAMA_MODEL_OVERRIDE not in models:
+            OLLAMA_MODEL_OVERRIDE = None
+            res = dict(res, configured_model=get_ollama_config()[1])
         current = res.get('configured_model')
         return jsonify({
             'ok': True,
@@ -3638,6 +3686,7 @@ def ollama_models():
 
 
 @app.route('/api/ollama/model', methods=['POST'])
+@require_auth(admin=True)
 @log_activity('ollama-model-set')
 def ollama_set_model():
     """Set current Ollama model at runtime for this backend process."""
@@ -3648,7 +3697,7 @@ def ollama_set_model():
         if not requested:
             return jsonify({'ok': False, 'error': 'Missing model field'}), 400
 
-        res = fetch_ollama_models()
+        res = fetch_ollama_models(force=True)
         if not res.get('ok'):
             return jsonify({
                 'ok': False,
