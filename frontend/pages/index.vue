@@ -1715,7 +1715,7 @@ function restoreRailState() {
 
 function toggleRailFlyout(name) {
   railFlyout.value = railFlyout.value === name ? '' : name;
-  if (railFlyout.value === 'model' && !ollamaModels.value.length) fetchOllamaModels();
+  if (railFlyout.value === 'model') fetchOllamaModels(true);
 }
 
 // On Swiss and other ISO layouts the backslash is not on the physical Backslash key.
@@ -2285,9 +2285,9 @@ async function loadCodeFromGallery(item) {
   showGallery.value = false;
 }
 
-async function fetchOllamaModels() {
+async function fetchOllamaModels(refresh = false) {
   try {
-    const response = await fetch(`${apiBase.value}/ollama/models`, {
+    const response = await fetch(`${apiBase.value}/ollama/models${refresh ? '?refresh=1' : ''}`, {
       headers: { 'Accept': 'application/json' }
     });
     const payload = await response.json();
@@ -2305,12 +2305,16 @@ async function applyOllamaModel(nextModel) {
   const response = await fetch(`${apiBase.value}/ollama/model`, {
     method: 'POST',
     headers: {
+      ...(await authHeaders()),
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     },
     body: JSON.stringify({ model: nextModel })
   });
-  const payload = await response.json();
+  const payload = await response.json().catch(() => ({}));
+  if (response.status === 401 || response.status === 403) {
+    throw new Error('Changing the active model is restricted to admins.');
+  }
   if (!response.ok || !payload?.ok) {
     throw new Error(payload?.error || `Failed to switch model (${response.status})`);
   }
