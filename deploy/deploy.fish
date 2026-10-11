@@ -79,6 +79,18 @@ if test -d "$BACKUP_DIR/soogi"
     rsync -rtv --no-o --no-g "$BACKUP_DIR/soogi/" "$SOOGI_DIR_ROOT/"; or exit 1
 end
 
+# 3b) SOM registry checkout read by /api/somap/registry (lives outside /opt/soog, untouched by git clean)
+set -l REGISTRY_DIR /opt/som-registry
+if set -q SOM_REGISTRY_DIR
+    set REGISTRY_DIR $SOM_REGISTRY_DIR
+end
+echo "→ Updating SOM registry in $REGISTRY_DIR"
+if test -d "$REGISTRY_DIR/.git"
+    git -C $REGISTRY_DIR pull --ff-only origin main; or echo "  ! registry pull failed, keeping current checkout"
+else
+    git clone --branch main https://github.com/zzigo/som-registry.git $REGISTRY_DIR; or echo "  ! registry clone failed, /api/somap/registry will return 503"
+end
+
 # 4) Backend dependencies (use venv pip directly)
 echo "→ Updating backend"
 set -gx PIP_DISABLE_PIP_VERSION_CHECK 1
@@ -209,6 +221,10 @@ end
 if test $FRONTEND_OK -ne 1
     echo "✖ Frontend health check failed after retries"
     exit 1
+end
+
+if not curl -fsS http://127.0.0.1:10000/api/somap/registry >/dev/null 2>/dev/null
+    echo "  ! /api/somap/registry is not answering (the rest of the deploy is healthy)"
 end
 
 echo "=== SOOG DEPLOY DONE ==="
