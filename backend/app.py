@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
 from logger import log_activity, get_logs, format_logs_html
+from som_registry import build_registry_graph
 import requests
 import matplotlib
 matplotlib.use('Agg')
@@ -3950,6 +3951,23 @@ def somap_graph():
         return jsonify(graph)
     except Exception as e:
         logging.error(f"Error in /api/somap/graph: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/somap/registry', methods=['GET'])
+@log_activity('somap-registry')
+def somap_registry():
+    """
+    Graph of the Speculative Organology registry (zzigo/som-registry checkout in
+    SOM_REGISTRY_DIR): notes, facet links and ghost nodes for missing notes.
+    """
+    try:
+        return jsonify(build_registry_graph())
+    except FileNotFoundError as e:
+        logging.error(f"Error in /api/somap/registry: {e}")
+        return jsonify({'error': str(e)}), 503
+    except Exception as e:
+        logging.error(f"Error in /api/somap/registry: {e}")
         return jsonify({'error': str(e)}), 500
 
 
