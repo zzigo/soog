@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
 from logger import log_activity, get_logs, format_logs_html
-from som_registry import build_registry_graph, read_note, registry_context
+from som_registry import build_registry_graph, read_note, registry_context, registry_context_info
 import requests
 import matplotlib
 matplotlib.use('Agg')
@@ -2868,6 +2868,119 @@ def sorganoid_save_world(name):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def build_generation_inputs(prompt_content, prompt, refact_meta, context_text=""):
+    """System prompt, first-call instruction and output template for /api/generate and /api/bench/generate."""
+    # Keep prompt.txt as primary instruction source; add contextual notes as secondary reference.
+    system_prompt = prompt_content
+    if context_text:
+        system_prompt = (
+            f"{prompt_content}\n\n"
+            "Additional Organological Context (secondary reference, do not override core prompt rules):\n"
+            f"{context_text}"
+        )
+    refactor_clause = ""
+    if refact_meta.get('is_refact'):
+        refactor_clause = (
+            "\n\nRefactor mode (lineage-aware):"
+            "\n- The prompt includes BASE context from a previous generation."
+            "\n- Preserve instrument identity and iterate on the existing design; do not restart from scratch."
+            "\n- Reuse and modify provided matplotlib/trimesh code when available."
+            "\n- Return full updated code blocks (matplotlib first, trimesh second), not only patches/diffs."
+        )
+    plot_output_template = build_plot_output_template()
+    # First call: summary + materials + matplotlib only.
+    plot_instruction = (
+        prompt
+        + "\n\nWrite first a concise 120-180 word conceptual summary describing the organogram's design decisions: shapes/schematics, arrows/flows, colors and their meanings, acoustical rationale, organological relations, and performative interactions."
+        + "\n\nThen, add a section titled 'Materials' as an enumerated shopping list with quantities and dimensions for building the instrument (e.g., '1 PVC tube, 30 cm length, 2.5 cm diameter'). If part of the instrument is virtual or hybrid, include 'Virtual Materials' items for assets (e.g., textures, shaders, samples)."
+        + "\n\nThen, provide the executable Python matplotlib code in a single fenced code block (```python ... ```)."
+        + "\n\nStrict generation contract for this first call:"
+        + "\n- You are a Python and matplotlib assistant specialized in Mantle Hood organograms."
+        + "\n- The first Python block must produce a valid matplotlib organogram figure (no placeholders, no pseudo-code, no blank figure)."
+        + "\n- Always include all required imports in each code block."
+        + "\n- For arrows and geometric patches use matplotlib.patches and ax.annotate/FancyArrowPatch; avoid plt.Arrow."
+        + "\n- Never include the phrase '# Evaluate the text again to render...'."
+        + "\n- Keep conceptual summary and materials outside code blocks."
+        + "\n- Never answer with prose only."
+        + "\n- If uncertain, simplify the organogram and keep the code valid."
+        + "\n- The first python block must literally begin with `import matplotlib.pyplot as plt`."
+        + "\n\nMandatory output template:"
+        + f"\n{plot_output_template}"
+        + "\n\nOptional structured blueprint (use when dimensional pipe/component data is available):"
+        + "\n- Define dataclass PipeElement with: name, length_mm, diameter_mm, wall_thickness_mm, material, category, acoustic_target."
+        + "\n- Implement plot_geometry_vs_frequency(elements) with a 2x2 figure: length vs fundamental_frequency_hz (log-log), diameter vs fundamental_frequency_hz, histogram of wall_thickness_mm, scatter length vs diameter sized by wall_thickness_mm."
+        + "\n- Use seaborn-like aesthetics with standard matplotlib only."
+        + "\n- Include a __main__ example with 3-4 dummy elements and ensure plotting code is executed so the backend can render the image."
+        + refactor_clause
+        + "\n\nDo not include any trimesh or STL code in this first call."
+        + "\nDo not include any additional commentary after the matplotlib code block."
+    )
+    return system_prompt, plot_instruction, plot_output_template
+
+
+@app.route('/api/bench/generate', methods=['POST'])
+@log_activity('bench-generate')
+@require_auth(admin=True)
+def bench_generate():
+    """
+    Admin-only benchmark of the generation core: prompt assembly, LLM call(s) and the
+    matplotlib render check. It skips the sketch, the modulus run and the gallery, and is
+    not metered. context: 'registry' (default, same as /api/generate) or 'off'.
+    """
+    data = request.get_json(silent=True) or {}
+    prompt = str(data.get('prompt') or '').strip()
+    if not prompt:
+        return jsonify({'error': 'No prompt provided.'}), 400
+    mode = str(data.get('context') or 'registry').strip().lower()
+    if mode not in ('registry', 'off'):
+        return jsonify({'error': "context must be 'registry' or 'off'."}), 400
+
+    limits = get_generation_limits()
+    prompt_content = get_prompt_content()
+    if "ERROR" in prompt_content:
+        return jsonify({'error': prompt_content}), 500
+    info = registry_context_info(prompt) if mode == 'registry' else {'text': '', 'labels': [], 'commit': ''}
+    system_prompt, plot_instruction, plot_output_template = build_generation_inputs(
+        prompt_content, prompt, {}, info['text']
+    )
+    context = {
+        'mode': mode,
+        'chars': len(info['text']),
+        'notes': info['labels'],
+        'registry_commit': info['commit'],
+    }
+    started = time.perf_counter()
+    deadline_at = started + float(limits['deadline_sec']) if float(limits['deadline_sec']) > 0 else None
+    try:
+        (_, _, _, plot_code, _, image_base64, _, llm_meta) = generate_with_image_required(
+            system_prompt,
+            prompt,
+            plot_instruction,
+            max_attempts=limits['max_attempts'],
+            llm_timeout_sec=limits['llm_timeout_sec'],
+            llm_max_tokens=limits['llm_max_tokens'],
+            deadline_at=deadline_at,
+            plot_output_template=plot_output_template,
+            request_id=''
+        )
+    except Exception as error:
+        return jsonify({
+            'ok': False,
+            'error': str(error)[:500],
+            'context': context,
+            'elapsed_ms': int((time.perf_counter() - started) * 1000),
+        })
+    return jsonify({
+        'ok': True,
+        'context': context,
+        'plot_code_chars': len((plot_code or '').strip()),
+        'image_bytes': len(base64.b64decode(image_base64)) if image_base64 else 0,
+        'llm_model': (llm_meta or {}).get('model'),
+        'llm_endpoint': (llm_meta or {}).get('endpoint'),
+        'elapsed_ms': int((time.perf_counter() - started) * 1000),
+    })
+
+
 @app.route('/api/generate', methods=['POST'])
 @log_activity('generate')
 @metered_action('organogram')
@@ -2968,50 +3081,8 @@ def generate():
             return jsonify({'error': prompt_content}), 500
         registry_ctx = registry_context(prompt)
 
-        # Keep prompt.txt as primary instruction source; add contextual notes as secondary reference.
-        system_prompt = prompt_content
-        if registry_ctx:
-            system_prompt = (
-                f"{prompt_content}\n\n"
-                "Additional Organological Context (secondary reference, do not override core prompt rules):\n"
-                f"{registry_ctx}"
-            )
-        refactor_clause = ""
-        if refact_meta.get('is_refact'):
-            refactor_clause = (
-                "\n\nRefactor mode (lineage-aware):"
-                "\n- The prompt includes BASE context from a previous generation."
-                "\n- Preserve instrument identity and iterate on the existing design; do not restart from scratch."
-                "\n- Reuse and modify provided matplotlib/trimesh code when available."
-                "\n- Return full updated code blocks (matplotlib first, trimesh second), not only patches/diffs."
-            )
-        plot_output_template = build_plot_output_template()
-        # First call: summary + materials + matplotlib only.
-        plot_instruction = (
-            prompt
-            + "\n\nWrite first a concise 120-180 word conceptual summary describing the organogram's design decisions: shapes/schematics, arrows/flows, colors and their meanings, acoustical rationale, organological relations, and performative interactions."
-            + "\n\nThen, add a section titled 'Materials' as an enumerated shopping list with quantities and dimensions for building the instrument (e.g., '1 PVC tube, 30 cm length, 2.5 cm diameter'). If part of the instrument is virtual or hybrid, include 'Virtual Materials' items for assets (e.g., textures, shaders, samples)."
-            + "\n\nThen, provide the executable Python matplotlib code in a single fenced code block (```python ... ```)."
-            + "\n\nStrict generation contract for this first call:"
-            + "\n- You are a Python and matplotlib assistant specialized in Mantle Hood organograms."
-            + "\n- The first Python block must produce a valid matplotlib organogram figure (no placeholders, no pseudo-code, no blank figure)."
-            + "\n- Always include all required imports in each code block."
-            + "\n- For arrows and geometric patches use matplotlib.patches and ax.annotate/FancyArrowPatch; avoid plt.Arrow."
-            + "\n- Never include the phrase '# Evaluate the text again to render...'."
-            + "\n- Keep conceptual summary and materials outside code blocks."
-            + "\n- Never answer with prose only."
-            + "\n- If uncertain, simplify the organogram and keep the code valid."
-            + "\n- The first python block must literally begin with `import matplotlib.pyplot as plt`."
-            + "\n\nMandatory output template:"
-            + f"\n{plot_output_template}"
-            + "\n\nOptional structured blueprint (use when dimensional pipe/component data is available):"
-            + "\n- Define dataclass PipeElement with: name, length_mm, diameter_mm, wall_thickness_mm, material, category, acoustic_target."
-            + "\n- Implement plot_geometry_vs_frequency(elements) with a 2x2 figure: length vs fundamental_frequency_hz (log-log), diameter vs fundamental_frequency_hz, histogram of wall_thickness_mm, scatter length vs diameter sized by wall_thickness_mm."
-            + "\n- Use seaborn-like aesthetics with standard matplotlib only."
-            + "\n- Include a __main__ example with 3-4 dummy elements and ensure plotting code is executed so the backend can render the image."
-            + refactor_clause
-            + "\n\nDo not include any trimesh or STL code in this first call."
-            + "\nDo not include any additional commentary after the matplotlib code block."
+        system_prompt, plot_instruction, plot_output_template = build_generation_inputs(
+            prompt_content, prompt, refact_meta, registry_ctx
         )
         request_start = time.perf_counter()
         deadline_at = (
