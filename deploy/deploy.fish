@@ -17,11 +17,12 @@ function run_pm2_candidate
     set -l candidate $argv[1]
     set -l candidate_home $argv[2]
     set -e argv[1..2]
+    set -l pm2_bin (command -s pm2)
 
     if test "$candidate" = (whoami)
-        $PM2_BIN $argv
+        $pm2_bin $argv
     else
-        sudo -u $candidate -H env PM2_HOME="$candidate_home/.pm2" PATH="/usr/local/bin:/usr/bin:/bin" $PM2_BIN $argv
+        sudo -u $candidate -H env PM2_HOME="$candidate_home/.pm2" PATH="/usr/local/bin:/usr/bin:/bin" $pm2_bin $argv
     end
 end
 
@@ -124,7 +125,6 @@ echo "→ Restarting runtime"
 set -l USED_PM2 0
 
 if command -sq pm2
-    set -l PM2_BIN (command -s pm2)
     set -l PM2_USERS
     set -l REPO_OWNER (stat -c %U $REPO_DIR 2>/dev/null)
     set -l PM2_DAEMON_OWNER (ps -eo user=,cmd= | awk '/PM2 v[0-9.]+: God Daemon/ {print $1; exit}')
