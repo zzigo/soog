@@ -4,10 +4,193 @@
     :class="{ 
       'sorganoid-active': sorganoidMode,
       'ui-hidden': !uiVisible,
+      'has-rail': !sorganoidMode && uiVisible,
       'workspace-background-mode': workspaceLayout === 'background',
       'workspace-split-mode': workspaceLayout === 'split'
     }"
   >
+    <!-- Thin tools rail (⌘/Ctrl + \ expands it) -->
+    <nav
+      v-if="!sorganoidMode && uiVisible"
+      ref="railRef"
+      class="rail"
+      :class="{ 'rail--expanded': railExpanded }"
+      aria-label="Tools"
+    >
+      <div class="rail__group">
+        <button
+          class="rail-item"
+          :title="railExpanded ? 'Collapse tools (⌘/Ctrl + \\)' : 'Expand tools (⌘/Ctrl + \\)'"
+          :aria-expanded="String(railExpanded)"
+          @click="toggleRail"
+        >
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" :d="railExpanded ? 'M14,7L9,12L14,17V7Z' : 'M10,17L15,12L10,7V17Z'" /></svg>
+          <span class="rail-label">Tools</span>
+        </button>
+    <div ref="workspacePresetMenuRef" class="workspace-preset-menu">
+      <button
+        class="rail-item workspace-preset-trigger"
+        :class="{ active: workspacePresetMenuOpen }"
+        @click="toggleWorkspacePresetMenu"
+        title="Workspace presets"
+      >
+        <svg class="icon workspace-preset-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none" />
+          <template v-if="workspacePreset === 'splitVertical'">
+            <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
+          </template>
+          <template v-else-if="workspacePreset === 'splitThree'">
+            <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
+            <path d="M12 12H20" stroke="currentColor" stroke-width="1.5" />
+          </template>
+          <template v-else-if="workspacePreset === 'splitFour'">
+            <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
+            <path d="M4 12H20" stroke="currentColor" stroke-width="1.5" />
+          </template>
+        </svg>
+        <span class="rail-label">{{ workspaceModeLabel }}</span>
+      </button>
+      <div v-if="workspacePresetMenuOpen" class="workspace-preset-dropdown">
+        <button
+          v-for="preset in workspacePresetOptions"
+          :key="preset.key"
+          class="workspace-preset-option"
+          :class="{ active: workspacePreset === preset.key }"
+          @click="setWorkspacePreset(preset.key)"
+        >
+          <svg class="workspace-preset-option__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="4" y="4" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none" />
+            <template v-if="preset.key === 'splitVertical'">
+              <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
+            </template>
+            <template v-else-if="preset.key === 'splitThree'">
+              <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
+              <path d="M12 12H20" stroke="currentColor" stroke-width="1.5" />
+            </template>
+            <template v-else-if="preset.key === 'splitFour'">
+              <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
+              <path d="M4 12H20" stroke="currentColor" stroke-width="1.5" />
+            </template>
+          </svg>
+          <span class="workspace-preset-option__copy">
+            <strong>{{ preset.label }}</strong>
+            <small>{{ preset.summary }}</small>
+          </span>
+        </button>
+      </div>
+    </div>
+        <button class="rail-item" :title="showCode ? 'Hide Code' : 'Show Code'" @click="toggleShowCode">
+          <svg v-if="showCode" class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9M12,4.5C17,4.5 21.27,7.61 23,12C21.27,16.39 17,19.5 12,19.5C7,19.5 2.73,16.39 1,12C2.73,7.61 7,4.5 12,4.5M3.18,12C4.83,15.36 8.24,17.5 12,17.5C15.76,17.5 19.17,15.36 20.82,12C19.17,8.64 15.76,6.5 12,6.5C8.24,6.5 4.83,8.64 3.18,12Z" />
+          </svg>
+          <svg v-else class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.74,7.13 11.35,7 12,7Z" />
+          </svg>
+          <span class="rail-label">{{ showCode ? 'Hide code' : 'Show code' }}</span>
+        </button>
+        <button class="rail-item" title="Evaluate selected text or all if no selection" @click="handleMobileEvaluate">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8,5.14V19.14L19,12.14L8,5.14Z" /></svg>
+          <span class="rail-label">Evaluate</span>
+        </button>
+        <button class="rail-item" title="Clear Editor (Ctrl+H)" @click="handleClear">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" /></svg>
+          <span class="rail-label">Clear</span>
+        </button>
+        <button class="rail-item" title="Random Prompt" @click="handleRandomPrompt">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14.83,13.41L13.42,14.82L16.55,17.95L14.5,20H20V14.5L17.96,16.54L14.83,13.41M14.5,4L16.54,6.04L4,18.59L5.41,20L17.96,7.46L20,9.5V4M10.59,9.17L5.41,4L4,5.41L9.17,10.58L10.59,9.17Z" /></svg>
+          <span class="rail-label">Random prompt</span>
+        </button>
+      </div>
+
+      <div class="rail__group">
+        <button class="rail-item" title="Gallery (Alt+↑/↓)" @click="showGallery = true">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21 19V5C21 3.89 20.1 3 19 3H5C3.89 3 3 3.89 3 5V19C3 20.1 3.89 21 5 21H19C20.1 21 21 20.1 21 19M8.5 13.5L11 16.51L14.5 12L19 18H5L8.5 13.5Z" /></svg>
+          <span class="rail-label">Gallery</span>
+        </button>
+        <button class="rail-item" :class="{ active: $route.path === '/somap' }" title="Somap (Alt+2)" @click="toggleSomap">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none" />
+            <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.8" />
+            <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" stroke="currentColor" stroke-width="1.2" fill="none" />
+          </svg>
+          <span class="rail-label">Somap</span>
+        </button>
+        <button class="rail-item" title="3D Concert Hall (Alt+3)" @click="$router.push('/concert')">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12,3L2,12H5V20H19V12H22L12,3M11.5,18V14H12.5V18H11.5M9,18V16H10V18H9M14,18V16H15V18H14M11.5,13V12H12.5V13H11.5M9,15V14H10V15H9M14,15V14H15V15H14Z" /></svg>
+          <span class="rail-label">Concert hall</span>
+        </button>
+        <button class="rail-item" title="Welcome to SOOG" @click="showHelp = true">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z" /></svg>
+          <span class="rail-label">Welcome</span>
+        </button>
+        <NuxtLink v-if="profile?.is_admin" to="/usage" class="rail-item" title="Daily and weekly usage">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5,9.2H8V19H5V9.2M10.6,5H13.4V19H10.6V5M16.2,13H19V19H16.2V13" /></svg>
+          <span class="rail-label">Usage</span>
+        </NuxtLink>
+
+        <div class="rail-flyout-wrap">
+          <button
+            class="rail-item"
+            :class="{ active: railFlyout === 'model' }"
+            :title="`Model: ${currentModel || 'loading...'}`"
+            aria-haspopup="menu"
+            :aria-expanded="String(railFlyout === 'model')"
+            @click="toggleRailFlyout('model')"
+          >
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12,4V1L8,5L12,9V6A6,6 0 0,1 18,12C18,13 17.75,13.96 17.3,14.8L18.76,16.26C19.53,15.05 20,13.57 20,12A8,8 0 0,0 12,4M6.7,9.2L5.24,7.74C4.47,8.95 4,10.43 4,12A8,8 0 0,0 12,20V23L16,19L12,15V18A6,6 0 0,1 6,12C6,11 6.25,10.04 6.7,9.2Z" /></svg>
+            <span class="rail-label">{{ shortModelLabel }}</span>
+          </button>
+          <div v-if="railFlyout === 'model'" class="rail-flyout" role="menu" aria-label="Model">
+            <div class="rail-flyout__title">Model</div>
+            <button
+              v-for="m in ollamaModels"
+              :key="m"
+              class="rail-flyout__option"
+              :class="{ active: m === currentModel }"
+              :disabled="modelSwitching"
+              role="menuitemradio"
+              :aria-checked="String(m === currentModel)"
+              @click="selectOllamaModel(m)"
+            >{{ m }}</button>
+            <p v-if="!ollamaModels.length" class="rail-flyout__empty">{{ currentModel || 'No model list available.' }}</p>
+          </div>
+        </div>
+
+        <div class="rail-flyout-wrap">
+          <button
+            class="rail-item"
+            :class="{ active: railFlyout === 'account' }"
+            :title="isAuthenticated ? `${userLabel} · account` : 'Sign in'"
+            aria-haspopup="menu"
+            :aria-expanded="String(railFlyout === 'account')"
+            @click="toggleRailFlyout('account')"
+          >
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" /></svg>
+            <span class="rail-label">{{ isAuthenticated ? userLabel : 'Sign in' }}</span>
+          </button>
+          <div v-if="railFlyout === 'account'" class="rail-flyout" role="menu" aria-label="Account">
+            <template v-if="isAuthenticated">
+              <div class="rail-flyout__title">{{ userLabel }}</div>
+              <span v-if="quota" class="quota-pill" :title="quotaTitle">{{ quotaLabel }}</span>
+              <button class="rail-flyout__option" role="menuitem" @click="railFlyout = ''; handleSignOut()">Sign out</button>
+            </template>
+            <button v-else class="rail-flyout__option" role="menuitem" @click="railFlyout = ''; showAuthGate = true">Sign in</button>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Help / session / SOT-A sidebar toggle (⌘/Ctrl + Shift + \) -->
+    <button
+      v-if="!sorganoidMode && uiVisible"
+      class="help-fab"
+      :class="{ active: workspaceSidebarOpen }"
+      :aria-expanded="String(workspaceSidebarOpen)"
+      aria-label="Help, session and SOT-A"
+      title="Help (⌘/Ctrl + Shift + \)"
+      @click="toggleWorkspaceSidebar"
+    >?</button>
+
     <!-- Left column: resizable editor -->
     <div 
       class="left-column"
@@ -36,162 +219,6 @@
       :class="{ 'right-column--background': workspaceLayout === 'background' }"
       :style="rightColumnStyle"
     >
-      <div class="hud">
-        <div class="hud-group hud-group--workspace">
-          <div ref="workspacePresetMenuRef" class="workspace-preset-menu">
-            <button
-              class="icon-button workspace-preset-trigger"
-              :class="{ active: workspacePresetMenuOpen }"
-              @click="toggleWorkspacePresetMenu"
-              title="Workspace presets"
-            >
-              <svg class="icon workspace-preset-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="4" y="4" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none" />
-                <template v-if="workspacePreset === 'splitVertical'">
-                  <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
-                </template>
-                <template v-else-if="workspacePreset === 'splitThree'">
-                  <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
-                  <path d="M12 12H20" stroke="currentColor" stroke-width="1.5" />
-                </template>
-                <template v-else-if="workspacePreset === 'splitFour'">
-                  <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
-                  <path d="M4 12H20" stroke="currentColor" stroke-width="1.5" />
-                </template>
-              </svg>
-              <span class="workspace-preset-trigger__label">{{ workspaceModeLabel }}</span>
-              <svg class="workspace-preset-trigger__chevron" viewBox="0 0 24 24" aria-hidden="true">
-                <path fill="currentColor" d="M7 10L12 15L17 10H7Z" />
-              </svg>
-            </button>
-            <div v-if="workspacePresetMenuOpen" class="workspace-preset-dropdown">
-              <button
-                v-for="preset in workspacePresetOptions"
-                :key="preset.key"
-                class="workspace-preset-option"
-                :class="{ active: workspacePreset === preset.key }"
-                @click="setWorkspacePreset(preset.key)"
-              >
-                <svg class="workspace-preset-option__icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="4" y="4" width="16" height="16" stroke="currentColor" stroke-width="1.5" fill="none" />
-                  <template v-if="preset.key === 'splitVertical'">
-                    <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
-                  </template>
-                  <template v-else-if="preset.key === 'splitThree'">
-                    <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
-                    <path d="M12 12H20" stroke="currentColor" stroke-width="1.5" />
-                  </template>
-                  <template v-else-if="preset.key === 'splitFour'">
-                    <path d="M12 4V20" stroke="currentColor" stroke-width="1.5" />
-                    <path d="M4 12H20" stroke="currentColor" stroke-width="1.5" />
-                  </template>
-                </svg>
-                <span class="workspace-preset-option__copy">
-                  <strong>{{ preset.label }}</strong>
-                  <small>{{ preset.summary }}</small>
-                </span>
-              </button>
-            </div>
-          </div>
-          <button
-            class="icon-button"
-            :class="{ active: workspaceSidebarOpen }"
-            @click="toggleWorkspaceSidebar"
-            title="Workspace sidebar (⌘/Ctrl + Shift + \\)"
-          >
-            <svg class="icon" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M3 5H21V7H3V5M3 11H21V13H3V11M3 17H9V19H3V17M13 17H21V19H13V17Z" />
-            </svg>
-          </button>
-        </div>
-
-        <div class="hud-group hud-group--main">
-          <span class="model-name" :title="currentModel || ''">{{ shortModelLabel }}</span>
-          <button
-            @click="cycleOllamaModel"
-            class="icon-button model-cycle-button"
-            :disabled="modelSwitching || ollamaModels.length < 2"
-            :title="`Model: ${currentModel || 'loading...'} (click to cycle)`"
-          >
-            <svg class="icon" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M12,4V1L8,5L12,9V6A6,6 0 0,1 18,12C18,13 17.75,13.96 17.3,14.8L18.76,16.26C19.53,15.05 20,13.57 20,12A8,8 0 0,0 12,4M6.7,9.2L5.24,7.74C4.47,8.95 4,10.43 4,12A8,8 0 0,0 12,20V23L16,19L12,15V18A6,6 0 0,1 6,12C6,11 6.25,10.04 6.7,9.2Z"/>
-            </svg>
-          </button>
-          <button @click="toggleShowCode" class="icon-button" :title="showCode ? 'Hide Code' : 'Show Code'">
-            <svg v-if="showCode" class="icon" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9M12,4.5C17,4.5 21.27,7.61 23,12C21.27,16.39 17,19.5 12,19.5C7,19.5 2.73,16.39 1,12C2.73,7.61 7,4.5 12,4.5M3.18,12C4.83,15.36 8.24,17.5 12,17.5C15.76,17.5 19.17,15.36 20.82,12C19.17,8.64 15.76,6.5 12,6.5C8.24,6.5 4.83,8.64 3.18,12Z" />
-            </svg>
-            <svg v-else class="icon" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.74,7.13 11.35,7 12,7Z" />
-            </svg>
-          </button>
-          <button @click="handleMobileEvaluate" class="icon-button" title="Evaluate selected text or all if no selection">
-            <svg class="icon" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M8,5.14V19.14L19,12.14L8,5.14Z" />
-            </svg>
-          </button>
-          <button @click="handleClear" class="icon-button" title="Clear Editor (Ctrl+H)">
-            <svg class="icon" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" />
-            </svg>
-          </button>
-          <button @click="handleRandomPrompt" class="icon-button" title="Random Prompt">
-            <svg class="icon" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M14.83,13.41L13.42,14.82L16.55,17.95L14.5,20H20V14.5L17.96,16.54L14.83,13.41M14.5,4L16.54,6.04L4,18.59L5.41,20L17.96,7.46L20,9.5V4M10.59,9.17L5.41,4L4,5.41L9.17,10.58L10.59,9.17Z" />
-            </svg>
-          </button>
-          <button @click="showHelp = true" class="icon-button" title="Help">
-            <svg class="icon" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M11,18H13V16H11V18M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,6A4,4 0 0,0 8,10H10A2,2 0 0,1 12,8A2,2 0 0,1 14,10C14,12 11,11.75 11,15H13C13,12.75 16,12.5 16,10A4,4 0 0,0 12,6Z" />
-            </svg>
-          </button>
-          <button @click="showGallery = true" class="icon-button" title="Gallery (Alt+↑/↓)">
-            <svg class="icon" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M21 19V5C21 3.89 20.1 3 19 3H5C3.89 3 3 3.89 3 5V19C3 20.1 3.89 21 5 21H19C20.1 21 21 20.1 21 19M8.5 13.5L11 16.51L14.5 12L19 18H5L8.5 13.5Z"/>
-            </svg>
-          </button>
-          <button
-            @click="toggleSomap"
-            class="icon-button"
-            :class="{ active: $route.path === '/somap' }"
-            title="Somap (Alt+2)"
-          >
-            <svg class="icon" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/>
-              <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.8"/>
-              <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" stroke="currentColor" stroke-width="1.2" fill="none"/>
-            </svg>
-          </button>
-          <button
-            @click="$router.push('/concert')"
-            class="icon-button"
-            title="3D Concert Hall (Alt+3)"
-          >
-            <svg class="icon" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M12,3L2,12H5V20H19V12H22L12,3M11.5,18V14H12.5V18H11.5M9,18V16H10V18H9M14,18V16H15V18H14M11.5,13V12H12.5V13H11.5M9,15V14H10V15H9M14,15V14H15V15H14Z" />
-            </svg>
-          </button>
-          <NuxtLink
-            v-if="profile?.is_admin"
-            to="/usage"
-            class="auth-pill admin-pill"
-            title="Daily and weekly usage"
-          >
-            USAGE
-          </NuxtLink>
-          <span v-if="isAuthenticated && quota" class="quota-pill" :title="quotaTitle">{{ quotaLabel }}</span>
-          <button
-            v-if="isAuthenticated"
-            @click="handleSignOut"
-            class="auth-pill"
-            :title="`${userLabel} · sign out`"
-          >
-            {{ userLabel }}
-          </button>
-          <button v-else @click="showAuthGate = true" class="auth-pill" title="Sign in">SIGN IN</button>
-        </div>
-      </div>
-
       <Transition
         enter-active-class="fadeIn"
         leave-active-class="fadeOut"
@@ -859,7 +886,11 @@ const workspacePresetMenuOpen = ref(false);
 const workspacePresetMenuRef = ref(null);
 const workspaceAutoView = ref('organogram');
 const workspacePaneViews = ref(['auto', 'organogram', 'sound', 'acoustic']);
-const workspaceSidebarOpen = ref(true);
+const workspaceSidebarOpen = ref(false);
+const railRef = ref(null);
+const railExpanded = ref(false);
+const railFlyout = ref(''); // '' | 'model' | 'account'
+const RAIL_KEY = 'soog.rail.expanded';
 const workspaceSidebarTab = ref('help'); // 'help', 'session', 'acoustic'
 const lastAcousticCommand = ref(null);
 const evaluatedAcousticSignature = ref('');
@@ -1664,14 +1695,46 @@ function toggleWorkspaceSidebar() {
   workspaceSidebarOpen.value = !workspaceSidebarOpen.value;
 }
 
+function toggleRail() {
+  railExpanded.value = !railExpanded.value;
+  railFlyout.value = '';
+  try {
+    window.localStorage.setItem(RAIL_KEY, railExpanded.value ? '1' : '0');
+  } catch (_) {
+    // storage may be unavailable; the rail still works for this session
+  }
+}
+
+function restoreRailState() {
+  try {
+    railExpanded.value = window.localStorage.getItem(RAIL_KEY) === '1';
+  } catch (_) {
+    railExpanded.value = false;
+  }
+}
+
+function toggleRailFlyout(name) {
+  railFlyout.value = railFlyout.value === name ? '' : name;
+  if (railFlyout.value === 'model' && !ollamaModels.value.length) fetchOllamaModels();
+}
+
+// On Swiss and other ISO layouts the backslash is not on the physical Backslash key.
+const isBackslashKey = (e) => e.code === 'Backslash' || e.code === 'IntlBackslash' || e.key === '\\';
+
 const handleKeyDown = (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'm') {
     e.preventDefault();
     uiVisible.value = !uiVisible.value;
   }
-  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === 'Backslash') {
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && isBackslashKey(e)) {
     e.preventDefault();
     toggleWorkspaceSidebar();
+  } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && isBackslashKey(e)) {
+    e.preventDefault();
+    toggleRail();
+  }
+  if (e.key === 'Escape' && railFlyout.value) {
+    railFlyout.value = '';
   }
   if (e.key === 'Escape' && workspacePresetMenuOpen.value) {
     workspacePresetMenuOpen.value = false;
@@ -1679,12 +1742,14 @@ const handleKeyDown = (e) => {
 };
 
 const handleDocumentPointerDown = (event) => {
+  if (railFlyout.value && !railRef.value?.contains?.(event.target)) railFlyout.value = '';
   if (!workspacePresetMenuOpen.value) return;
   if (workspacePresetMenuRef.value?.contains?.(event.target)) return;
   workspacePresetMenuOpen.value = false;
 };
 
 onMounted(() => {
+  restoreRailState();
   loadResponseTimeHistory();
   fetchOllamaModels();
   checkDevice();
@@ -2236,6 +2301,39 @@ async function fetchOllamaModels() {
   }
 }
 
+async function applyOllamaModel(nextModel) {
+  const response = await fetch(`${apiBase.value}/ollama/model`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({ model: nextModel })
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload?.ok) {
+    throw new Error(payload?.error || `Failed to switch model (${response.status})`);
+  }
+  currentModel.value = payload.model || nextModel;
+}
+
+async function selectOllamaModel(name) {
+  if (modelSwitching.value || name === currentModel.value) {
+    railFlyout.value = '';
+    return;
+  }
+  modelSwitching.value = true;
+  try {
+    await applyOllamaModel(name);
+    error.value = null;
+    railFlyout.value = '';
+  } catch (e) {
+    error.value = e?.message || 'Model switch failed.';
+  } finally {
+    modelSwitching.value = false;
+  }
+}
+
 async function cycleOllamaModel() {
   if (modelSwitching.value) return;
   modelSwitching.value = true;
@@ -2249,21 +2347,7 @@ async function cycleOllamaModel() {
     }
     const currentIdx = Math.max(0, ollamaModels.value.indexOf(currentModel.value));
     const nextIdx = (currentIdx + 1) % ollamaModels.value.length;
-    const nextModel = ollamaModels.value[nextIdx];
-
-    const response = await fetch(`${apiBase.value}/ollama/model`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ model: nextModel })
-    });
-    const payload = await response.json();
-    if (!response.ok || !payload?.ok) {
-      throw new Error(payload?.error || `Failed to switch model (${response.status})`);
-    }
-    currentModel.value = payload.model || nextModel;
+    await applyOllamaModel(ollamaModels.value[nextIdx]);
     error.value = null;
   } catch (e) {
     error.value = e?.message || 'Model switch failed.';
@@ -2794,43 +2878,6 @@ watch(
   padding: 0 !important;
 }
 
-.hud {
-  padding: 4px 12px;
-  display: flex;
-  gap: 8px;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  position: sticky;
-  top: 0;
-  z-index: 120;
-  background: rgba(0, 0, 0, 0.92);
-}
-
-.right-column--background .hud {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  border-bottom: none;
-  padding: 8px 14px;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.86), rgba(0, 0, 0, 0));
-}
-
-.hud-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.hud-group--main {
-  margin-left: auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
 .layout-pill {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -2884,17 +2931,6 @@ watch(
 .icon-button:disabled {
   opacity: 0.35;
   cursor: not-allowed;
-}
-
-.model-name {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.7);
-  margin-right: 2px;
-  letter-spacing: 0.03em;
-}
-
-.model-cycle-button {
-  margin-right: 2px;
 }
 
 .auth-pill,
@@ -3879,15 +3915,201 @@ watch(
   height: min(72vh, 780px);
 }
 
+/* Tools rail (left) and help button (top right): black, hairline wireframe */
+.app-container.has-rail {
+  box-sizing: border-box;
+  padding-left: 44px !important;
+}
+
+.rail {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 17px; /* the fixed footer is 17px tall */
+  width: 44px;
+  z-index: 130;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #000;
+  border-right: 1px solid rgba(255, 255, 255, 0.14);
+  transition: width 0.18s ease;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.rail--expanded {
+  width: 210px;
+}
+
+.rail__group {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.rail-item {
+  height: 38px;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid transparent;
+  color: #666;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.rail-item .icon {
+  flex: none;
+}
+
+.rail-item:hover,
+.rail-item.active {
+  color: #fff;
+}
+
+.rail-item.active {
+  border-left-color: #fff;
+}
+
+.rail-item:focus-visible,
+.help-fab:focus-visible {
+  outline: 1px solid #fff;
+  outline-offset: -1px;
+}
+
+.rail-label {
+  display: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rail--expanded .rail-label {
+  display: inline;
+}
+
+.rail .workspace-preset-dropdown {
+  top: 0;
+  left: calc(100% + 6px);
+}
+
+.rail-flyout-wrap {
+  position: relative;
+}
+
+.rail-flyout {
+  position: absolute;
+  left: calc(100% + 6px);
+  bottom: 0;
+  min-width: 220px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  z-index: 140;
+}
+
+.rail-flyout__title {
+  margin-bottom: 4px;
+  padding: 2px 6px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  overflow-wrap: anywhere;
+}
+
+.rail-flyout__option {
+  padding: 5px 6px;
+  background: transparent;
+  border: 0;
+  color: rgba(255, 255, 255, 0.75);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.rail-flyout__option:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.rail-flyout__option.active {
+  color: #fff;
+  box-shadow: inset 2px 0 0 #fff;
+}
+
+.rail-flyout__option:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.rail-flyout__empty {
+  margin: 0;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* keep pane header controls clear of the ? button */
+.right-column .workspace-pane__header {
+  padding-right: 44px;
+}
+
+.help-fab {
+  position: fixed;
+  top: 8px;
+  right: 10px;
+  z-index: 140;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.7);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.help-fab:hover,
+.help-fab.active {
+  color: #fff;
+  border-color: #fff;
+}
+
 .workspace-sidebar {
   position: fixed;
-  top: 42px;
+  top: 0;
   right: 0;
   bottom: 44px;
   width: 360px;
   display: flex;
-  transform: translateX(316px);
-  transition: transform 0.24s ease;
+  transform: translateX(100%);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.24s ease, visibility 0s linear 0.24s;
   z-index: 90;
   border-left: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(0, 0, 0, 0.18);
@@ -3896,6 +4118,9 @@ watch(
 
 .workspace-sidebar--open {
   transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
+  transition: transform 0.24s ease;
 }
 
 .workspace-sidebar__rail {
@@ -3952,7 +4177,7 @@ watch(
 }
 
 .workspace-sidebar__close {
-  color: rgba(255, 255, 255, 0.46);
+  display: none; /* the ? button is the toggle */
 }
 
 .workspace-sidebar__body {
@@ -4153,8 +4378,6 @@ watch(
 }
 
 @media (max-width: 768px) {
-  .hud { width: 100% !important; box-sizing: border-box; position: absolute; top: 0; left: 0; z-index: 100; background: rgba(0,0,0,0.8); }
-  .left-column { padding-top: 50px !important; }
 
   .app-container {
     font-family: 'IBM Plex Mono', monospace;
@@ -4212,9 +4435,8 @@ watch(
     border-top: 1px solid rgba(255, 255, 255, 0.12);
   }
   .workspace-sidebar {
-    top: 50px;
-    width: 100vw;
-    transform: translateX(calc(100vw - 44px));
+    top: 0;
+    width: calc(100vw - 44px);
   }
   .background-stage {
     padding-left: 12px;
