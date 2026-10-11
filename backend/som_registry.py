@@ -96,6 +96,29 @@ def _git_commit(base):
             return out.stdout.strip()
     except (OSError, subprocess.SubprocessError):
         pass
+    return _read_git_head(base)
+
+
+def _read_git_head(base):
+    """Read HEAD without git, for checkouts owned by another user (git safe.directory)."""
+    git_dir = os.path.join(base, '.git')
+    try:
+        with open(os.path.join(git_dir, 'HEAD'), encoding='utf-8') as fh:
+            head = fh.read().strip()
+        if not head.startswith('ref: '):
+            return head
+        ref = head[5:]
+        ref_path = os.path.join(git_dir, ref)
+        if os.path.isfile(ref_path):
+            with open(ref_path, encoding='utf-8') as fh:
+                return fh.read().strip()
+        with open(os.path.join(git_dir, 'packed-refs'), encoding='utf-8') as fh:
+            for line in fh:
+                parts = line.split()
+                if len(parts) == 2 and parts[1] == ref:
+                    return parts[0]
+    except OSError:
+        pass
     return ''
 
 
