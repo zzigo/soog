@@ -13,7 +13,6 @@
         <div class="views" role="group" aria-label="View">
           <button type="button" :class="{ on: mode === '2d' }" @click="setView('2d')">2D</button>
           <button type="button" :class="{ on: mode === '3d' }" @click="setView('3d')">3D</button>
-          <NuxtLink :to="{ path: '/somap', query: { view: 'vault' } }">vault graph ↗</NuxtLink>
         </div>
         <div class="stats" aria-live="polite" v-if="!reg.loading.value && !reg.error.value">
           <span><b>{{ reg.real.value.length }}</b> notes</span>

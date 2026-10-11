@@ -2,7 +2,7 @@
 Graph builder for the Speculative Organology registry (github.com/zzigo/som-registry).
 
 Reads a local checkout of the registry (SOM_REGISTRY_DIR, default /opt/som-registry)
-and returns {nodes, links, meta} for /api/somap/registry. Independent of backend/soopub.
+and returns {nodes, links, meta} for /api/somap/registry. Also supplies the secondary prompt context (registry_context).
 """
 import datetime
 import os
@@ -340,3 +340,74 @@ def read_note(node_id, base=None):
         'body': body,
         'truncated': truncated,
     }
+
+
+_context_cache = {'graph': None, 'docs': []}
+_TOKEN_RE = re.compile(r'[a-zA-Z]{4,}')
+
+
+def _tokens(text):
+    return set(_TOKEN_RE.findall((text or '').lower()))
+
+
+def _context_docs(base):
+    graph = build_registry_graph(base)
+    with _cache_lock:
+        if _context_cache['graph'] is graph:
+            return _context_cache['docs']
+    docs = []
+    root = os.path.realpath(base)
+    for node in graph['nodes']:
+        if node.get('ghost') or not node.get('file'):
+            continue
+        path = os.path.realpath(os.path.join(base, node['file']))
+        if os.path.commonpath([root, path]) != root:
+            continue
+        try:
+            with open(path, 'r', encoding='utf-8') as fh:
+                text = fh.read(20_000).lstrip('\ufeff')
+        except (OSError, UnicodeDecodeError):
+            continue
+        match = _FRONTMATTER_RE.match(text)
+        body = (text[match.end():] if match else text).strip()
+        if not body:
+            continue
+        docs.append({
+            'label': f"{node['category']}/{node['title']}",
+            'text': body[:2200],
+            'title_tokens': _tokens(node['title']),
+            'tokens': _tokens(body[:2200]),
+        })
+    with _cache_lock:
+        _context_cache['graph'] = graph
+        _context_cache['docs'] = docs
+    return docs
+
+
+def registry_context(query_text='', max_docs=4, max_chars=5600, base=None):
+    """
+    Short secondary context for generation prompts: the registry notes whose title or
+    body share the most words with the query. Returns '' when nothing overlaps or the
+    registry checkout is unavailable; it never raises.
+    """
+    query = _tokens(query_text)
+    if not query:
+        return ''
+    try:
+        docs = _context_docs(base or registry_dir())
+    except (OSError, ValueError):
+        return ''
+    scored = []
+    for doc in docs:
+        score = len(doc['tokens'] & query) + 3 * len(doc['title_tokens'] & query)
+        if score:
+            scored.append((score, doc['label'], doc))
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    chunks, used = [], 0
+    for _, _, doc in scored[:max_docs]:
+        block = f"[{doc['label']}]\n{doc['text']}".strip()
+        if used + len(block) > max_chars and chunks:
+            break
+        chunks.append(block)
+        used += len(block)
+    return '\n\n'.join(chunks)

@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
 from logger import log_activity, get_logs, format_logs_html
-from som_registry import build_registry_graph, read_note
+from som_registry import build_registry_graph, read_note, registry_context
 import requests
 import matplotlib
 matplotlib.use('Agg')
@@ -85,25 +85,12 @@ DEFAULT_OLLAMA_MODEL = 'deepseek-r1:8b'
 FALLBACK_OLLAMA_MODEL = os.getenv('SOOG_FALLBACK_OLLAMA_MODEL', 'gemma4:31b-cloud')
 
 OLLAMA_MODEL_OVERRIDE = None
-SOOPUB_CONTEXT_CACHE = {}
-SOOPUB_DOCS_CACHE = None
-SOOPUB_GRAPH_CACHE = {}
 SKETCH_PIPELINE = None
 SKETCH_PIPELINE_MODEL = None
 SOUND_PIPELINE = None
 SOUND_PIPELINE_MODEL = None
 GENERATION_PROGRESS = {}
 GENERATION_PROGRESS_LOCK = threading.Lock()
-SOOPUB_SECTION_LABELS = {
-    '1mat': 'materials',
-    '2obj': 'objects',
-    '3agn': 'agents',
-    '4int': 'interfaces',
-    '5pri': 'principles of functions',
-    '6env': 'environments',
-    '7dict': 'dictionary'
-}
-
 app = Flask(__name__)
 app.url_map.strict_slashes = False
 CORS(app, resources={
@@ -270,7 +257,7 @@ def get_generation_limits():
         # Absolute wall-clock budget for /api/generate.
         # Set to 0 to disable deadline (stress-testing mode).
         'deadline_sec': _env_int('SOOG_GENERATE_DEADLINE_SEC', 240, min_value=0, max_value=86400),
-        # Optional second pass without soopub context (disabled by default to avoid long waits).
+        # Optional second pass without registry context (disabled by default to avoid long waits).
         'retry_without_context': _env_bool('SOOG_RETRY_WITHOUT_CONTEXT', default=False),
         # Max PNG bytes to include inline in /api/generate JSON (0 disables inline image payload).
         'max_inline_image_bytes': _env_int('SOOG_MAX_INLINE_IMAGE_BYTES', 600000, min_value=0, max_value=20000000)
@@ -296,104 +283,6 @@ def get_sketch_config():
         'guidance_scale': _env_float('SOOG_SKETCH_GUIDANCE_SCALE', 8.5, min_value=1.0, max_value=20.0),
         'cache_pipeline': _env_bool('SOOG_SKETCH_CACHE_PIPELINE', default=True)
     }
-
-
-def _read_context_excerpt(path: str, max_chars: int = 3000):
-    if not os.path.isfile(path):
-        return ""
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            content = f.read().strip()
-    except Exception:
-        return ""
-    if not content:
-        return ""
-    return content[:max_chars]
-
-
-def _keyword_tokens(text: str):
-    return set(re.findall(r"[a-zA-Z]{4,}", (text or "").lower()))
-
-
-def _load_soopub_docs():
-    global SOOPUB_DOCS_CACHE
-    if SOOPUB_DOCS_CACHE is not None:
-        return SOOPUB_DOCS_CACHE
-
-    base = os.path.join(os.path.dirname(__file__), 'soopub')
-    if not os.path.isdir(base):
-        SOOPUB_DOCS_CACHE = []
-        return SOOPUB_DOCS_CACHE
-
-    docs = []
-    for root, _, files in os.walk(base):
-        for filename in files:
-            if not filename.lower().endswith(('.md', '.txt')):
-                continue
-            fp = os.path.join(root, filename)
-            excerpt = _read_context_excerpt(fp, max_chars=2200)
-            if not excerpt:
-                continue
-            label = os.path.relpath(fp, os.path.dirname(__file__))
-            docs.append({
-                'label': label,
-                'text': excerpt,
-                'tokens': _keyword_tokens(excerpt)
-            })
-    SOOPUB_DOCS_CACHE = docs
-    return SOOPUB_DOCS_CACHE
-
-
-def get_soopub_context(query_text: str = "", max_docs: int = 4, max_chars: int = 5600):
-    """
-    Load compact contextual notes from soopub for stronger organological guidance.
-    Retrieval keeps prompt.txt primary, adding only a small ranked context slice.
-    """
-    global SOOPUB_CONTEXT_CACHE
-    cache_key = f"{(query_text or '').strip().lower()}|{max_docs}|{max_chars}"
-    if cache_key in SOOPUB_CONTEXT_CACHE:
-        return SOOPUB_CONTEXT_CACHE[cache_key]
-
-    docs = _load_soopub_docs()
-    if not docs:
-        SOOPUB_CONTEXT_CACHE[cache_key] = ""
-        return ""
-
-    query_tokens = _keyword_tokens(query_text)
-    preferred = {
-        'soopub/7dict/mantle-hood organogram system.md',
-        'soopub/4int/sound motion object.md',
-        'soopub/5pri/acoustic.md',
-        'soopub/1mat/material-acoustic-atlas.md',
-        'soopub/2obj/platonic-geometry-acoustics.md'
-    }
-
-    def score(doc):
-        overlap = len(doc['tokens'] & query_tokens) if query_tokens else 0
-        preferred_bonus = 3 if doc['label'] in preferred else 0
-        return overlap * 5 + preferred_bonus
-
-    ranked = sorted(docs, key=score, reverse=True)
-    selected = ranked[:max_docs]
-
-    chunks = []
-    used_chars = 0
-    for doc in selected:
-        block = f"[{doc['label']}]\n{doc['text']}".strip()
-        if not block:
-            continue
-        if used_chars + len(block) > max_chars and chunks:
-            break
-        chunks.append(block)
-        used_chars += len(block)
-
-    context = "\n\n".join(chunks).strip()
-    SOOPUB_CONTEXT_CACHE[cache_key] = context
-    return context
-
-
-def _soopub_base_dir():
-    return os.path.join(os.path.dirname(__file__), 'soopub')
 
 
 def _collapse_text(value: str, max_chars: int = None) -> str:
@@ -829,362 +718,6 @@ def generate_sound_samples(prompt: str, summary_text: str, materials_text: str, 
         gc.collect()
         
     return results, config['model_id']
-
-
-def _normalize_graph_token(value: str) -> str:
-    token = (value or '').strip().lower().replace('\\', '/')
-    token = re.sub(r'\.[a-z0-9]+$', '', token)
-    token = re.sub(r'[/\s]+', ' ', token)
-    token = re.sub(r'[^a-z0-9 _\-/]+', '', token)
-    token = re.sub(r'\s+', ' ', token).strip()
-    return token
-
-
-def _split_frontmatter(content: str):
-    if not content or not content.startswith('---'):
-        return "", content
-    lines = content.splitlines()
-    if not lines or lines[0].strip() != '---':
-        return "", content
-    for idx in range(1, len(lines)):
-        if lines[idx].strip() == '---':
-            frontmatter = "\n".join(lines[1:idx])
-            body = "\n".join(lines[idx + 1:])
-            return frontmatter, body
-    return "", content
-
-
-def _strip_yaml_scalar(value: str) -> str:
-    text = (value or '').strip().strip('"\'')
-    if text.startswith('[[') and text.endswith(']]'):
-        text = text[2:-2]
-    if text.startswith('#'):
-        text = text[1:]
-    return text.strip()
-
-
-def _parse_frontmatter_tags(frontmatter: str):
-    if not frontmatter:
-        return []
-    tags = []
-    seen = set()
-    lines = frontmatter.splitlines()
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        match = re.match(r'^\s*tags\s*:\s*(.*)$', line, flags=re.IGNORECASE)
-        if not match:
-            i += 1
-            continue
-
-        remainder = (match.group(1) or '').strip()
-        if remainder:
-            remainder = remainder.strip('[]')
-            for token in re.split(r'[,\s]+', remainder):
-                tag = _strip_yaml_scalar(token)
-                normalized = _normalize_graph_token(tag)
-                if normalized and normalized not in seen:
-                    seen.add(normalized)
-                    tags.append(normalized)
-            i += 1
-            continue
-
-        i += 1
-        while i < len(lines):
-            row = lines[i]
-            item = re.match(r'^\s*-\s*(.+)$', row)
-            if item:
-                tag = _strip_yaml_scalar(item.group(1))
-                normalized = _normalize_graph_token(tag)
-                if normalized and normalized not in seen:
-                    seen.add(normalized)
-                    tags.append(normalized)
-                i += 1
-                continue
-            if not row.strip():
-                i += 1
-                continue
-            break
-    return tags
-
-
-def _extract_inline_tags(body: str):
-    tags = []
-    seen = set()
-    for line in (body or '').splitlines():
-        if re.match(r'^\s{0,3}#{1,6}\s', line):
-            continue
-        for match in re.finditer(r'(?<![\w/])#([a-zA-Z0-9][a-zA-Z0-9_/\-]{1,63})', line):
-            tag = _normalize_graph_token(match.group(1))
-            if tag and tag not in seen:
-                seen.add(tag)
-                tags.append(tag)
-    return tags
-
-
-def _extract_wikilinks(content: str):
-    links = []
-    seen = set()
-    for raw in re.findall(r'\[\[([^\]]+)\]\]', content or ''):
-        cleaned = raw.strip()
-        if not cleaned:
-            continue
-        if cleaned not in seen:
-            seen.add(cleaned)
-            links.append(cleaned)
-    return links
-
-
-def _normalize_wikilink_target(value: str) -> str:
-    target = (value or '').strip()
-    if not target:
-        return ''
-    target = target.split('|', 1)[0].split('#', 1)[0].strip()
-    target = target.replace('\\', '/')
-    target = re.sub(r'\.md$', '', target, flags=re.IGNORECASE)
-    return target.strip()
-
-
-def _soopub_files_signature(base_dir: str):
-    parts = []
-    for root, _, files in os.walk(base_dir):
-        for filename in sorted(files):
-            if filename.startswith('.'):
-                continue
-            if not filename.lower().endswith(('.md', '.txt')):
-                continue
-            fp = os.path.join(root, filename)
-            try:
-                stat = os.stat(fp)
-            except OSError:
-                continue
-            rel = os.path.relpath(fp, base_dir).replace('\\', '/')
-            parts.append(f"{rel}:{int(stat.st_mtime)}:{stat.st_size}")
-    return "|".join(parts)
-
-
-def _build_soopub_graph():
-    base_dir = _soopub_base_dir()
-    if not os.path.isdir(base_dir):
-        return {'nodes': [], 'links': [], 'stats': {'nodes': 0, 'links': 0}}
-
-    signature = _soopub_files_signature(base_dir)
-    cached = SOOPUB_GRAPH_CACHE.get('snapshot')
-    if cached and cached.get('signature') == signature:
-        return cached.get('graph')
-
-    nodes = {}
-    links = []
-    link_keys = set()
-    note_records = []
-
-    def add_node(payload: dict):
-        node_id = payload.get('id')
-        if not node_id:
-            return
-        if node_id in nodes:
-            return
-        nodes[node_id] = payload
-
-    def add_link(source: str, target: str, edge_type: str):
-        if not source or not target or source == target:
-            return
-        key = (source, target, edge_type)
-        if key in link_keys:
-            return
-        link_keys.add(key)
-        links.append({
-            'source': source,
-            'target': target,
-            'type': edge_type
-        })
-
-    root_folder_id = 'folder:soopub'
-    add_node({
-        'id': root_folder_id,
-        'type': 'folder',
-        'title': 'soopub',
-        'path': 'soopub',
-        'section_key': 'root',
-        'section_label': 'vault',
-        'depth': 0
-    })
-
-    for root, dirs, files in os.walk(base_dir):
-        dirs[:] = sorted([d for d in dirs if not d.startswith('.')])
-        files = sorted(files)
-
-        rel_dir = os.path.relpath(root, base_dir).replace('\\', '/')
-        rel_dir = '' if rel_dir == '.' else rel_dir
-
-        folder_id = root_folder_id if not rel_dir else f"folder:{rel_dir}"
-        folder_name = 'soopub' if not rel_dir else os.path.basename(root)
-        folder_depth = 0 if not rel_dir else rel_dir.count('/') + 1
-        top_section = rel_dir.split('/')[0] if rel_dir else 'root'
-        top_label = SOOPUB_SECTION_LABELS.get(top_section, top_section)
-
-        folder_title = folder_name
-        if rel_dir and rel_dir.count('/') == 0 and top_section in SOOPUB_SECTION_LABELS:
-            folder_title = f"{folder_name} ({top_label})"
-
-        add_node({
-            'id': folder_id,
-            'type': 'folder',
-            'title': folder_title,
-            'path': rel_dir or 'soopub',
-            'section_key': top_section,
-            'section_label': top_label,
-            'depth': folder_depth
-        })
-
-        if rel_dir:
-            parent_rel = os.path.dirname(rel_dir).replace('\\', '/')
-            parent_id = root_folder_id if not parent_rel else f"folder:{parent_rel}"
-            add_link(parent_id, folder_id, 'folder_contains')
-
-        for filename in files:
-            if filename.startswith('.'):
-                continue
-            if not filename.lower().endswith(('.md', '.txt')):
-                continue
-
-            fp = os.path.join(root, filename)
-            rel_file = os.path.relpath(fp, base_dir).replace('\\', '/')
-            rel_no_ext = re.sub(r'\.[^.]+$', '', rel_file)
-            title = os.path.splitext(os.path.basename(filename))[0].strip()
-            note_id = f"note:{rel_no_ext}"
-            section_key = rel_file.split('/')[0] if '/' in rel_file else 'root'
-            section_label = SOOPUB_SECTION_LABELS.get(section_key, section_key)
-
-            try:
-                with open(fp, 'r', encoding='utf-8') as f:
-                    content = f.read()
-            except Exception:
-                continue
-
-            frontmatter, body = _split_frontmatter(content)
-            preview = re.sub(r'\s+', ' ', (body or '').strip())[:360]
-            tags = []
-            tag_seen = set()
-            for tag in _parse_frontmatter_tags(frontmatter) + _extract_inline_tags(body):
-                normalized = _normalize_graph_token(tag)
-                if normalized and normalized not in tag_seen:
-                    tag_seen.add(normalized)
-                    tags.append(normalized)
-            wikilinks = _extract_wikilinks(content)
-
-            add_node({
-                'id': note_id,
-                'type': 'note',
-                'title': title or rel_no_ext,
-                'path': rel_file,
-                'section_key': section_key,
-                'section_label': section_label,
-                'folder_id': folder_id,
-                'preview': preview,
-                'tag_count': len(tags)
-            })
-            add_link(folder_id, note_id, 'folder_contains')
-
-            note_records.append({
-                'id': note_id,
-                'title': title,
-                'path_no_ext': rel_no_ext,
-                'wikilinks': wikilinks,
-                'tags': tags
-            })
-
-    note_lookup = {}
-    for record in note_records:
-        keys = {
-            _normalize_graph_token(record['title']),
-            _normalize_graph_token(record['path_no_ext']),
-            _normalize_graph_token(os.path.basename(record['path_no_ext'])),
-            _normalize_graph_token(record['path_no_ext'].replace('/', ' '))
-        }
-        for key in keys:
-            if key and key not in note_lookup:
-                note_lookup[key] = record['id']
-
-    for record in note_records:
-        note_id = record['id']
-
-        for tag in record['tags']:
-            tag_id = f"tag:{tag}"
-            tag_leaf = tag.split('/')[-1]
-            add_node({
-                'id': tag_id,
-                'type': 'tag',
-                'title': f"#{tag_leaf}",
-                'path': tag,
-                'section_key': 'tag',
-                'section_label': 'tags'
-            })
-            add_link(note_id, tag_id, 'tagged')
-
-        for raw_target in record['wikilinks']:
-            target = _normalize_wikilink_target(raw_target)
-            if not target:
-                continue
-
-            target_key = _normalize_graph_token(target)
-            target_basename = _normalize_graph_token(os.path.basename(target))
-            target_id = note_lookup.get(target_key) or note_lookup.get(target_basename)
-
-            if target_id and target_id != note_id:
-                add_link(note_id, target_id, 'wikilink')
-                continue
-
-            ghost_key = _normalize_graph_token(target)
-            if not ghost_key:
-                continue
-            ghost_id = f"ghost:{ghost_key}"
-            add_node({
-                'id': ghost_id,
-                'type': 'ghost',
-                'title': target,
-                'path': target,
-                'section_key': 'reference',
-                'section_label': 'external references'
-            })
-            add_link(note_id, ghost_id, 'wikilink_unresolved')
-
-    degree = {node_id: 0 for node_id in nodes.keys()}
-    for edge in links:
-        source = edge.get('source')
-        target = edge.get('target')
-        if source in degree:
-            degree[source] += 1
-        if target in degree:
-            degree[target] += 1
-
-    for node in nodes.values():
-        node_degree = degree.get(node['id'], 0)
-        node['degree'] = node_degree
-        if node.get('type') == 'folder':
-            node['val'] = 3 + min(node_degree, 20) * 0.18
-        elif node.get('type') == 'note':
-            node['val'] = 2.4 + min(node_degree, 24) * 0.16
-        elif node.get('type') == 'tag':
-            node['val'] = 1.8 + min(node_degree, 18) * 0.14
-        else:
-            node['val'] = 1.6 + min(node_degree, 12) * 0.12
-
-    graph = {
-        'nodes': list(nodes.values()),
-        'links': links,
-        'stats': {
-            'nodes': len(nodes),
-            'links': len(links),
-            'notes': len([n for n in nodes.values() if n.get('type') == 'note']),
-            'folders': len([n for n in nodes.values() if n.get('type') == 'folder']),
-            'tags': len([n for n in nodes.values() if n.get('type') == 'tag']),
-            'ghosts': len([n for n in nodes.values() if n.get('type') == 'ghost'])
-        },
-        'section_labels': SOOPUB_SECTION_LABELS
-    }
-    SOOPUB_GRAPH_CACHE['snapshot'] = {'signature': signature, 'graph': graph}
-    return graph
 
 
 def _repair_matplotlib_imports(code: str) -> str:
@@ -3433,15 +2966,15 @@ def generate():
         prompt_content = get_prompt_content()
         if "ERROR" in prompt_content:
             return jsonify({'error': prompt_content}), 500
-        soopub_context = get_soopub_context(prompt)
+        registry_ctx = registry_context(prompt)
 
         # Keep prompt.txt as primary instruction source; add contextual notes as secondary reference.
         system_prompt = prompt_content
-        if soopub_context:
+        if registry_ctx:
             system_prompt = (
                 f"{prompt_content}\n\n"
                 "Additional Organological Context (secondary reference, do not override core prompt rules):\n"
-                f"{soopub_context}"
+                f"{registry_ctx}"
             )
         refactor_clause = ""
         if refact_meta.get('is_refact'):
@@ -3508,7 +3041,7 @@ def generate():
                 request_id=request_id
             )
         except Exception as first_error:
-            can_retry_without_context = bool(soopub_context) and limits.get('retry_without_context', False)
+            can_retry_without_context = bool(registry_ctx) and limits.get('retry_without_context', False)
             has_time_budget = deadline_at is None or (deadline_at - time.perf_counter()) > 25
             if can_retry_without_context and has_time_budget:
                 logging.error(
@@ -3936,21 +3469,6 @@ def health():
         })
     except Exception as e:
         logging.error(f"Error in /api/health: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/somap/graph', methods=['GET'])
-@log_activity('somap-graph')
-def somap_graph():
-    """
-    Build a knowledge graph from markdown notes in backend/soopub:
-    folders, notes, tags, and Obsidian wikilinks.
-    """
-    try:
-        graph = _build_soopub_graph()
-        return jsonify(graph)
-    except Exception as e:
-        logging.error(f"Error in /api/somap/graph: {e}")
         return jsonify({'error': str(e)}), 500
 
 
