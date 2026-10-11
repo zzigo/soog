@@ -1,11 +1,5 @@
 <template>
-  <div v-if="isRegistryView" class="registry-view">
-    <nav class="view-tabs" aria-label="SOMAP views">
-      <NuxtLink to="/somap">SOMAP (vault graph)</NuxtLink>
-      <span aria-current="page">Registry (preview)</span>
-    </nav>
-    <SomRegistryGraph />
-  </div>
+  <SomRegistry v-if="!isVaultView" />
   <div v-else class="somap-root">
     <div ref="graphContainer" class="graph-surface"></div>
 
@@ -39,7 +33,7 @@
       <div class="actions">
         <button class="hud-btn" @click="focusFinderNode">Focus</button>
         <button class="hud-btn" @click="refreshGraph">Reload</button>
-        <NuxtLink class="hud-btn" :to="{ path: '/somap', query: { view: 'registry' } }">Registry (preview)</NuxtLink>
+        <NuxtLink class="hud-btn" :to="{ path: '/somap' }">Registry graph</NuxtLink>
         <button class="hud-btn" :class="{ active: autoRotate }" @click="toggleAutoRotate">
           Orbit {{ autoRotate ? 'on' : 'off' }}
         </button>
@@ -76,14 +70,17 @@ import { useRoute, useRouter } from 'vue-router'
 import * as THREE from 'three'
 
 import { useApi } from '~/composables/useApi'
+import SomRegistry from '~/components/SomRegistry.vue'
 
 const { apiBase } = useApi()
 const router = useRouter()
 const route = useRoute()
 
-// Remount when switching between the vault graph and ?view=registry.
-definePageMeta({ key: (r) => (r.query.view === 'registry' ? 'somap-registry' : 'somap') })
-const isRegistryView = computed(() => route.query.view === 'registry')
+// /somap shows the registry graph (2D by default, ?view=3d for 3D; ?view=registry is kept as an alias).
+// The Obsidian vault graph lives at ?view=vault. Switching between the two remounts the page;
+// switching 2D/3D inside the registry does not.
+definePageMeta({ key: (r) => (r.query.view === 'vault' ? 'somap-vault' : 'somap-registry') })
+const isVaultView = computed(() => route.query.view === 'vault')
 
 const graphContainer = ref(null)
 const loading = ref(false)
@@ -549,7 +546,7 @@ function installThreeWarningFilter() {
 }
 
 onMounted(async () => {
-  if (isRegistryView.value) return
+  if (!isVaultView.value) return
   restoreConsoleWarn = installThreeWarningFilter()
   const module = await import('3d-force-graph')
   ForceGraph3D = module.default
@@ -572,30 +569,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.registry-view {
-  min-height: 100vh;
-  overflow-y: auto;
-}
-
-.view-tabs {
-  display: flex;
-  gap: 16px;
-  padding: 10px 16px;
-  background: #000;
-  color: rgba(255, 255, 255, 0.88);
-  font-family: 'Courier New', monospace;
-  font-size: 13px;
-}
-
-.view-tabs a {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.view-tabs [aria-current='page'] {
-  color: #fff;
-  border-bottom: 1px solid #fff;
-}
-
 .somap-root {
   position: relative;
   width: 100vw;
