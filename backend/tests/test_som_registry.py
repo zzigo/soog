@@ -122,6 +122,13 @@ class RegistryContextTest(unittest.TestCase):
         self.assertNotIn('Steel', out)
         self.assertNotIn('id: wood', out)
 
+    def test_info_reports_notes_and_commit_field(self):
+        info = som_registry.registry_context_info('spruce soundboard', base=self.base)
+        self.assertEqual(info['labels'], ['1mat/Wood'])
+        self.assertIn('Spruce', info['text'])
+        self.assertIn('commit', info)
+        self.assertEqual(som_registry.registry_context_info('zzzz', base=self.base)['labels'], [])
+
     def test_empty_when_no_overlap_or_no_query(self):
         self.assertEqual(som_registry.registry_context('', base=self.base), '')
         self.assertEqual(som_registry.registry_context('zzzz qqqq', base=self.base), '')

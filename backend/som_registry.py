@@ -384,30 +384,39 @@ def _context_docs(base):
     return docs
 
 
-def registry_context(query_text='', max_docs=4, max_chars=5600, base=None):
+def registry_context_info(query_text='', max_docs=4, max_chars=5600, base=None):
     """
     Short secondary context for generation prompts: the registry notes whose title or
-    body share the most words with the query. Returns '' when nothing overlaps or the
-    registry checkout is unavailable; it never raises.
+    body share the most words with the query. Returns {'text', 'labels', 'commit'};
+    text is '' when nothing overlaps or the registry checkout is unavailable. Never raises.
     """
+    empty = {'text': '', 'labels': [], 'commit': ''}
     query = _tokens(query_text)
     if not query:
-        return ''
+        return empty
+    base = base or registry_dir()
     try:
-        docs = _context_docs(base or registry_dir())
+        docs = _context_docs(base)
+        commit = build_registry_graph(base)['meta'].get('commit', '')
     except (OSError, ValueError):
-        return ''
+        return empty
     scored = []
     for doc in docs:
         score = len(doc['tokens'] & query) + 3 * len(doc['title_tokens'] & query)
         if score:
             scored.append((score, doc['label'], doc))
     scored.sort(key=lambda item: (-item[0], item[1]))
-    chunks, used = [], 0
+    chunks, labels, used = [], [], 0
     for _, _, doc in scored[:max_docs]:
         block = f"[{doc['label']}]\n{doc['text']}".strip()
         if used + len(block) > max_chars and chunks:
             break
         chunks.append(block)
+        labels.append(doc['label'])
         used += len(block)
-    return '\n\n'.join(chunks)
+    return {'text': '\n\n'.join(chunks), 'labels': labels, 'commit': commit}
+
+
+def registry_context(query_text='', max_docs=4, max_chars=5600, base=None):
+    """Text-only form of registry_context_info."""
+    return registry_context_info(query_text, max_docs, max_chars, base)['text']
