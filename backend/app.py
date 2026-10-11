@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
 from logger import log_activity, get_logs, format_logs_html
-from som_registry import build_registry_graph
+from som_registry import build_registry_graph, read_note
 import requests
 import matplotlib
 matplotlib.use('Agg')
@@ -3968,6 +3968,28 @@ def somap_registry():
         return jsonify({'error': str(e)}), 503
     except Exception as e:
         logging.error(f"Error in /api/somap/registry: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/somap/registry/note', methods=['GET'])
+@log_activity('somap-registry-note')
+def somap_registry_note():
+    """
+    One registry note: raw YAML frontmatter, parsed frontmatter and markdown body.
+    The note is addressed by graph node id (?id=); no file path is accepted.
+    """
+    node_id = (request.args.get('id') or '').strip()
+    if not node_id:
+        return jsonify({'error': 'missing id'}), 400
+    try:
+        return jsonify(read_note(node_id))
+    except KeyError:
+        return jsonify({'error': 'note not found'}), 404
+    except FileNotFoundError as e:
+        logging.error(f"Error in /api/somap/registry/note: {e}")
+        return jsonify({'error': str(e)}), 503
+    except Exception as e:
+        logging.error(f"Error in /api/somap/registry/note: {e}")
         return jsonify({'error': str(e)}), 500
 
 

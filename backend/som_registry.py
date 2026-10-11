@@ -22,6 +22,8 @@ SKIP_DIRS = {'soog-templates', '.git', '.github', 'node_modules'}
 _FRONTMATTER_RE = re.compile(r'^---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|$)', re.S)
 _WIKILINK_RE = re.compile(r'\[\[([^\]]+)\]\]')
 
+MAX_NOTE_CHARS = 300_000
+
 _cache = {'signature': None, 'graph': None}
 _cache_lock = threading.Lock()
 
@@ -282,3 +284,59 @@ def build_registry_graph(base=None):
         _cache['signature'] = signature
         _cache['graph'] = graph
     return graph
+
+
+def _json_safe(value):
+    """YAML values (dates, sets, ...) as JSON-serialisable data."""
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, (datetime.date, datetime.datetime)):
+        return value.isoformat()
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def read_note(node_id, base=None):
+    """
+    Full text of one registry note: raw YAML, parsed frontmatter and markdown body.
+
+    The file is looked up through the graph (node id -> relative path found by the
+    registry walk), never from a caller-supplied path. Raises KeyError for unknown
+    ids, pending (ghost) notes and files that resolve outside the checkout.
+    """
+    base = base or registry_dir()
+    graph = build_registry_graph(base)
+    node = next((n for n in graph['nodes'] if n['id'] == node_id and not n.get('ghost')), None)
+    if node is None or not node.get('file'):
+        raise KeyError(node_id)
+    root = os.path.realpath(base)
+    path = os.path.realpath(os.path.join(base, node['file']))
+    if os.path.commonpath([root, path]) != root:
+        raise KeyError(node_id)
+    with open(path, 'r', encoding='utf-8') as fh:
+        text = fh.read(MAX_NOTE_CHARS + 1)
+    truncated = len(text) > MAX_NOTE_CHARS
+    text = text[:MAX_NOTE_CHARS].lstrip('\ufeff')
+    raw, body, parsed = '', text, None
+    match = _FRONTMATTER_RE.match(text)
+    if match:
+        raw = match.group(1)
+        body = text[match.end():]
+        try:
+            data = yaml.safe_load(raw)
+            parsed = _json_safe(data) if isinstance(data, dict) else None
+        except yaml.YAMLError:
+            parsed = None
+    return {
+        'id': node['id'],
+        'title': node['title'],
+        'file': node['file'],
+        'category': node['category'],
+        'frontmatter_raw': raw,
+        'frontmatter': parsed,
+        'body': body,
+        'truncated': truncated,
+    }

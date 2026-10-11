@@ -59,5 +59,48 @@ class RegistryGraphTest(unittest.TestCase):
         self.assertIn('air', {n['id'] for n in second['nodes']})
 
 
+class ReadNoteTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.base = self.tmp.name
+        som_registry._cache.update(signature=None, graph=None)
+        write(self.base, '0ins/Violin.md',
+              '---\nid: violin\ntype: instrument\nyear: 2025\nmodified: 2026-10-11\n'
+              'connect: ["[[missing note]]"]\nmoaie:\n  vector: [0.5, 0.25, 0, 0, 1]\n---\n\n# Violin\n\nbody text\n')
+        write(self.base, '1mat/wood.md', '---\nid: wood\ncategory: 1mat\n---\n')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_returns_yaml_and_body(self):
+        note = som_registry.read_note('violin', self.base)
+        self.assertEqual(note['file'], '0ins/Violin.md')
+        self.assertIn('id: violin', note['frontmatter_raw'])
+        self.assertEqual(note['frontmatter']['moaie']['vector'], [0.5, 0.25, 0, 0, 1])
+        self.assertEqual(note['frontmatter']['modified'], '2026-10-11')
+        self.assertTrue(note['body'].lstrip().startswith('# Violin'))
+        self.assertFalse(note['truncated'])
+
+    def test_unknown_ghost_and_path_ids_are_refused(self):
+        for bad in ('nope', 'ghost:missing note', '../../etc/passwd', '0ins/Violin.md', ''):
+            with self.assertRaises(KeyError, msg=bad):
+                som_registry.read_note(bad, self.base)
+
+    def test_symlink_outside_checkout_is_refused(self):
+        with tempfile.TemporaryDirectory() as outside:
+            secret = write(outside, 'secret.md', '---\nid: leak\ncategory: 1mat\n---\nsecret\n')
+            os.symlink(secret, os.path.join(self.base, '1mat', 'leak.md'))
+            som_registry._cache.update(signature=None, graph=None)
+            with self.assertRaises(KeyError):
+                som_registry.read_note('leak', self.base)
+
+    def test_truncates_long_notes(self):
+        write(self.base, '2obj/long.md', '---\nid: long\ncategory: 2obj\n---\n' + 'x' * (som_registry.MAX_NOTE_CHARS + 10))
+        som_registry._cache.update(signature=None, graph=None)
+        note = som_registry.read_note('long', self.base)
+        self.assertTrue(note['truncated'])
+        self.assertLessEqual(len(note['body']), som_registry.MAX_NOTE_CHARS)
+
+
 if __name__ == '__main__':
     unittest.main()
