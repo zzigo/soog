@@ -211,7 +211,7 @@ if test $BACKEND_OK -ne 1
 end
 
 set -l FRONTEND_OK 0
-for _ in (seq 1 15)
+for attempt in (seq 1 15)
     if curl -fsSI http://127.0.0.1:3000 >/dev/null 2>/dev/null
         set FRONTEND_OK 1
         break

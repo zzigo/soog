@@ -59,6 +59,16 @@ class ModelListTest(unittest.TestCase):
             fresh = soog.fetch_ollama_models(force=True)
             self.assertIn('new:1b', fresh['models'])
 
+    def test_cloud_models_hidden_unless_allowed(self):
+        tags = {'models': [{'name': 'qwen3:4b'}, {'name': 'glm-5.3:cloud'}, {'name': 'gemma4:31b-cloud'}]}
+        caps = {'qwen3:4b': ['completion'], 'glm-5.3:cloud': ['completion'], 'gemma4:31b-cloud': ['completion']}
+        get = lambda url, **k: FakeResponse(200, tags)
+        post = lambda url, json=None, **k: FakeResponse(200, {'capabilities': caps[json['model']]})
+        with mock.patch.object(soog.requests, 'get', get), mock.patch.object(soog.requests, 'post', post):
+            self.assertEqual(soog.fetch_ollama_models(force=True)['models'], ['qwen3:4b'])
+            with mock.patch.dict(os.environ, {'SOOG_ALLOW_CLOUD_MODELS': '1'}):
+                self.assertEqual(len(soog.fetch_ollama_models(force=True)['models']), 3)
+
     def test_set_model_requires_auth(self):
         client = soog.app.test_client()
         res = client.post('/api/ollama/model', json={'model': 'qwen3:4b'})
