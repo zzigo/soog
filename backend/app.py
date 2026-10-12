@@ -599,7 +599,7 @@ def build_audio_prompts(prompt: str, summary_text: str, materials_text: str, req
         content, meta = call_ollama_chat(
             system_prompt,
             user_prompt,
-            timeout=60,
+            timeout=240,
             max_tokens=600,
             temperature=0.8,
             progress_callback=progress_cb if request_id else None
@@ -704,7 +704,7 @@ def generate_sound_samples(prompt: str, summary_text: str, materials_text: str, 
     if not results:
         update_generation_progress(request_id, stage='error', status='error', reasoning_preview="No sound samples were generated successfully.")
     else:
-        update_generation_progress(request_id, stage='completed', status='completed')
+        update_generation_progress(request_id, stage='sound_saving', status='running')
         
     if not config.get('cache_pipeline'):
         try:
@@ -1543,9 +1543,19 @@ def _model_can_generate(base_url, name, headers):
         return True
 
 
+def _is_cloud_model(name):
+    return name.endswith(':cloud') or name.endswith('-cloud')
+
+
 def filter_generating_models(base_url, names, headers):
     hidden = _hidden_models()
-    return [n for n in names if n not in hidden and _model_can_generate(base_url, n, headers)]
+    allow_cloud = os.getenv('SOOG_ALLOW_CLOUD_MODELS', '').strip().lower() in ('1', 'true', 'yes')
+    return [
+        n for n in names
+        if n not in hidden
+        and (allow_cloud or not _is_cloud_model(n))
+        and _model_can_generate(base_url, n, headers)
+    ]
 
 
 def fetch_ollama_models(force=False):
@@ -3499,17 +3509,50 @@ def remake_sketch(basename: str):
         return jsonify({'error': str(e)}), 500
 
 
+SOUND_JOBS = {}
+SOUND_JOBS_LOCK = threading.Lock()
+
+
+def _run_sound_job(basename, meta_path, prompt, summary_text, materials_text, request_id):
+    try:
+        sound_results, sound_model = generate_sound_samples(
+            prompt=prompt,
+            summary_text=summary_text,
+            materials_text=materials_text,
+            basename=basename,
+            request_id=request_id
+        )
+        if not sound_results:
+            raise RuntimeError('Sound generation failed to produce output')
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            meta = json.load(f)
+        meta['sound_samples'] = sound_results
+        meta['sound_model'] = sound_model
+        meta['updated_at'] = datetime.datetime.now().isoformat()
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+        update_generation_progress(request_id, stage='completed', status='completed')
+    except Exception as e:
+        logging.error(f"Error generating sound for {basename}: {e}")
+        update_generation_progress(request_id, stage='error', status='error', reasoning_preview=str(e)[:300])
+    finally:
+        with SOUND_JOBS_LOCK:
+            SOUND_JOBS.pop(basename, None)
+
+
 @app.route('/api/gallery/item/<basename>/generate_sound', methods=['POST'])
 @log_activity('generate_sound')
 @metered_action('sound', charged=False)
 def generate_sound(basename: str):
     """
-    Generate audio samples for an existing gallery item using Stable Audio Open.
+    Start sound generation for a gallery item in the background (Stable Audio Open on CPU
+    takes longer than proxy timeouts). Clients poll /api/generate/progress/<request_id>.
     """
     if not basename:
         return jsonify({'error': 'Missing basename'}), 400
 
-    request_id = request.json.get('request_id') if request.is_json else None
+    body = request.get_json(silent=True) or {}
+    request_id = str(body.get('request_id') or '').strip() or None
 
     meta_path = os.path.join(GALLERY_DIR, f"{basename}.json")
     if not os.path.isfile(meta_path):
@@ -3518,41 +3561,26 @@ def generate_sound(basename: str):
     try:
         with open(meta_path, 'r', encoding='utf-8') as f:
             meta = json.load(f)
-
-        prompt = meta.get('prompt', '') or ''
-        summary_text = meta.get('summary', '') or meta.get('answer', '') or ''
-        materials_text = meta.get('materials_text', '') or ''
-
-        # Generate sound samples
-        sound_results, sound_model = generate_sound_samples(
-            prompt=prompt,
-            summary_text=summary_text,
-            materials_text=materials_text,
-            basename=basename,
-            request_id=request_id
-        )
-
-        if not sound_results:
-            return jsonify({'error': 'Sound generation failed to produce output'}), 500
-
-        # Update metadata
-        meta['sound_samples'] = sound_results
-        meta['sound_model'] = sound_model
-        meta['updated_at'] = datetime.datetime.now().isoformat()
-
-        with open(meta_path, 'w', encoding='utf-8') as f:
-            json.dump(meta, f, ensure_ascii=False, indent=2)
-
-        return jsonify({
-            'ok': True,
-            'sound_samples': sound_results,
-            'sound_model': sound_model,
-            'item': meta
-        })
-
     except Exception as e:
-        logging.error(f"Error generating sound for {basename}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f'Could not read gallery item: {e}'}), 500
+
+    custom_prompt = str(body.get('prompt') or '').strip()
+    prompt = custom_prompt or meta.get('prompt', '') or ''
+    summary_text = meta.get('summary', '') or meta.get('answer', '') or ''
+    materials_text = meta.get('materials_text', '') or ''
+
+    with SOUND_JOBS_LOCK:
+        if basename in SOUND_JOBS:
+            return jsonify({'error': 'Sound generation is already running for this item'}), 409
+        SOUND_JOBS[basename] = request_id or True
+
+    update_generation_progress(request_id, stage='sound_queued', status='running')
+    threading.Thread(
+        target=_run_sound_job,
+        args=(basename, meta_path, prompt, summary_text, materials_text, request_id),
+        daemon=True
+    ).start()
+    return jsonify({'ok': True, 'status': 'started', 'request_id': request_id}), 202
 
 
 @app.route('/api/version', methods=['GET'])

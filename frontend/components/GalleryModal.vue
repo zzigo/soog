@@ -248,6 +248,28 @@ function openSoundGenerator() {
   showSoundGenModal.value = true
 }
 
+async function readJsonSafe(res) {
+  const text = await res.text()
+  try { return JSON.parse(text) } catch { return { error: `Server returned ${res.status} ${res.statusText || ''} (not JSON). The request may have timed out at the proxy.`.trim() } }
+}
+
+async function waitForSoundJob(requestId, timeoutMs = 40 * 60 * 1000) {
+  const started = Date.now()
+  while (Date.now() - started < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+    try {
+      const res = await fetch(`${apiBase.value}/generate/progress/${requestId}`, { headers: { Accept: 'application/json' } })
+      if (!res.ok) continue
+      const payload = await readJsonSafe(res)
+      if (payload?.status === 'completed') return
+      if (payload?.status === 'error') throw new Error(payload.reasoning_preview || 'Sound generation failed')
+    } catch (e) {
+      if (e instanceof Error && e.message && !/fetch|network|Failed/i.test(e.message)) throw e
+    }
+  }
+  throw new Error('Sound generation timed out')
+}
+
 async function executeSoundGen() {
   if (!current.value || generatingSound.value) return
   generatingSound.value = true
@@ -258,13 +280,14 @@ async function executeSoundGen() {
     const res = await fetch(`${apiBase.value}/gallery/item/${current.value.basename}/generate_sound`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         request_id: generationRequestId.value,
-        prompt: customSoundPrompt.value 
+        prompt: customSoundPrompt.value
       })
     })
-    const payload = await res.json()
+    const payload = await readJsonSafe(res)
     if (!res.ok) throw new Error(payload.error || 'Failed to generate sound')
+    if (res.status === 202) await waitForSoundJob(generationRequestId.value)
     await load(current.value?.basename)
   } catch (e) { alert(e.message) }
   finally { generatingSound.value = false; stopReasoningPolling(); }
