@@ -253,12 +253,52 @@
                     Download STL
                   </button>
                   <button
-                    v-if="pane.view === 'sketch' && hasResults"
-                    @click="remakeSketch"
-                    class="remake-btn-small"
-                    :disabled="loading"
+                    v-if="pane.view === 'geometry' && itemTarget"
+                    class="pane-action"
+                    title="Reconstruct a high-resolution 3D mesh for this item"
+                    :disabled="remakingLRM"
+                    @click="buildMesh(itemTarget)"
                   >
-                    {{ loading ? '...' : 'GENERATE' }}
+                    {{ remakingLRM ? '…' : 'BUILD 3D' }}
+                  </button>
+                  <button
+                    v-if="pane.view === 'sketch' && hasResults"
+                    class="pane-action"
+                    title="Regenerate the diffusion sketch"
+                    :disabled="loading || remakingSketch"
+                    @click="regenerateSketch"
+                  >
+                    {{ loading || remakingSketch ? '…' : 'REGEN SKETCH' }}
+                  </button>
+                  <template v-if="pane.view === 'sound' && itemTarget">
+                    <button
+                      v-for="(sample, sampleIdx) in soundSamples"
+                      :key="sampleIdx"
+                      class="pane-action sample-btn"
+                      :class="{ playing: playingIdx === sampleIdx }"
+                      :title="`Play sample ${sampleIdx + 1}`"
+                      @click="toggleAudio(sample, sampleIdx)"
+                    >
+                      {{ playingIdx === sampleIdx ? '❚❚' : '▶' }}{{ sampleIdx + 1 }}
+                    </button>
+                    <span v-if="playingIdx !== null" class="pane-timer">{{ formatAudioTime(currentTime) }}/{{ formatAudioTime(duration) }}</span>
+                    <button
+                      class="pane-action"
+                      title="Generate sound samples for this item"
+                      :disabled="generatingSound"
+                      @click="openSoundGenerator(itemTarget)"
+                    >
+                      {{ generatingSound ? '…' : '+ SOUND' }}
+                    </button>
+                  </template>
+                  <button
+                    v-if="pane.view === 'acoustic' && itemTarget"
+                    class="pane-action"
+                    title="Run the acoustic simulation for this item"
+                    :disabled="remakingModulus"
+                    @click="calcAcoustics(itemTarget)"
+                  >
+                    {{ remakingModulus ? '…' : 'CALC ACOUSTICS' }}
                   </button>
                   <template v-if="pane.view === 'acoustic' && acousticViewUsesPlane && activeAcousticPlaneData">
                     <div class="modulus-mode-toggle">
@@ -752,13 +792,31 @@
 
         <div v-if="workspaceSidebarTab === 'help'" class="workspace-sidebar__body">
           <div v-for="domain in commandDomains" :key="domain.key" class="command-domain">
-            <div class="command-domain__header">
+            <button
+              class="command-domain__header"
+              :aria-expanded="String(isHelpOpen(domain.key))"
+              @click="toggleHelpDomain(domain.key)"
+            >
               <span class="command-domain__badge" :style="{ '--domain-color': domain.color }">{{ domain.label }}</span>
-            </div>
-            <div v-for="command in domain.commands" :key="command.syntax" class="command-domain__row">
-              <code>{{ command.syntax }}</code>
-              <p>{{ command.detail }}</p>
-            </div>
+              <span class="command-domain__count">{{ domain.commands.length }}</span>
+              <span class="command-domain__chevron" aria-hidden="true">{{ isHelpOpen(domain.key) ? '−' : '+' }}</span>
+            </button>
+            <template v-if="isHelpOpen(domain.key)">
+              <div v-for="command in domain.commands" :key="command.syntax" class="command-domain__row">
+                <div class="command-domain__line">
+                  <code>{{ command.syntax }}</code>
+                  <button
+                    v-if="command.example"
+                    class="pane-action"
+                    :title="`Insert in the editor:\n${command.example}`"
+                    @click="insertHelpExample(command.example)"
+                  >
+                    INSERT
+                  </button>
+                </div>
+                <p>{{ command.detail }}</p>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -851,6 +909,22 @@
       </button>
     </div>
     <div v-if="error && uiVisible" class="error">{{ error }}</div>
+    <div v-if="soundModalOpen" class="sound-modal-overlay" @click.self="closeSoundGenerator">
+      <div class="sound-modal">
+        <header class="sound-modal__header">
+          <h4>CUSTOM SOUND SYNTHESIS</h4>
+          <button @click="closeSoundGenerator">×</button>
+        </header>
+        <p class="sound-modal__desc">Describe the sound; Stable Audio generates samples for this item.</p>
+        <textarea v-model="soundPrompt" class="sound-modal__textarea" placeholder="Describe the sound..."></textarea>
+        <div class="sound-modal__actions">
+          <button class="cancel-btn" @click="closeSoundGenerator">Cancel</button>
+          <button class="confirm-btn" :disabled="generatingSound" @click="runSoundGenerator">
+            {{ generatingSound ? 'GENERATING...' : 'GENERATE SAMPLES' }}
+          </button>
+        </div>
+      </div>
+    </div>
     <HelpModal 
       v-if="uiVisible" v-model="showHelp" 
       @select-featured="handleSelectFeatured"
@@ -907,6 +981,7 @@ import { useFavicon } from '~/composables/useFavicon';
 import { useAcousticSonification } from '~/composables/useAcousticSonification';
 import { useApi } from '~/composables/useApi';
 import { useWorkspace } from '~/composables/useWorkspace';
+import { useItemTools } from '~/composables/useItemTools';
 import { buildServerFacts, buildStageRows } from '~/composables/sessionTelemetry';
 import { useSoogAuth } from '~/composables/useSoogAuth';
 import { runAcousticSimulation } from '~/utils/acousticSimulation';
@@ -965,6 +1040,12 @@ const {
   canRestore: canRestoreWorkspace,
   startDrag: startPaneDrag,
 } = useWorkspace();
+const {
+  remakingSketch, remakingLRM, remakingModulus, generatingSound,
+  soundModalOpen, soundPrompt, openSoundGenerator, closeSoundGenerator, runSoundGenerator,
+  playingIdx, currentTime, duration, toggleAudio, toolError,
+  remakeSketch: remakeItemSketch, buildMesh, calcAcoustics, onItemUpdated,
+} = useItemTools();
 const loading = ref(false);
 const progress = ref(0);
 const elapsedMs = ref(0);
@@ -1011,6 +1092,10 @@ const evaluatedAcousticSignature = ref('');
 const editorContent = ref('');
 const liveModulusData = ref(null);
 const targetBasename = ref('');
+const soundSamples = ref([]);
+const itemPrompt = ref('');
+// The gallery item the pods are showing; the pod tools (sketch, 3D, sound, acoustics) act on it.
+const itemTarget = computed(() => (targetBasename.value ? { basename: targetBasename.value, prompt: itemPrompt.value } : null));
 const acousticTemporalMax = Math.PI * 2;
 let progressPollInterval = null;
 let editorSyncBound = false;
@@ -1253,10 +1338,10 @@ const commandDomains = [
     label: 'RENDER',
     color: '#8bc34a',
     commands: [
-      { syntax: 'Alt+Enter', detail: 'Evaluate current selection or the full editor buffer.' },
+      { syntax: 'Alt+Enter', detail: 'Evaluate current selection or the full editor buffer.', example: 'A glass harp bowed by two performers on a rotating table' },
       { syntax: 'workspace menu', detail: 'Choose fullscreen, split vertical, split 3, or split 4 from the HUD preset icon.' },
       { syntax: 'pane routing', detail: 'Each pane can point to auto, organogram, sound, 3D object, acoustic, sketch, SOT-A, or Stage 3D. ⤢ shows a pane alone, ⤡ returns.' },
-      { syntax: '/sot-a · /stage · /session · /help', detail: 'Open that pane or sidebar tab without calling the model.' },
+      { syntax: '/sot-a · /stage · /session · /help', detail: 'Open that pane or sidebar tab without calling the model. Select the line and press Alt+Enter.', example: '/sot-a' },
       { syntax: 'Alt+1 · Alt+2 · Alt+3', detail: 'Jump between SOOG, SOMAP, and Concert Room.' }
     ]
   },
@@ -1265,14 +1350,14 @@ const commandDomains = [
     label: 'SOT-A',
     color: '#ff9800',
     commands: [
-      { syntax: '@acoustic mode=2d primitive=circle freq=440 source=-0.55,0 probe=0.55,0 obstacle=0.15,0', detail: 'Run the planar cavity study against the online field solver.' },
-      { syntax: '@acoustic mode=3d primitive=sphere freq=440 source=-0.45,0,-0.28 probe=0.42,0.08,0.32 obstacle=0.08,0.12,0', detail: 'Run the volumetric cavity study with real XYZ coordinates.' },
-      { syntax: 'solver=<fd|surrogate>', detail: 'Optional override when you want to force the backend phase 2 field or the lighter preview-style solver.' },
+      { syntax: '@acoustic mode=2d primitive=circle freq=440 source=-0.55,0 probe=0.55,0 obstacle=0.15,0', detail: 'Run the planar cavity study against the online field solver.', example: '@acoustic mode=2d primitive=circle freq=440 source=-0.55,0 probe=0.55,0 obstacle=0.15,0\nPlanar cavity study.' },
+      { syntax: '@acoustic mode=3d primitive=sphere freq=440 source=-0.45,0,-0.28 probe=0.42,0.08,0.32 obstacle=0.08,0.12,0', detail: 'Run the volumetric cavity study with real XYZ coordinates.', example: '@acoustic mode=3d primitive=sphere freq=440 source=-0.45,0,-0.28 probe=0.42,0.08,0.32 obstacle=0.08,0.12,0\nVolumetric cavity study.' },
+      { syntax: 'solver=<fd|surrogate>', detail: 'Optional override when you want to force the backend phase 2 field or the lighter preview-style solver.', example: '@acoustic mode=2d primitive=square freq=330 source=-0.5,0 probe=0.5,0 obstacle=0.1,0 solver=surrogate' },
       { syntax: 'preview vs evaluate', detail: 'Sliders and edits keep a local surrogate preview; Evaluate swaps in the backend phase 2 finite-difference field when the command matches.' },
-      { syntax: 'primitive=<circle|square|triangle|hexagon|sphere|cube|cylinder>', detail: 'Choose planar or volumetric primitive families for the current acoustic test.' },
+      { syntax: 'primitive=<circle|square|triangle|hexagon|sphere|cube|cylinder>', detail: 'Choose planar or volumetric primitive families for the current acoustic test.', example: '@acoustic mode=3d primitive=cylinder freq=220 source=-0.45,0,-0.28 probe=0.42,0.08,0.32 obstacle=0.08,0.12,0' },
       { syntax: 'SOT-A sliders', detail: 'The SOT-A pane (rail icon, or the /sot-a command) edits the @acoustic command directly, including XYZ when mode=3d.' },
       { syntax: 'map / surf / vol / iso / xy-xz-yz', detail: 'Plane fields can switch between heatmap and relief surface; 3D studies can flip between cloud, iso-shell, and probe slices.' },
-      { syntax: 'follow-up lines', detail: 'Any lines after the command are passed as contextual notes to the solver.' }
+      { syntax: 'follow-up lines', detail: 'Any lines after the command are passed as contextual notes to the solver.', example: '@acoustic mode=2d primitive=hexagon freq=523 source=-0.5,0 probe=0.5,0 obstacle=0.12,0\nThe walls are fired clay; the source is a struck bowl.' }
     ]
   },
   {
@@ -1280,9 +1365,9 @@ const commandDomains = [
     label: 'REVERSION',
     color: '#42a5f5',
     commands: [
-      { syntax: '* correction notes…', detail: 'Fast reversion on top of the current instrument lineage.' },
-      { syntax: '+ addon notes…', detail: 'Alternative shorthand for iterative variants.' },
-      { syntax: '[REFACT source=<basename> group=<group_id> title=<name>]', detail: 'Explicit reversion header for precise lineage control.' }
+      { syntax: '* correction notes…', detail: 'Fast reversion on top of the current instrument lineage.', example: '* make the resonator longer and add a second reed' },
+      { syntax: '+ addon notes…', detail: 'Alternative shorthand for iterative variants.', example: '+ add a bowed drone string under the main body' },
+      { syntax: '[REFACT source=<basename> group=<group_id> title=<name>]', detail: 'Explicit reversion header for precise lineage control. Replace the placeholders with the item basename and group from the gallery.', example: '[REFACT source=<basename> group=<group_id> title=<name>]\nReplace the glass bowls with ceramic ones.' }
     ]
   },
   {
@@ -1290,12 +1375,57 @@ const commandDomains = [
     label: 'WORLD',
     color: '#ab47bc',
     commands: [
-      { syntax: '§ ...', detail: 'Enter Sorganoid / world commands without touching the default workspace.' },
+      { syntax: '§ list instruments', detail: 'Enter the Sorganoid world and list the instruments you can load.', example: '§ list instruments' },
+      { syntax: '§ spawn 3 individuals of rectangulata', detail: 'Place individuals of an instrument in the world.', example: '§ spawn 3 individuals of rectangulata' },
+      { syntax: '§ evolve speed for 3 generations', detail: 'Run evolution cycles toward speed, survival or efficiency.', example: '§ evolve speed for 3 generations' },
+      { syntax: '§ mutate gravity 0.5', detail: 'Change the world gravity as a factor of 9.82.', example: '§ mutate gravity 0.5' },
       { syntax: '⌘/Ctrl + Shift + \\', detail: 'Toggle this command sidebar.' },
       { syntax: '?', detail: 'Legacy help stays intact; command docs now live here.' }
     ]
   }
 ];
+
+const HELP_OPEN_KEY = 'soog.help.open';
+const helpOpen = ref({ render: true });
+
+function loadHelpOpenState() {
+  try {
+    const raw = window.localStorage.getItem(HELP_OPEN_KEY);
+    if (raw) helpOpen.value = { ...helpOpen.value, ...JSON.parse(raw) };
+  } catch {
+    // keep the default fold state
+  }
+}
+
+const isHelpOpen = (key) => !!helpOpen.value[key];
+
+function toggleHelpDomain(key) {
+  helpOpen.value = { ...helpOpen.value, [key]: !helpOpen.value[key] };
+  try {
+    window.localStorage.setItem(HELP_OPEN_KEY, JSON.stringify(helpOpen.value));
+  } catch {
+    // the fold state just won't persist
+  }
+}
+
+// Append a help example to the editor and select it, so Alt+Enter evaluates exactly that example.
+function insertHelpExample(text) {
+  const editor = editorRef.value?.aceEditor?.();
+  if (!editor || !text) return;
+  const before = String(editor.getValue() || '');
+  const gap = !before.trim() ? '' : before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+  editor.navigateFileEnd();
+  const start = editor.getCursorPosition();
+  editor.insert(`${gap}${text}\n`);
+  const lines = text.split('\n');
+  const startRow = start.row + (gap.match(/\n/g) || []).length;
+  const startColumn = gap ? 0 : start.column;
+  editor.selection.setSelectionRange({
+    start: { row: startRow, column: startColumn },
+    end: { row: startRow + lines.length - 1, column: lines[lines.length - 1].length },
+  });
+  editor.focus();
+}
 
 const isOperator = computed(() => !!profile.value?.is_admin);
 const stageEvents = ref([]);
@@ -1891,6 +2021,7 @@ const handleDocumentPointerDown = (event) => {
 };
 
 onMounted(() => {
+  loadHelpOpenState();
   restoreRailState();
   loadResponseTimeHistory();
   fetchOllamaModels();
@@ -2426,6 +2557,8 @@ async function loadCodeFromGallery(item) {
 // Show a gallery item in the workspace panes without touching the editor.
 function applyGalleryItem(item) {
   targetBasename.value = item.basename || '';
+  soundSamples.value = Array.isArray(item.sound_samples) ? item.sound_samples : [];
+  itemPrompt.value = item.prompt || '';
   summary.value = item.summary || item.answer || null;
   materialsText.value = item.materials_text || '';
   organogramCode.value = (item.plot_code || item.code || '').trim();
@@ -2451,6 +2584,8 @@ function captureGenerationState() {
   if (generationSnapshot) return;
   generationSnapshot = {
     targetBasename: targetBasename.value,
+    soundSamples: soundSamples.value,
+    itemPrompt: itemPrompt.value,
     summary: summary.value,
     materialsText: materialsText.value,
     organogramCode: organogramCode.value,
@@ -2471,6 +2606,8 @@ function restoreGenerationState() {
   generationSnapshot = null;
   if (!saved) return;
   targetBasename.value = saved.targetBasename;
+  soundSamples.value = saved.soundSamples;
+  itemPrompt.value = saved.itemPrompt;
   summary.value = saved.summary;
   materialsText.value = saved.materialsText;
   organogramCode.value = saved.organogramCode;
@@ -2489,6 +2626,24 @@ function restoreGenerationState() {
 watch(showGallery, (open) => {
   if (!open) restoreGenerationState();
 });
+
+// A pod tool finished: show the refreshed item if it is still the one on screen.
+const stopItemUpdates = onItemUpdated((item) => {
+  if (item.basename === targetBasename.value) applyGalleryItem(item);
+});
+onUnmounted(stopItemUpdates);
+watch(toolError, (message) => { if (message) error.value = message; });
+
+function formatAudioTime(seconds) {
+  if (!Number.isFinite(seconds)) return '0:00';
+  return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+}
+
+// REGEN SKETCH: a saved item goes through the gallery endpoint, a result not yet saved through /generate/sketch.
+function regenerateSketch() {
+  if (itemTarget.value) return remakeItemSketch(itemTarget.value);
+  return remakeSketch();
+}
 
 function previewGalleryItem(item) {
   if (!item) return;
@@ -2758,6 +2913,9 @@ const handleEvaluate = async (selectedText) => {
   }
 
   function applyGenerationState(nextState) {
+    targetBasename.value = nextState.basename || '';
+    soundSamples.value = nextState.soundSamples || [];
+    itemPrompt.value = nextState.itemPrompt || '';
     plotImage.value = nextState.plotImage;
     sketchImage.value = nextState.sketchImage;
     summary.value = nextState.summary;
@@ -2848,6 +3006,9 @@ const handleEvaluate = async (selectedText) => {
     const stagedMaterialsText = deriveMaterialsText(data.materials, stagedSummary);
 
     applyGenerationState({
+      basename: data.gallery?.basename || '',
+      soundSamples: data.gallery?.sound_samples || [],
+      itemPrompt: data.gallery?.prompt || '',
       plotImage: stagedPlotImage,
       sketchImage: stagedSketchImage,
       summary: stagedSummary,
@@ -3582,7 +3743,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 12px;
+  padding: 4px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(0, 0, 0, 0.78);
   flex: 0 0 auto;
@@ -3637,6 +3798,116 @@ watch(
 .pane-action:hover {
   color: #fff;
   border-color: rgba(255, 255, 255, 0.4);
+}
+
+.pane-action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.sample-btn.playing {
+  color: #000;
+  background: rgba(255, 255, 255, 0.85);
+  border-color: #fff;
+}
+
+.pane-timer {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.sound-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.9);
+}
+
+.sound-modal {
+  width: min(400px, 92vw);
+  padding: 20px;
+  background: #000;
+  border: 1px solid #222;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.sound-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.sound-modal__header h4 {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: #fff;
+  font-weight: 400;
+}
+
+.sound-modal__header button {
+  background: transparent;
+  border: 0;
+  color: #666;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.sound-modal__desc {
+  margin: 0 0 10px;
+  font-size: 10px;
+  color: #666;
+}
+
+.sound-modal__textarea {
+  width: 100%;
+  height: 80px;
+  box-sizing: border-box;
+  margin-bottom: 14px;
+  padding: 8px;
+  background: #000;
+  border: 1px solid #222;
+  color: #eee;
+  font: inherit;
+  font-size: 11px;
+  resize: none;
+  outline: none;
+}
+
+.sound-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cancel-btn {
+  background: transparent;
+  border: 1px solid #222;
+  color: #777;
+  font: inherit;
+  font-size: 10px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.confirm-btn {
+  background: #fff;
+  color: #000;
+  border: 1px solid #fff;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 14px;
+  cursor: pointer;
+}
+
+.confirm-btn:disabled {
+  opacity: 0.5;
 }
 
 .sota-pane {
@@ -4557,7 +4828,51 @@ watch(
 }
 
 .command-domain__header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 8px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.command-domain__count {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 10px;
+}
+
+.command-domain__chevron {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.command-domain__header:hover .command-domain__chevron {
+  color: #fff;
+}
+
+.command-domain__line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.command-domain__line code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.command-domain__line .pane-action {
+  flex: none;
 }
 
 .command-domain__badge {

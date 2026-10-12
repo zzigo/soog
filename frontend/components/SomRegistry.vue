@@ -69,7 +69,7 @@ const { apiBase } = useApi()
 const reg = useSomRegistryState(apiBase)
 const stage = ref(null)
 
-const mode = computed(() => (route.query.view === '3d' ? '3d' : '2d'))
+const mode = computed(() => (route.query.view === '2d' ? '2d' : '3d'))
 const TABS = ['node', 'details', 'filters']
 
 function setView(view) {

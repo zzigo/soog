@@ -6,7 +6,7 @@
 </template>
 
 <script setup>
-// /somap is the registry graph. ?view=3d opens the 3D stage, ?node=<id>&tab=<node|details|filters>
+// /somap is the registry graph, 3D by default; ?view=2d opens the flat graph, ?node=<id>&tab=<node|details|filters>
 // deep-links a note; both are handled inside SomRegistry.
 useHead({ title: 'SOMAP' })
 </script>
