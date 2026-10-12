@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, Response, make_response, copy_current
 from flask_cors import CORS
 from dotenv import load_dotenv
 from logger import log_activity, get_logs, format_logs_html
+import organogram_spec
 from som_registry import build_registry_graph, read_note, registry_context, registry_context_info
 import requests
 import matplotlib
@@ -1624,6 +1625,36 @@ def fetch_ollama_models(force=False):
     return {'ok': False, 'status': last_status or 500, 'error': 'Could not list Ollama models', 'base_url': base_url}
 
 
+def generate_organogram_from_spec(system_prompt, prompt_text, *, llm_timeout_sec, llm_max_tokens, call_timeout, progress_callback=None):
+    """Ask the model for a structured organogram spec and render it deterministically.
+
+    Returns (summary, materials, plot_code, image_base64, raw_json, llm_meta).
+    Raises when the model returns nothing usable or the render fails.
+    """
+    data, llm_meta = call_ollama_structured(
+        system_prompt,
+        organogram_spec.build_spec_instruction(prompt_text),
+        schema=organogram_spec.build_spec_schema(),
+        timeout=call_timeout,
+        max_tokens=llm_max_tokens,
+        temperature=0.4,
+        progress_callback=progress_callback
+    )
+    spec = organogram_spec.normalize_spec(data)
+    if not spec:
+        raise RuntimeError("Model returned no usable organogram parts.")
+    plot_code = organogram_spec.render_spec_code(spec)
+    image_base64 = execute_matplotlib_code(plot_code)
+    return (
+        str(data.get('summary') or '').strip(),
+        str(data.get('materials') or '').strip() or None,
+        plot_code,
+        image_base64,
+        json.dumps(data, ensure_ascii=False, indent=2),
+        llm_meta,
+    )
+
+
 def generate_with_image_required(
     prompt_content: str,
     prompt_text: str,
@@ -1760,114 +1791,156 @@ def generate_with_image_required(
     )
     stl_prompt_content = get_specialized_prompt('digitalFab')
 
+    # Default mode 'spec': the model fills a small JSON spec and the organogram is drawn
+    # deterministically. SOOG_ORGANOGRAM_MODE=code keeps the free-form matplotlib path first.
+    organogram_mode = os.getenv('SOOG_ORGANOGRAM_MODE', 'spec').strip().lower()
+    spec_done = False
+    if organogram_mode != 'code':
+        for spec_attempt in range(1, max_attempts + 1):
+            try:
+                update_generation_progress(request_id, stage='plot_llm', status='running')
+                (summary_text, materials_text, plot_code, image_base64,
+                 raw_plot_response, plot_llm_meta) = generate_organogram_from_spec(
+                    prompt_content, prompt_text,
+                    llm_timeout_sec=llm_timeout_sec,
+                    llm_max_tokens=llm_max_tokens,
+                    call_timeout=compute_call_timeout(stage="plot"),
+                    progress_callback=make_reasoning_callback('plot_llm')
+                )
+                image_bytes = base64.b64decode(image_base64)
+                if image_bytes:
+                    spec_done = True
+                    logging.info(f"Organogram spec attempt={spec_attempt} rendered ({len(plot_code)} chars of code)")
+                    break
+            except Exception as spec_err:
+                last_reason = f"Spec generation failed: {spec_err}"
+                logging.warning(last_reason)
+                if 'requires more system memory' in str(spec_err).lower():
+                    raise RuntimeError(last_reason)
+
     # We try max_attempts. If we are on the last attempt and still failing, 
     # we switch to the fallback model to ensure we get a result.
-    for attempt_idx in range(1, max_attempts + 1):
-        is_last_attempt = (attempt_idx == max_attempts)
-        current_model_override = None
-        if is_last_attempt and max_attempts > 1:
-            current_model_override = FALLBACK_OLLAMA_MODEL
-            logging.warning(f"Using fallback model {FALLBACK_OLLAMA_MODEL} for the last attempt.")
+    if not spec_done:
+        # In 'spec' mode a failed spec goes straight to the deterministic fallback (no second long LLM call).
+        legacy_attempts = 0 if organogram_mode == 'spec' else max_attempts
+        for attempt_idx in range(1, legacy_attempts + 1):
+            is_last_attempt = (attempt_idx == max_attempts)
+            current_model_override = None
+            if is_last_attempt and max_attempts > 1:
+                current_model_override = FALLBACK_OLLAMA_MODEL
+                logging.warning(f"Using fallback model {FALLBACK_OLLAMA_MODEL} for the last attempt.")
 
-        attempt_prompt, attempt_temperature = build_plot_attempt_prompt(
-            plot_instruction,
-            last_error=last_reason,
-            attempt_idx=attempt_idx
-        )
-        call_timeout = compute_call_timeout(stage="plot")
-        update_generation_progress(request_id, stage='plot_llm', status='running')
+            attempt_prompt, attempt_temperature = build_plot_attempt_prompt(
+                plot_instruction,
+                last_error=last_reason,
+                attempt_idx=attempt_idx
+            )
+            call_timeout = compute_call_timeout(stage="plot")
+            update_generation_progress(request_id, stage='plot_llm', status='running')
 
-        try:
-            structured_instruction = (
-                attempt_prompt
-                + "\n\nReturn one JSON object only. No markdown fences."
-                + "\n- `summary`: conceptual summary text only."
-                + "\n- `materials`: materials list as plain text lines."
-                + "\n- `plot_code`: executable matplotlib code only, without fences."
-            )
-            structured_data, llm_meta = call_ollama_structured(
-                materials_prompt,
-                structured_instruction,
-                schema=plot_schema,
-                model_name_override=current_model_override,
-                timeout=call_timeout,
-                max_tokens=llm_max_tokens,
-                temperature=min(attempt_temperature, 0.35),
-                progress_callback=make_reasoning_callback('plot_llm')
-            )
-            summary_text = str(structured_data.get('summary') or '').strip()
-            materials_text = str(structured_data.get('materials') or '').strip() or None
-            plot_code = str(structured_data.get('plot_code') or '').strip()
-            raw_plot_response = json.dumps(structured_data, ensure_ascii=False, indent=2)
-            plot_llm_meta = llm_meta
-            logging.info(
-                f"LLM structured plot attempt={attempt_idx} endpoint={llm_meta.get('endpoint')} model={llm_meta.get('model')}"
-            )
-        except Exception as structured_err:
-            logging.warning(f"Structured plot generation failed on attempt {attempt_idx}: {structured_err}")
             try:
-                raw_plot_response, llm_meta = call_ollama_chat(
+                structured_instruction = (
+                    attempt_prompt
+                    + "\n\nReturn one JSON object only. No markdown fences."
+                    + "\n- `summary`: conceptual summary text only."
+                    + "\n- `materials`: materials list as plain text lines."
+                    + "\n- `plot_code`: executable matplotlib code only, without fences."
+                )
+                structured_data, llm_meta = call_ollama_structured(
                     materials_prompt,
-                    attempt_prompt,
+                    structured_instruction,
+                    schema=plot_schema,
                     model_name_override=current_model_override,
                     timeout=call_timeout,
                     max_tokens=llm_max_tokens,
-                    temperature=attempt_temperature,
+                    temperature=min(attempt_temperature, 0.35),
                     progress_callback=make_reasoning_callback('plot_llm')
                 )
+                summary_text = str(structured_data.get('summary') or '').strip()
+                materials_text = str(structured_data.get('materials') or '').strip() or None
+                plot_code = str(structured_data.get('plot_code') or '').strip()
+                raw_plot_response = json.dumps(structured_data, ensure_ascii=False, indent=2)
+                plot_llm_meta = llm_meta
+                logging.info(
+                    f"LLM structured plot attempt={attempt_idx} endpoint={llm_meta.get('endpoint')} model={llm_meta.get('model')}"
+                )
+            except Exception as structured_err:
+                logging.warning(f"Structured plot generation failed on attempt {attempt_idx}: {structured_err}")
+                try:
+                    raw_plot_response, llm_meta = call_ollama_chat(
+                        materials_prompt,
+                        attempt_prompt,
+                        model_name_override=current_model_override,
+                        timeout=call_timeout,
+                        max_tokens=llm_max_tokens,
+                        temperature=attempt_temperature,
+                        progress_callback=make_reasoning_callback('plot_llm')
+                    )
+                except Exception as e:
+                    last_reason = f"LLM call failed: {e}"
+                    logging.error(last_reason)
+                    if 'requires more system memory' in str(e).lower():
+                        raise RuntimeError(last_reason)
+                    continue
+                plot_llm_meta = llm_meta
+                logging.info(
+                    f"LLM freeform plot attempt={attempt_idx} endpoint={llm_meta.get('endpoint')} model={llm_meta.get('model')}"
+                )
+
+                text_no_code = re.sub(r"```[\s\S]*?```", "", raw_plot_response).strip()
+                summary_text, materials_text = split_summary_and_materials(text_no_code)
+
+                code_blocks = extract_python_code_blocks(raw_plot_response)
+                plot_code, _ = split_plot_and_stl_code(code_blocks)
+
+            if not plot_code:
+                last_reason = "Model response did not include matplotlib code."
+                continue
+
+            try:
+                update_generation_progress(request_id, stage='rendering_organogram', status='running')
+                image_base64 = execute_matplotlib_code(plot_code)
+                image_bytes = base64.b64decode(image_base64)
+                if not image_bytes:
+                    last_reason = "Matplotlib code executed but produced empty image bytes."
+                    continue
             except Exception as e:
-                last_reason = f"LLM call failed: {e}"
+                last_reason = f"Matplotlib execution failed: {e}"
                 logging.error(last_reason)
-                if 'requires more system memory' in str(e).lower():
-                    raise RuntimeError(last_reason)
                 continue
-            plot_llm_meta = llm_meta
-            logging.info(
-                f"LLM freeform plot attempt={attempt_idx} endpoint={llm_meta.get('endpoint')} model={llm_meta.get('model')}"
-            )
-
-            text_no_code = re.sub(r"```[\s\S]*?```", "", raw_plot_response).strip()
-            summary_text, materials_text = split_summary_and_materials(text_no_code)
-
-            code_blocks = extract_python_code_blocks(raw_plot_response)
-            plot_code, _ = split_plot_and_stl_code(code_blocks)
-
-        if not plot_code:
-            last_reason = "Model response did not include matplotlib code."
-            continue
-
-        try:
-            update_generation_progress(request_id, stage='rendering_organogram', status='running')
-            image_base64 = execute_matplotlib_code(plot_code)
-            image_bytes = base64.b64decode(image_base64)
-            if not image_bytes:
-                last_reason = "Matplotlib code executed but produced empty image bytes."
-                continue
-        except Exception as e:
-            last_reason = f"Matplotlib execution failed: {e}"
-            logging.error(last_reason)
-            continue
-        break
-    else:
-        # Final fallback: if everything failed, try a very simple plot with fallback model
-        logging.error("All plot attempts failed. Trying emergency fallback with simplest possible plot.")
-        try:
-            emergency_prompt = "Create a simplest possible Mantle Hood organogram for a musical instrument: one circle and one rectangle."
-            structured_data, llm_meta = call_ollama_structured(
-                prompt_content,
-                emergency_prompt,
-                schema=plot_schema,
-                model_name_override=FALLBACK_OLLAMA_MODEL,
-                timeout=300,
-                max_tokens=512,
-                temperature=0.1
-            )
-            summary_text = str(structured_data.get('summary') or 'Emergency fallback summary.').strip()
-            plot_code = str(structured_data.get('plot_code') or '').strip()
-            image_base64 = execute_matplotlib_code(plot_code)
-            plot_llm_meta = llm_meta
-        except Exception as final_e:
-            raise RuntimeError(f"Complete generation failure including fallback: {last_reason} -> {final_e}")
+            break
+        else:
+            # Final fallback: if everything failed, try a very simple plot with fallback model
+            logging.error("All plot attempts failed. Drawing a deterministic organogram from the prompt text.")
+            fallback_ok = False
+            try:
+                fallback_spec = organogram_spec.spec_from_text(prompt_text, summary_text, materials_text)
+                plot_code = organogram_spec.render_spec_code(fallback_spec)
+                image_base64 = execute_matplotlib_code(plot_code)
+                image_bytes = base64.b64decode(image_base64)
+                fallback_ok = bool(image_bytes)
+                if fallback_ok and not summary_text:
+                    summary_text = "Deterministic organogram derived from the prompt text (the model produced no usable output)."
+            except Exception as det_err:
+                logging.error(f"Deterministic organogram fallback failed: {det_err}")
+            if not fallback_ok:
+                try:
+                    emergency_prompt = "Create a simplest possible Mantle Hood organogram for a musical instrument: one circle and one rectangle."
+                    structured_data, llm_meta = call_ollama_structured(
+                        prompt_content,
+                        emergency_prompt,
+                        schema=plot_schema,
+                        model_name_override=FALLBACK_OLLAMA_MODEL,
+                        timeout=300,
+                        max_tokens=512,
+                        temperature=0.1
+                    )
+                    summary_text = str(structured_data.get('summary') or 'Emergency fallback summary.').strip()
+                    plot_code = str(structured_data.get('plot_code') or '').strip()
+                    image_base64 = execute_matplotlib_code(plot_code)
+                    plot_llm_meta = llm_meta
+                except Exception as final_e:
+                    raise RuntimeError(f"Complete generation failure including fallback: {last_reason} -> {final_e}")
 
     stl_schema = build_stl_generation_schema()
     stl_code = ""
