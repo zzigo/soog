@@ -769,9 +769,42 @@
               <strong>{{ fact.value }}</strong>
             </div>
           </div>
-          <div class="session-summary">
-            <h4>Summary</h4>
-            <div class="summary-content" v-html="summaryHtml || '<p>No summary yet.</p>'"></div>
+
+          <div class="session-section">
+            <h4>Stages</h4>
+            <div v-if="stageRows.length" class="stage-list">
+              <div
+                v-for="row in stageRows"
+                :key="row.key"
+                class="stage-row"
+                :class="{ 'stage-row--running': row.running }"
+              >
+                <span class="stage-row__name">{{ row.label }}</span>
+                <span class="stage-row__time">{{ row.duration }}</span>
+                <span
+                  v-if="isOperator && row.cpu !== null"
+                  class="stage-row__cpu"
+                  :title="`Server CPU ${row.cpu}% when the stage began`"
+                ><i :style="{ width: `${row.cpu}%` }"></i></span>
+              </div>
+            </div>
+            <p v-else class="session-empty">No render in this session yet.</p>
+          </div>
+
+          <div v-if="isOperator" class="session-section">
+            <h4>Server</h4>
+            <template v-if="serverMetrics">
+              <div v-if="serverMetrics.cpu_pct != null" class="cpu-meter" :title="`CPU ${serverMetrics.cpu_pct}%`">
+                <i :style="{ width: `${serverMetrics.cpu_pct}%` }"></i>
+              </div>
+              <div class="session-facts">
+                <div v-for="fact in serverFacts" :key="fact.label" class="session-fact">
+                  <span>{{ fact.label }}</span>
+                  <strong>{{ fact.value }}</strong>
+                </div>
+              </div>
+            </template>
+            <p v-else class="session-empty">Reading server load…</p>
           </div>
         </div>
 
@@ -874,6 +907,7 @@ import { useFavicon } from '~/composables/useFavicon';
 import { useAcousticSonification } from '~/composables/useAcousticSonification';
 import { useApi } from '~/composables/useApi';
 import { useWorkspace } from '~/composables/useWorkspace';
+import { buildServerFacts, buildStageRows } from '~/composables/sessionTelemetry';
 import { useSoogAuth } from '~/composables/useSoogAuth';
 import { runAcousticSimulation } from '~/utils/acousticSimulation';
 import { phaseTurnsLabel, wrapPhase } from '~/utils/acousticTemporal';
@@ -1263,6 +1297,15 @@ const commandDomains = [
   }
 ];
 
+const isOperator = computed(() => !!profile.value?.is_admin);
+const stageEvents = ref([]);
+const progressInfo = ref({ status: '', started_at: 0, updated_at: 0 });
+const serverMetrics = ref(null);
+
+// One row per stage of the last render: how long it ran and, for operators, the server CPU when it began.
+const stageRows = computed(() => buildStageRows(stageEvents.value, progressInfo.value));
+const serverFacts = computed(() => buildServerFacts(serverMetrics.value));
+
 const sessionFacts = computed(() => ([
   { label: 'Workspace', value: workspaceModeLabel.value.toUpperCase() },
   { label: 'Model', value: responseModel.value || currentModel.value || '—' },
@@ -1312,14 +1355,21 @@ function stopReasoningPolling() {
 async function fetchReasoningProgress() {
   if (!generationRequestId.value) return;
   try {
-    const response = await fetch(`${apiBase.value}/generate/progress/${generationRequestId.value}`, {
-      headers: { Accept: 'application/json' }
-    });
+    // Operators send their token so the response carries stage CPU and server load.
+    const headers = { Accept: 'application/json', ...(isOperator.value ? await authHeaders().catch(() => ({})) : {}) };
+    const response = await fetch(`${apiBase.value}/generate/progress/${generationRequestId.value}`, { headers });
     if (!response.ok) return;
     const payload = await response.json();
     if (!payload?.ok) return;
     reasoningPreview.value = String(payload.reasoning_preview || '').trim();
     progressStage.value = String(payload.stage || '').trim();
+    stageEvents.value = Array.isArray(payload.events) ? payload.events : [];
+    progressInfo.value = {
+      status: String(payload.status || ''),
+      started_at: Number(payload.started_at) || 0,
+      updated_at: Number(payload.updated_at) || 0,
+    };
+    if (payload.server) serverMetrics.value = payload.server;
     if (payload.status === 'completed' || payload.status === 'error') {
       stopReasoningPolling();
     }
@@ -1332,6 +1382,8 @@ function startReasoningPolling() {
   stopReasoningPolling();
   reasoningPreview.value = '';
   progressStage.value = '';
+  stageEvents.value = [];
+  progressInfo.value = { status: 'running', started_at: 0, updated_at: 0 };
   progressPollInterval = setInterval(fetchReasoningProgress, 700);
 }
 
@@ -1693,6 +1745,39 @@ function syncEditorContent() {
   }
   return true;
 }
+
+let serverMetricsTimer = null;
+
+async function fetchServerMetrics() {
+  try {
+    const response = await fetch(`${apiBase.value}/admin/server-metrics`, {
+      headers: { Accept: 'application/json', ...(await authHeaders()) },
+    });
+    if (!response.ok) return;
+    const payload = await response.json();
+    if (payload?.ok && payload.server) serverMetrics.value = payload.server;
+  } catch {
+    // the SESSION panel keeps its last reading
+  }
+}
+
+function stopServerMetricsPolling() {
+  if (serverMetricsTimer) clearInterval(serverMetricsTimer);
+  serverMetricsTimer = null;
+}
+
+// While SESSION is open an operator sees the server load even when nothing is rendering.
+watch(
+  [workspaceSidebarOpen, workspaceSidebarTab, isOperator, loading],
+  ([open, tab, operator, busy]) => {
+    stopServerMetricsPolling();
+    if (!open || tab !== 'session' || !operator || busy) return;
+    fetchServerMetrics();
+    serverMetricsTimer = setInterval(fetchServerMetrics, 3000);
+  },
+  { immediate: true },
+);
+onUnmounted(stopServerMetricsPolling);
 
 function toggleWorkspaceSidebar() {
   workspaceSidebarOpen.value = !workspaceSidebarOpen.value;
@@ -4467,7 +4552,6 @@ watch(
 
 .command-domain + .command-domain,
 .acoustic-summary + .acoustic-summary,
-.session-summary,
 .session-facts + .session-facts {
   margin-top: 18px;
 }
@@ -4525,6 +4609,73 @@ watch(
   color: rgba(255, 255, 255, 0.86);
   font-weight: 400;
   text-align: right;
+}
+
+.session-section {
+  margin-top: 18px;
+}
+
+.session-section h4 {
+  margin: 0 0 8px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 400;
+}
+
+.session-empty {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11px;
+}
+
+.stage-list {
+  display: grid;
+  gap: 6px;
+}
+
+.stage-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 44px;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.stage-row__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-row__time {
+  color: rgba(255, 255, 255, 0.86);
+  text-align: right;
+}
+
+.stage-row--running .stage-row__name,
+.stage-row--running .stage-row__time {
+  color: #fff;
+}
+
+.stage-row__cpu,
+.cpu-meter {
+  display: block;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.cpu-meter {
+  margin-bottom: 10px;
+  height: 6px;
+}
+
+.stage-row__cpu i,
+.cpu-meter i {
+  display: block;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .session-summary h4,
