@@ -1543,9 +1543,19 @@ def _model_can_generate(base_url, name, headers):
         return True
 
 
+def _is_cloud_model(name):
+    return name.endswith(':cloud') or name.endswith('-cloud')
+
+
 def filter_generating_models(base_url, names, headers):
     hidden = _hidden_models()
-    return [n for n in names if n not in hidden and _model_can_generate(base_url, n, headers)]
+    allow_cloud = os.getenv('SOOG_ALLOW_CLOUD_MODELS', '').strip().lower() in ('1', 'true', 'yes')
+    return [
+        n for n in names
+        if n not in hidden
+        and (allow_cloud or not _is_cloud_model(n))
+        and _model_can_generate(base_url, n, headers)
+    ]
 
 
 def fetch_ollama_models(force=False):
