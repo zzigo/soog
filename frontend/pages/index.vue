@@ -233,7 +233,12 @@
           }"
           :key="workspacePreset"
         >
-          <div class="workspace-stage" :class="`workspace-stage--${workspacePreset}`">
+          <div
+            ref="workspaceStageRef"
+            class="workspace-stage"
+            :class="`workspace-stage--${workspacePreset}`"
+            :style="workspaceStageStyle"
+          >
             <section
               v-for="pane in activeWorkspacePanes"
               :key="pane.id"
@@ -441,6 +446,27 @@
                 </template>
               </div>
             </section>
+            <div
+              v-if="showPaneHandleX"
+              class="pane-handle pane-handle--x"
+              :style="{ left: `${paneSplit.x}%` }"
+              role="separator"
+              aria-orientation="vertical"
+              title="Drag to resize (double-click to reset)"
+              @pointerdown.prevent="startPaneDrag('x', $event)"
+              @dblclick="resetPaneSplit"
+            ></div>
+            <div
+              v-if="showPaneHandleY"
+              class="pane-handle pane-handle--y"
+              :class="{ 'pane-handle--right': workspacePreset === 'splitThree' }"
+              :style="{ top: `${paneSplit.y}%` }"
+              role="separator"
+              aria-orientation="horizontal"
+              title="Drag to resize (double-click to reset)"
+              @pointerdown.prevent="startPaneDrag('y', $event)"
+              @dblclick="resetPaneSplit"
+            ></div>
           </div>
         </div>
       </Transition>
@@ -798,7 +824,7 @@
     </div>
     </template>
 <script setup>
-import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue';
+import { ref, reactive, onMounted, onUnmounted, computed, nextTick, watch } from 'vue';
 import { useRuntimeConfig } from '#app';
 import { marked } from 'marked';
 import AceEditor from '~/components/AceEditor.vue';
@@ -1106,6 +1132,44 @@ const leftColumnStyle = computed(() => {
     flex: `0 0 min(${dockWidth}vw, 760px)`,
   };
 });
+const workspaceStageRef = ref(null);
+const paneSplit = reactive({ x: 50, y: 50 });
+const PANE_SPLIT_MIN = 15;
+const PANE_SPLIT_MAX = 85;
+const showPaneHandleX = computed(() => ['splitVertical', 'splitThree', 'splitFour'].includes(workspacePreset.value));
+const showPaneHandleY = computed(() => ['splitThree', 'splitFour'].includes(workspacePreset.value));
+const workspaceStageStyle = computed(() => (
+  workspacePreset.value === 'fullscreen'
+    ? {}
+    : { '--pane-x': `${paneSplit.x}%`, '--pane-y': `${paneSplit.y}%` }
+));
+function resetPaneSplit() {
+  paneSplit.x = 50;
+  paneSplit.y = 50;
+}
+function startPaneDrag(axis, event) {
+  const stage = workspaceStageRef.value;
+  if (!stage) return;
+  const handle = event.currentTarget;
+  handle.setPointerCapture?.(event.pointerId);
+  const move = (e) => {
+    const rect = stage.getBoundingClientRect();
+    if (axis === 'x') {
+      paneSplit.x = Math.min(PANE_SPLIT_MAX, Math.max(PANE_SPLIT_MIN, ((e.clientX - rect.left) / rect.width) * 100));
+    } else {
+      paneSplit.y = Math.min(PANE_SPLIT_MAX, Math.max(PANE_SPLIT_MIN, ((e.clientY - rect.top) / rect.height) * 100));
+    }
+  };
+  const end = (e) => {
+    handle.releasePointerCapture?.(e.pointerId);
+    handle.removeEventListener('pointermove', move);
+    handle.removeEventListener('pointerup', end);
+    handle.removeEventListener('pointercancel', end);
+  };
+  handle.addEventListener('pointermove', move);
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+}
 const rightColumnStyle = computed(() => (
   workspaceLayout.value === 'background'
     ? {}
@@ -1665,6 +1729,7 @@ function setWorkspacePreset(presetKey) {
   const preset = WORKSPACE_PRESET_CONFIG[presetKey];
   if (!preset) return;
   workspacePreset.value = presetKey;
+  resetPaneSplit();
   workspacePaneViews.value = [...preset.defaults];
   syncWorkspaceLayoutFromPreset();
   workspacePresetMenuOpen.value = false;
@@ -2813,7 +2878,7 @@ watch(
 .left-column--background {
   position: relative;
   z-index: 30;
-  border-right: 1px solid rgba(255, 255, 255, 0.14);
+  border-right: none;
 }
 
 .right-column {
@@ -2836,7 +2901,7 @@ watch(
 
 .app-container.workspace-background-mode .editor-wrapper {
   background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.86) 48%, rgba(0, 0, 0, 0.28) 100%);
+    linear-gradient(90deg, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.7) 45%, rgba(0, 0, 0, 0) 100%);
 }
 
 .app-container.workspace-background-mode .left-column :deep(.ace_editor),
@@ -3215,6 +3280,7 @@ watch(
 }
 
 .workspace-stage {
+  position: relative;
   flex: 1;
   min-height: 0;
   min-width: 0;
@@ -3235,26 +3301,66 @@ watch(
 }
 
 .workspace-stage--splitVertical {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, var(--pane-x, 50%)) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   grid-template-areas: 'a b';
 }
 
 .workspace-stage--splitThree {
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, var(--pane-x, 50%)) minmax(0, 1fr);
+  grid-template-rows: minmax(0, var(--pane-y, 50%)) minmax(0, 1fr);
   grid-template-areas:
     'a b'
     'a c';
 }
 
 .workspace-stage--splitFour {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, var(--pane-x, 50%)) minmax(0, 1fr);
+  grid-template-rows: minmax(0, var(--pane-y, 50%)) minmax(0, 1fr);
   grid-template-areas:
     'a b'
     'c d';
 }
+
+.pane-handle {
+  position: absolute;
+  z-index: 6;
+  touch-action: none;
+}
+
+.pane-handle--x {
+  top: 0;
+  bottom: 0;
+  width: 11px;
+  margin-left: -5px;
+  cursor: col-resize;
+}
+
+.pane-handle--y {
+  left: 0;
+  right: 0;
+  height: 11px;
+  margin-top: -5px;
+  cursor: row-resize;
+}
+
+.pane-handle--y.pane-handle--right {
+  left: var(--pane-x, 50%);
+}
+
+.pane-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  background: rgba(255, 255, 255, 0.0);
+  transition: background-color 0.15s ease;
+}
+
+.pane-handle--x::after { width: 2px; }
+.pane-handle--y::after { height: 2px; }
+.pane-handle:hover::after,
+.pane-handle:active::after { background: rgba(120, 190, 255, 0.7); }
 
 .workspace-pane {
   min-width: 0;
@@ -4382,6 +4488,7 @@ watch(
 }
 
 @media (max-width: 768px) {
+  .pane-handle { display: none; }
 
   .app-container {
     font-family: 'IBM Plex Mono', monospace;
