@@ -11,14 +11,13 @@
     }"
   >
     <!-- Thin tools rail (⌘/Ctrl + \ expands it) -->
-    <nav
+<NavRail
       v-if="!sorganoidMode && uiVisible"
       ref="railRef"
-      class="rail"
-      :class="{ 'rail--expanded': railExpanded }"
-      aria-label="Tools"
+      :expanded="railExpanded"
+      :bottom="17"
     >
-      <div class="rail__group">
+      <template #head>
         <button
           class="rail-item"
           :title="railExpanded ? 'Collapse tools (⌘/Ctrl + \\)' : 'Expand tools (⌘/Ctrl + \\)'"
@@ -28,6 +27,8 @@
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" :d="railExpanded ? 'M14,7L9,12L14,17V7Z' : 'M10,17L15,12L10,7V17Z'" /></svg>
           <span class="rail-label">Tools</span>
         </button>
+      </template>
+      <template #tools>
     <div ref="workspacePresetMenuRef" class="workspace-preset-menu">
       <button
         class="rail-item workspace-preset-trigger"
@@ -101,24 +102,29 @@
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14.83,13.41L13.42,14.82L16.55,17.95L14.5,20H20V14.5L17.96,16.54L14.83,13.41M14.5,4L16.54,6.04L4,18.59L5.41,20L17.96,7.46L20,9.5V4M10.59,9.17L5.41,4L4,5.41L9.17,10.58L10.59,9.17Z" /></svg>
           <span class="rail-label">Random prompt</span>
         </button>
-      </div>
-
-      <div class="rail__group">
+      
+      </template>
+      <template #bottom>
         <button class="rail-item" title="Gallery (Alt+↑/↓)" @click="showGallery = true">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21 19V5C21 3.89 20.1 3 19 3H5C3.89 3 3 3.89 3 5V19C3 20.1 3.89 21 5 21H19C20.1 21 21 20.1 21 19M8.5 13.5L11 16.51L14.5 12L19 18H5L8.5 13.5Z" /></svg>
           <span class="rail-label">Gallery</span>
         </button>
-        <button class="rail-item" :class="{ active: $route.path === '/somap' }" title="Somap (Alt+2)" @click="toggleSomap">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none" />
-            <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.8" />
-            <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" stroke="currentColor" stroke-width="1.2" fill="none" />
-          </svg>
-          <span class="rail-label">Somap</span>
-        </button>
+        
         <button class="rail-item" title="Stage 3D pane (Alt+3 opens the full page)" :class="{ active: workspacePaneShows('stage') }" @click="openWorkspaceView('stage')">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12,3L2,12H5V20H19V12H22L12,3M11.5,18V14H12.5V18H11.5M9,18V16H10V18H9M14,18V16H15V18H14M11.5,13V12H12.5V13H11.5M9,15V14H10V15H9M14,15V14H15V15H14Z" /></svg>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" /></svg>
           <span class="rail-label">Concert hall</span>
+        </button>
+        <button class="rail-item" :class="{ active: workspacePaneShows('sota') }" title="SOT-A acoustic pane (/sot-a)" @click="openWorkspaceView('sota')">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12q2.5-9 5 0t5 0 5 0 5 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+          <span class="rail-label">SOT-A</span>
+        </button>
+        <button class="rail-item" :class="{ active: workspaceSidebarOpen && workspaceSidebarTab === 'session' }" title="Session (/session)" @click="openSidebarTab('session')">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" /></svg>
+          <span class="rail-label">Session</span>
+        </button>
+        <button class="rail-item" :class="{ active: workspaceSidebarOpen && workspaceSidebarTab === 'help' }" title="Command help (⌘/Ctrl + Shift + \\)" @click="openSidebarTab('help')">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11,18H13V16H11V18M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,6A4,4 0 0,0 8,10H10A2,2 0 0,1 12,8A2,2 0 0,1 14,10C14,12 11,11.75 11,15H13C13,12.75 16,12.5 16,10A4,4 0 0,0 12,6Z" /></svg>
+          <span class="rail-label">Help</span>
         </button>
         <button class="rail-item" title="Welcome to SOOG" @click="showHelp = true">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z" /></svg>
@@ -178,19 +184,9 @@
             <button v-else class="rail-flyout__option" role="menuitem" @click="railFlyout = ''; showAuthGate = true">Sign in</button>
           </div>
         </div>
-      </div>
-    </nav>
-
-    <!-- Help / session / SOT-A sidebar toggle (⌘/Ctrl + Shift + \) -->
-    <button
-      v-if="!sorganoidMode && uiVisible"
-      class="help-fab"
-      :class="{ active: workspaceSidebarOpen }"
-      :aria-expanded="String(workspaceSidebarOpen)"
-      aria-label="Help and session"
-      title="Help (⌘/Ctrl + Shift + \)"
-      @click="toggleWorkspaceSidebar"
-    >?</button>
+      
+      </template>
+    </NavRail>
 
     <!-- Left column: resizable editor -->
     <div 
@@ -863,6 +859,7 @@ import { marked } from 'marked';
 import AceEditor from '~/components/AceEditor.vue';
 import HelpModal from '~/components/HelpModal.vue';
 import GalleryDock from '~/components/GalleryDock.vue';
+import NavRail from '~/components/NavRail.vue';
 import StlViewer from '~/components/StlViewer.vue';
 import ConcertSimulator from '~/components/ConcertSimulator.vue';
 import ModulusHeatmap from '~/components/ModulusHeatmap.vue';
@@ -1701,6 +1698,16 @@ function toggleWorkspaceSidebar() {
   workspaceSidebarOpen.value = !workspaceSidebarOpen.value;
 }
 
+// Rail icons for HELP and SESSION: open the tab, or close the sidebar when that tab is already showing.
+function openSidebarTab(tab) {
+  if (workspaceSidebarOpen.value && workspaceSidebarTab.value === tab) {
+    workspaceSidebarOpen.value = false;
+    return;
+  }
+  workspaceSidebarTab.value = tab;
+  workspaceSidebarOpen.value = true;
+}
+
 function workspacePaneShows(viewKey) {
   return workspacePreset.value !== 'fullscreen' && activeWorkspacePanes.value.some((pane) => pane.view === viewKey);
 }
@@ -1792,7 +1799,7 @@ const handleKeyDown = (e) => {
 };
 
 const handleDocumentPointerDown = (event) => {
-  if (railFlyout.value && !railRef.value?.contains?.(event.target)) railFlyout.value = '';
+  if (railFlyout.value && !railRef.value?.$el?.contains?.(event.target)) railFlyout.value = '';
   if (!workspacePresetMenuOpen.value) return;
   if (workspacePresetMenuRef.value?.contains?.(event.target)) return;
   workspacePresetMenuOpen.value = false;
@@ -2327,6 +2334,7 @@ async function loadCodeFromGallery(item) {
     editorRef.value.addToHistory(draft);
   }
 
+  generationSnapshot = null; // LOAD commits the item, closing the gallery keeps it
   applyGalleryItem(item);
 }
 
@@ -2351,8 +2359,55 @@ function applyGalleryItem(item) {
   syncWorkspaceAutoView();
 }
 
+// What the panes showed before the gallery started previewing items; restored when the gallery closes.
+let generationSnapshot = null;
+
+function captureGenerationState() {
+  if (generationSnapshot) return;
+  generationSnapshot = {
+    targetBasename: targetBasename.value,
+    summary: summary.value,
+    materialsText: materialsText.value,
+    organogramCode: organogramCode.value,
+    geometryCode: geometryCode.value,
+    responseModel: responseModel.value,
+    sketchModel: sketchModel.value,
+    responseElapsedMs: responseElapsedMs.value,
+    stlUrl: stlUrl.value,
+    plotImage: plotImage.value,
+    sketchImage: sketchImage.value,
+    modulusData: modulusData.value,
+    evaluatedAcousticSignature: evaluatedAcousticSignature.value,
+  };
+}
+
+function restoreGenerationState() {
+  const saved = generationSnapshot;
+  generationSnapshot = null;
+  if (!saved) return;
+  targetBasename.value = saved.targetBasename;
+  summary.value = saved.summary;
+  materialsText.value = saved.materialsText;
+  organogramCode.value = saved.organogramCode;
+  geometryCode.value = saved.geometryCode;
+  responseModel.value = saved.responseModel;
+  sketchModel.value = saved.sketchModel;
+  responseElapsedMs.value = saved.responseElapsedMs;
+  stlUrl.value = saved.stlUrl;
+  plotImage.value = saved.plotImage;
+  sketchImage.value = saved.sketchImage;
+  modulusData.value = saved.modulusData;
+  evaluatedAcousticSignature.value = saved.evaluatedAcousticSignature;
+  syncWorkspaceAutoView();
+}
+
+watch(showGallery, (open) => {
+  if (!open) restoreGenerationState();
+});
+
 function previewGalleryItem(item) {
   if (!item) return;
+  captureGenerationState();
   applyGalleryItem(item);
   if (workspacePreset.value === 'fullscreen') {
     setWorkspacePreset('splitFour');
@@ -2452,6 +2507,7 @@ const handleEvaluate = async (selectedText) => {
 
   if (runWorkspaceCommand(selectedText)) return;
 
+  generationSnapshot = null; // a new generation replaces whatever the gallery was previewing
   const acousticCommand = parseAcousticCommand(selectedText);
   const requestPrompt = acousticCommand?.normalizedPrompt || selectedText;
   lastAcousticCommand.value = acousticCommand?.meta || null;
@@ -4105,7 +4161,7 @@ watch(
   height: min(72vh, 780px);
 }
 
-/* Tools rail (left) and help button (top right): black, hairline wireframe */
+/* Tools rail (left, see NavRail): black, hairline wireframe */
 .app-container.has-rail {
   box-sizing: border-box;
   padding-left: 44px !important;
@@ -4126,84 +4182,6 @@ watch(
   .app-container.gallery-open .right-column--background {
     left: 0;
   }
-}
-
-.rail {
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 17px; /* the fixed footer is 17px tall */
-  width: 44px;
-  z-index: 130;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  background: #000;
-  border-right: 1px solid rgba(255, 255, 255, 0.14);
-  transition: width 0.18s ease;
-  font-family: 'IBM Plex Mono', monospace;
-}
-
-.rail--expanded {
-  width: 210px;
-}
-
-.rail__group {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.rail-item {
-  height: 38px;
-  width: 100%;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 12px;
-  background: transparent;
-  border: 0;
-  border-left: 1px solid transparent;
-  color: #666;
-  font: inherit;
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  text-decoration: none;
-  white-space: nowrap;
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.rail-item .icon {
-  flex: none;
-}
-
-.rail-item:hover,
-.rail-item.active {
-  color: #fff;
-}
-
-.rail-item.active {
-  border-left-color: #fff;
-}
-
-.rail-item:focus-visible,
-.help-fab:focus-visible {
-  outline: 1px solid #fff;
-  outline-offset: -1px;
-}
-
-.rail-label {
-  display: none;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rail--expanded .rail-label {
-  display: inline;
 }
 
 .rail .workspace-preset-dropdown {
@@ -4278,32 +4256,6 @@ watch(
 /* keep pane header controls clear of the ? button */
 .right-column .workspace-pane__header {
   padding-right: 44px;
-}
-
-.help-fab {
-  position: fixed;
-  top: 8px;
-  right: 10px;
-  z-index: 140;
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  background: #000;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  color: rgba(255, 255, 255, 0.7);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.help-fab:hover,
-.help-fab.active {
-  color: #fff;
-  border-color: #fff;
 }
 
 .workspace-sidebar {
