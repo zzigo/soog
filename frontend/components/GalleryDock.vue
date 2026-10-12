@@ -59,28 +59,6 @@
     </div>
 
 
-    <div v-if="current" class="dock-tools">
-      <div class="sound-controls">
-        <button
-          v-for="(sample, idx) in current.sound_samples"
-          :key="idx"
-          class="sound-node"
-          @click="toggleAudio(sample, idx)"
-          :class="{ playing: playingIdx === idx }"
-        >
-          <svg v-if="playingIdx !== idx" viewBox="0 0 24 24"><path fill="currentColor" d="M8,5.14V19.14L19,12.14L8,5.14Z"/></svg><svg v-else viewBox="0 0 24 24"><path fill="currentColor" d="M14,19H18V5H14M6,19H10V5H6V19Z"/></svg><span class="s-idx">{{ idx + 1 }}</span>
-        </button>
-        <button class="add-node" title="Generate sound samples" @click="openSoundGenerator" :disabled="generatingSound">+</button>
-        <div v-if="playingIdx !== null" class="timer">
-          {{ formatAudioTime(currentTime) }} / {{ formatAudioTime(duration) }}
-        </div>
-      </div>
-      <div class="tool-row">
-        <button class="pane-action" @click="remakeSketch" :disabled="remakingSketch">REGEN SKETCH</button>
-        <button class="pane-action" @click="generateModulus" :disabled="remakingModulus">CALC ACOUSTICS</button>
-        <button class="pane-action" @click="generateLRM" :disabled="remakingLRM">BUILD 3D</button>
-      </div>
-    </div>
       <div v-if="current" class="metadata">
         <div class="meta-section">
           <label>PROMPT</label>
@@ -91,30 +69,6 @@
           <div class="summary-text markdown" v-html="currentSummaryHtml"></div>
         </div>
       </div>
-
-    <!-- Sound Generation Sub-Modal -->
-    <div v-if="showSoundGenModal" class="sub-modal-overlay" @click.self="showSoundGenModal = false">
-      <div class="sub-modal">
-        <header class="sub-modal-header">
-          <h4>CUSTOM SOUND SYNTHESIS</h4>
-          <button @click="showSoundGenModal = false">×</button>
-        </header>
-        <div class="sub-modal-body">
-          <p class="sub-modal-desc">Generate new timbral samples using Stable Audio Open. Describe the sonic characteristics you want to synthesize.</p>
-          <textarea 
-            v-model="customSoundPrompt" 
-            placeholder="e.g. resonant wooden pipes, metallic harmonic overtones..." 
-            class="sub-modal-textarea"
-          ></textarea>
-          <div class="sub-modal-actions">
-            <button @click="showSoundGenModal = false" class="cancel-btn">Cancel</button>
-            <button @click="executeSoundGen" class="confirm-btn" :disabled="generatingSound">
-              {{ generatingSound ? 'GENERATING...' : 'GENERATE SAMPLES' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <footer v-if="isProcessingAny" class="process-footer">
       <div class="terminal-line">
@@ -132,6 +86,7 @@ import { marked } from 'marked'
 import StlViewer from '~/components/StlViewer.vue'
 import ModulusHeatmap from '~/components/ModulusHeatmap.vue'
 import { useApi } from '~/composables/useApi'
+import { useItemTools } from '~/composables/useItemTools'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -151,18 +106,11 @@ const newName = ref('')
 const galleryKey = ref(0)
 const listContainer = ref(null)
 
-// Processing States
-const remakingSketch = ref(false)
-const generatingSound = ref(false)
-const remakingModulus = ref(false)
-const remakingLRM = ref(false)
-const progressStage = ref('')
-const reasoningPreview = ref('')
-const generationRequestId = ref('')
-
-const isProcessingAny = computed(() => 
-  generatingSound.value || remakingSketch.value || remakingModulus.value || remakingLRM.value
-)
+// Tool state (sketch, 3D, acoustics, sound) lives in useItemTools so the workspace pods can drive it too.
+const {
+  remakingSketch, generatingSound, remakingModulus, remakingLRM,
+  isBusy: isProcessingAny, progressStage, reasoningPreview, onItemUpdated,
+} = useItemTools()
 
 const consoleDisplayMessage = computed(() => {
   if (progressStage.value) return formatProgressStage(progressStage.value)
@@ -173,183 +121,9 @@ const consoleDisplayMessage = computed(() => {
   return 'PROCESSING...'
 })
 
-// Audio state
-const playingIdx = ref(null)
-const currentTime = ref(0)
-const duration = ref(0)
-let audioObj = null
-
-// Sub-modal state
-const showSoundGenModal = ref(false)
-const customSoundPrompt = ref('')
-
-function openSoundGenerator() {
-  customSoundPrompt.value = current.value?.prompt || ''
-  showSoundGenModal.value = true
-}
-
-async function readJsonSafe(res) {
-  const text = await res.text()
-  try { return JSON.parse(text) } catch { return { error: `Server returned ${res.status} ${res.statusText || ''} (not JSON). The request may have timed out at the proxy.`.trim() } }
-}
-
-async function waitForSoundJob(requestId, timeoutMs = 40 * 60 * 1000) {
-  const started = Date.now()
-  while (Date.now() - started < timeoutMs) {
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-    try {
-      const res = await fetch(`${apiBase.value}/generate/progress/${requestId}`, { headers: { Accept: 'application/json' } })
-      if (!res.ok) continue
-      const payload = await readJsonSafe(res)
-      if (payload?.status === 'completed') return
-      if (payload?.status === 'error') throw new Error(payload.reasoning_preview || 'Sound generation failed')
-    } catch (e) {
-      if (e instanceof Error && e.message && !/fetch|network|Failed/i.test(e.message)) throw e
-    }
-  }
-  throw new Error('Sound generation timed out')
-}
-
-async function executeSoundGen() {
-  if (!current.value || generatingSound.value) return
-  generatingSound.value = true
-  showSoundGenModal.value = false
-  generationRequestId.value = createRequestId()
-  startReasoningPolling()
-  try {
-    const res = await fetch(`${apiBase.value}/gallery/item/${current.value.basename}/generate_sound`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-      body: JSON.stringify({
-        request_id: generationRequestId.value,
-        prompt: customSoundPrompt.value
-      })
-    })
-    const payload = await readJsonSafe(res)
-    if (!res.ok) throw new Error(payload.error || 'Failed to generate sound')
-    if (res.status === 202) await waitForSoundJob(generationRequestId.value)
-    await load(current.value?.basename)
-    announce()
-  } catch (e) { alert(e.message) }
-  finally { generatingSound.value = false; stopReasoningPolling(); }
-}
-
-async function generateLRM() {
-  if (!current.value || remakingLRM.value) return
-  remakingLRM.value = true
-  generationRequestId.value = createRequestId()
-  startReasoningPolling()
-  try {
-    const res = await fetch(`${apiBase.value}/gallery/item/${current.value.basename}/generate_lrm`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-      body: JSON.stringify({ request_id: generationRequestId.value })
-    })
-    if (!res.ok) {
-      const err = await res.json()
-      throw new Error(err.error || 'Failed to generate high-res mesh')
-    }
-    await load(current.value?.basename)
-    announce()
-  } catch (e) { alert(e.message) }
-  finally { remakingLRM.value = false; stopReasoningPolling(); }
-}
-
-async function remakeSketch() {
-  if (!current.value || remakingSketch.value) return
-  remakingSketch.value = true
-  generationRequestId.value = createRequestId()
-  startReasoningPolling()
-  try {
-    const res = await fetch(`${apiBase.value}/gallery/item/${current.value.basename}/remake_sketch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-      body: JSON.stringify({ request_id: generationRequestId.value })
-    })
-    if (!res.ok) throw new Error('Failed to remake sketch')
-    await load(current.value?.basename)
-    announce()
-  } catch (e) { alert(e.message) }
-  finally { remakingSketch.value = false; stopReasoningPolling(); }
-}
-
-async function generateModulus() {
-  if (!current.value || remakingModulus.value) return
-  remakingModulus.value = true
-  generationRequestId.value = createRequestId()
-  startReasoningPolling()
-  try {
-    const prompt = `[MODULUS] ${current.value.prompt}`
-    const res = await fetch(`${apiBase.value}/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-      body: JSON.stringify({ 
-        prompt, 
-        request_id: generationRequestId.value, 
-        gallery_update: current.value.basename 
-      })
-    })
-    if (!res.ok) throw new Error('Failed to run simulation')
-    await load(current.value?.basename)
-    announce()
-  } catch (e) { alert(e.message) }
-  finally { remakingModulus.value = false; stopReasoningPolling(); }
-}
-
-function formatAudioTime(seconds) {
-  if (isNaN(seconds)) return '0:00'
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
-function toggleAudio(sample, idx) {
-  if (playingIdx.value === idx) {
-    audioObj?.pause()
-    playingIdx.value = null
-    return
-  }
-  if (audioObj) audioObj.pause()
-  playingIdx.value = idx
-  const url = assetHref(sample.ogg_url || sample.url)
-  audioObj = new Audio(url)
-  audioObj.addEventListener('timeupdate', () => { currentTime.value = audioObj.currentTime })
-  audioObj.addEventListener('loadedmetadata', () => { duration.value = audioObj.duration })
-  audioObj.addEventListener('ended', () => { playingIdx.value = null })
-  audioObj.play()
-}
-
-let progressPollInterval = null
-
-function createRequestId() {
-  return `gallery-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function stopReasoningPolling() {
-  if (progressPollInterval) { clearInterval(progressPollInterval); progressPollInterval = null; }
-}
-
-async function fetchReasoningProgress() {
-  if (!generationRequestId.value) return;
-  try {
-    const response = await fetch(`${apiBase.value}/generate/progress/${generationRequestId.value}`, {
-      headers: { Accept: 'application/json' }
-    });
-    if (!response.ok) return;
-    const payload = await response.json();
-    if (!payload?.ok) return;
-    reasoningPreview.value = String(payload.reasoning_preview || '').trim();
-    progressStage.value = String(payload.stage || '').trim();
-    if (payload.status === 'completed' || payload.status === 'error') stopReasoningPolling();
-  } catch (e) { reasoningPreview.value = 'CONNECTION LOST...'; }
-}
-
-function startReasoningPolling() {
-  stopReasoningPolling();
-  reasoningPreview.value = '';
-  progressStage.value = '';
-  progressPollInterval = setInterval(fetchReasoningProgress, 800);
-}
+// A pod finished a tool on an item: refresh the list and keep it selected.
+const stopItemUpdates = onItemUpdated((item) => { if (props.modelValue) load(item.basename) })
+onUnmounted(stopItemUpdates)
 
 const current = computed(() => items.value.find((item) => item.basename === selectedBasename.value) || null)
 const currentSummaryHtml = computed(() => {
@@ -576,8 +350,6 @@ watch(() => props.modelValue, (value) => { if (value) load(selectedBasename.valu
 onMounted(() => window.addEventListener('keydown', onKey))
 onUnmounted(() => {
   window.removeEventListener('keydown', onKey)
-  if (audioObj) audioObj.pause()
-  stopReasoningPolling()
 })
 </script>
 
@@ -636,18 +408,6 @@ onUnmounted(() => {
 .v-tag { font-size: 8px; color: #444; border: 1px solid #080808; padding: 1px 4px; cursor: pointer; }
 .v-tag.active { color: #fff; border-color: #444; }
 
-.dock-tools { flex: 0 0 auto; border-top: 1px solid #111; padding: 10px 15px; display: flex; flex-direction: column; gap: 8px; background: #020202; }
-.sound-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.sound-node { position: relative; background: #000; border: 1px solid #111; color: #ff9a2f; width: 32px; height: 32px; font-size: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.sound-node svg { width: 24px; height: 24px; }
-.s-idx { position: absolute; bottom: -2px; right: -2px; font-size: 7px; background: #000; color: #fff; width: 12px; height: 12px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-.sound-node.playing { background: rgba(255, 255, 255, 0.6); color: #000; border-color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.2); }
-.add-node { background: transparent; border: 1px dashed #333; color: #555; width: 22px; height: 22px; cursor: pointer; }
-.timer { font-size: 9px; color: #555; letter-spacing: 0.1em; }
-.tool-row { display: flex; flex-wrap: wrap; gap: 6px; }
-.pane-action { background: transparent; border: 1px solid #1a1a1a; color: #555; font-size: 8px; padding: 3px 6px; letter-spacing: 0.05em; cursor: pointer; }
-.pane-action:hover:not(:disabled) { color: #fff; border-color: #333; }
-.pane-action:disabled { opacity: 0.4; cursor: default; }
 
 .metadata { flex: 0 1 200px; border-top: 1px solid #111; overflow-y: auto; padding: 12px 15px; background: #000; }
 .meta-section { margin-bottom: 12px; }
@@ -655,17 +415,6 @@ onUnmounted(() => {
 .raw-text { font-size: 9px; line-height: 1.4; color: #666; white-space: pre-wrap; word-break: break-word; }
 .summary-text { font-size: 10px; line-height: 1.4; color: #888; }
 
-/* Sound generation dialog (small, stays modal) */
-.sub-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 4000; }
-.sub-modal { width: min(400px, 92vw); background: #000; border: 1px solid #111; padding: 20px; }
-.sub-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-.sub-modal-header h4 { font-size: 10px; letter-spacing: 0.2em; color: #fff; margin: 0; }
-.sub-modal-header button { background: transparent; border: none; color: #444; font-size: 18px; cursor: pointer; }
-.sub-modal-desc { font-size: 9px; color: #444; margin-bottom: 10px; }
-.sub-modal-textarea { width: 100%; height: 80px; background: #000; border: 1px solid #111; color: #eee; padding: 8px; font-size: 11px; resize: none; outline: none; margin-bottom: 15px; }
-.sub-modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
-.cancel-btn { background: transparent; border: 1px solid #111; color: #444; font-size: 9px; padding: 4px 10px; cursor: pointer; }
-.confirm-btn { background: #fff; color: #000; border: 1px solid #fff; font-size: 9px; padding: 4px 15px; font-weight: 700; cursor: pointer; }
 
 .process-footer { flex: 0 0 auto; padding: 6px 15px; background: #050505; border-top: 1px solid #111; }
 .terminal-line { font-size: 9px; color: #fff; letter-spacing: 0.05em; font-weight: 700; }
