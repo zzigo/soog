@@ -1462,8 +1462,9 @@ def build_plot_output_template():
         "from matplotlib.patches import Circle, Rectangle, Polygon, FancyArrowPatch\n"
         "plt.style.use('dark_background')\n"
         "fig, ax = plt.subplots(figsize=(10, 6))\n"
-        "# organogram drawing here\n"
+        "# organogram drawing here: primitive by instrument class, material colours, blue counts, arrows\n"
         "ax.set_aspect('equal')\n"
+        "ax.set_axis_off()\n"
         "```"
     )
 
@@ -1738,7 +1739,14 @@ def generate_with_image_required(
     raw_plot_response = ""
     plot_llm_meta = None
 
-    materials_prompt = get_specialized_prompt('materials')
+    materials_guidance = get_specialized_prompt('materials')
+    # prompt.txt (Mantle Hood rules, primitives, colour coding, one-shot) stays the primary
+    # system prompt; the materials guidance is appended for the Materials section only.
+    materials_prompt = (
+        f"{prompt_content}\n\n"
+        "### MATERIALS SECTION GUIDANCE (applies to the Materials list only)\n"
+        f"{materials_guidance}"
+    )
     stl_prompt_content = get_specialized_prompt('digitalFab')
 
     # We try max_attempts. If we are on the last attempt and still failing, 
@@ -2950,11 +2958,10 @@ def build_generation_inputs(prompt_content, prompt, refact_meta, context_text=""
         + "\n- The first python block must literally begin with `import matplotlib.pyplot as plt`."
         + "\n\nMandatory output template:"
         + f"\n{plot_output_template}"
-        + "\n\nOptional structured blueprint (use when dimensional pipe/component data is available):"
-        + "\n- Define dataclass PipeElement with: name, length_mm, diameter_mm, wall_thickness_mm, material, category, acoustic_target."
-        + "\n- Implement plot_geometry_vs_frequency(elements) with a 2x2 figure: length vs fundamental_frequency_hz (log-log), diameter vs fundamental_frequency_hz, histogram of wall_thickness_mm, scatter length vs diameter sized by wall_thickness_mm."
-        + "\n- Use seaborn-like aesthetics with standard matplotlib only."
-        + "\n- Include a __main__ example with 3-4 dummy elements and ensure plotting code is executed so the backend can render the image."
+        + "\n\nDesign rules (from the system prompt, restated):"
+        + "\n- Draw a schematic organogram, never a chart: no axes, no grids, no histograms, no scatter or log-log plots."
+        + "\n- Choose the primitive by instrument class (idiophone square, membranophone horizontal rectangle, chordophone vertical rectangle, aerophone circle, electronophone rhombus) and colour each part by its material."
+        + "\n- The drawing must differ with the instrument described: encode its parts, counts (small blue numbers), excitation and radiation (arrows) from the user's description."
         + refactor_clause
         + "\n\nDo not include any trimesh or STL code in this first call."
         + "\nDo not include any additional commentary after the matplotlib code block."
