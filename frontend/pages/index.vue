@@ -775,6 +775,9 @@
     <div v-if="uiVisible" class="footer">
       <div v-if="loading" class="loading">
         <div class="loading-status">{{ loadingStatus }}</div>
+        <div class="loading-bar" role="progressbar" :aria-valuenow="Math.round(progress)" aria-valuemin="0" aria-valuemax="100">
+          <div class="loading-bar__fill" :style="{ width: `${progress}%` }"></div>
+        </div>
         <div v-if="progressStage" class="progress-stage">{{ formatProgressStage(progressStage) }}</div>
         <div v-if="reasoningPreview" class="reasoning-preview" :title="progressStage || 'reasoning'">
           {{ reasoningPreview }}
@@ -875,7 +878,8 @@ let startLeft = 50;
 const loading = ref(false);
 const progress = ref(0);
 const elapsedMs = ref(0);
-const responseTimesMs = ref([]);
+const responseTimesByModel = ref({});
+const progressModel = ref('');
 const isReversioning = ref(false);
 const error = ref(null);
 const plotImage = ref(null);
@@ -946,7 +950,9 @@ const pendingRenderPrompt = ref('');
 const profileRefreshAttempted = ref(false);
 const isMobileOrTablet = ref(false);
 const showLightbox = ref(false);
-const RESPONSE_TIMES_KEY = 'soog_response_times_ms';
+const RESPONSE_TIMES_KEY = 'soog_response_times_by_model.v1';
+const DEFAULT_RESPONSE_MS = 180000;
+const MAX_RESPONSE_MS = 60 * 60 * 1000;
 const MAX_RESPONSE_SAMPLES = 20;
 const PENDING_RENDER_KEY = 'soog.pending-render.v1';
 const WORKSPACE_PRESET_CONFIG = {
@@ -1000,11 +1006,23 @@ const quotaTitle = computed(() => {
   return `Daily ${daily.used}/${daily.limit ?? 'unlimited'} · Weekly ${weekly.used}/${weekly.limit ?? 'unlimited'}`;
 });
 
-const averageResponseMs = computed(() => {
-  if (!responseTimesMs.value.length) return 20000;
-  const total = responseTimesMs.value.reduce((sum, ms) => sum + ms, 0);
-  return total / responseTimesMs.value.length;
+const median = (values) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+
+// Typical duration for the model of the running request: median of its own successful runs.
+// Without history for that model, fall back to the median of all models, then a conservative default.
+const typicalResponse = computed(() => {
+  const byModel = responseTimesByModel.value;
+  const own = byModel[progressModel.value || currentModel.value] || [];
+  if (own.length) return { ms: median(own), basis: `${own.length} run${own.length > 1 ? 's' : ''}` };
+  const all = Object.values(byModel).flat();
+  if (all.length) return { ms: median(all), basis: 'other models' };
+  return { ms: DEFAULT_RESPONSE_MS, basis: 'no history' };
 });
+const averageResponseMs = computed(() => typicalResponse.value.ms);
 
 const loadingStatus = computed(() => {
   const pct = Math.round(progress.value);
@@ -1013,7 +1031,8 @@ const loadingStatus = computed(() => {
   const etaMs = Math.max(0, averageResponseMs.value - elapsedMs.value);
   const etaSec = (etaMs / 1000).toFixed(1);
   const prefix = isReversioning.value ? '[reversion] ' : '';
-  return `${prefix}Processing... ${pct}% | ${elapsedSec}s elapsed | avg ${avgSec}s | ETA ${etaSec}s`;
+  const eta = elapsedMs.value > averageResponseMs.value ? 'over typical' : `ETA ${etaSec}s`;
+  return `${prefix}Processing... ${pct}% | ${elapsedSec}s elapsed | typical ${avgSec}s (${typicalResponse.value.basis}) | ${eta}`;
 });
 
 const shortModelLabel = computed(() => {
@@ -2063,38 +2082,48 @@ const loadResponseTimeHistory = () => {
     const raw = window.localStorage.getItem(RESPONSE_TIMES_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return;
-    responseTimesMs.value = parsed
-      .filter((n) => Number.isFinite(n) && n > 0 && n < 10 * 60 * 1000)
-      .slice(-MAX_RESPONSE_SAMPLES);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+    const clean = {};
+    for (const [model, values] of Object.entries(parsed)) {
+      if (!Array.isArray(values)) continue;
+      const kept = values
+        .filter((n) => Number.isFinite(n) && n > 0 && n < MAX_RESPONSE_MS)
+        .slice(-MAX_RESPONSE_SAMPLES);
+      if (kept.length) clean[model] = kept;
+    }
+    responseTimesByModel.value = clean;
   } catch {
-    responseTimesMs.value = [];
+    responseTimesByModel.value = {};
   }
 };
 
 const saveResponseTimeHistory = () => {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(RESPONSE_TIMES_KEY, JSON.stringify(responseTimesMs.value.slice(-MAX_RESPONSE_SAMPLES)));
+    window.localStorage.setItem(RESPONSE_TIMES_KEY, JSON.stringify(responseTimesByModel.value));
   } catch {
     // ignore storage write errors
   }
 };
 
-const registerResponseTime = (ms) => {
-  if (!Number.isFinite(ms) || ms <= 0) return;
-  responseTimesMs.value.push(ms);
-  if (responseTimesMs.value.length > MAX_RESPONSE_SAMPLES) {
-    responseTimesMs.value = responseTimesMs.value.slice(-MAX_RESPONSE_SAMPLES);
-  }
+const registerResponseTime = (model, ms) => {
+  const key = String(model || '').trim();
+  if (!key || !Number.isFinite(ms) || ms <= 0 || ms >= MAX_RESPONSE_MS) return;
+  const next = [...(responseTimesByModel.value[key] || []), ms].slice(-MAX_RESPONSE_SAMPLES);
+  responseTimesByModel.value = { ...responseTimesByModel.value, [key]: next };
   saveResponseTimeHistory();
 };
 
 // Progress based on real elapsed time and rolling average
 let progressInterval;
 let requestStartAt = 0;
+let progressSucceeded = false;
+let progressResultModel = '';
 const startProgress = () => {
   clearInterval(progressInterval);
+  progressSucceeded = false;
+  progressResultModel = '';
+  progressModel.value = currentModel.value;
   requestStartAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   elapsedMs.value = 0;
   progress.value = 0;
@@ -2118,7 +2147,8 @@ const completeProgress = () => {
   const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   if (requestStartAt > 0) {
     elapsedMs.value = Math.max(0, now - requestStartAt);
-    registerResponseTime(elapsedMs.value);
+    // Only successful generations teach the estimator; failures would drag the average down.
+    if (progressSucceeded) registerResponseTime(progressResultModel || progressModel.value, elapsedMs.value);
   }
   clearInterval(progressInterval);
   progress.value = 100;
@@ -2599,6 +2629,8 @@ const handleEvaluate = async (selectedText) => {
 
   try {
     const data = await callOnce();
+    progressSucceeded = true;
+    progressResultModel = String(data?.llm_model || '').trim();
     void refreshProfile(apiBase.value).catch(() => {});
     const requestEndedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     const clientElapsed = Math.max(0, requestEndedAt - requestStartedAt);
@@ -3119,6 +3151,20 @@ watch(
   color: rgba(255, 255, 255, 0.9);
 }
 
+.loading-bar {
+  margin-top: 5px;
+  width: min(62vw, 420px);
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.loading-bar__fill {
+  height: 100%;
+  background: rgba(150, 150, 150, 0.55);
+  transition: width 0.25s linear;
+}
+
 .progress-stage {
   margin-top: 3px;
   color: rgba(255, 255, 255, 0.46);
@@ -3292,6 +3338,10 @@ watch(
 
 .results-panel--background .workspace-stage {
   background: transparent;
+}
+
+.workspace-stage--fullscreen .panel-placeholder {
+  display: none;
 }
 
 .workspace-stage--fullscreen {
