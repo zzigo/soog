@@ -32,6 +32,12 @@ cd $REPO_DIR; or exit 1
 echo "→ Backing up persistent data to $BACKUP_DIR"
 mkdir -p "$BACKUP_DIR/backend"; or exit 1
 
+# Keep only the 3 newest backups: every deploy copies the offload data and old copies fill the disk
+for old_backup in (ls -1dt $BACKUP_ROOT/deploy-backup-* 2>/dev/null | tail -n +4)
+    echo "  - Pruning old backup $old_backup"
+    rm -rf $old_backup
+end
+
 if test -d $OFFLOAD_DIR_BACKEND
     echo "  - Backing up backend/offload"
     rsync -rtv --no-o --no-g "$OFFLOAD_DIR_BACKEND/" "$BACKUP_DIR/backend/offload/"; or exit 1
