@@ -1,4 +1,6 @@
 <template>
+  <div class="usage-shell">
+  <NavRail />
   <main class="usage-route">
     <div v-if="checkingProfile || (!profileChecked && isLoading)" class="usage-route-state">Loading admin access…</div>
 
@@ -31,6 +33,7 @@
       @close="navigateTo('/')"
     />
   </main>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -88,6 +91,11 @@ watch(
 </script>
 
 <style scoped>
+.usage-shell {
+  padding-left: 44px;
+  box-sizing: border-box;
+}
+
 .usage-route {
   min-height: 100vh;
   background: #050505;

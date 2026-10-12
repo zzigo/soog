@@ -1,5 +1,6 @@
 <template>
   <div class="concert-page">
+    <NavRail auto-hide />
     <ClientOnly>
       <ConcertSimulator />
     </ClientOnly>
