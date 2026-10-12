@@ -70,12 +70,6 @@
         </div>
       </div>
 
-    <footer v-if="isProcessingAny" class="process-footer">
-      <div class="terminal-line">
-        <span class="blink">_</span> {{ consoleDisplayMessage }}
-        <span v-if="reasoningPreview" class="reason-txt">{{ reasoningPreview }}</span>
-      </div>
-    </footer>
   </aside>
 </template>
 
@@ -109,17 +103,9 @@ const listContainer = ref(null)
 // Tool state (sketch, 3D, acoustics, sound) lives in useItemTools so the workspace pods can drive it too.
 const {
   remakingSketch, generatingSound, remakingModulus, remakingLRM,
-  isBusy: isProcessingAny, progressStage, reasoningPreview, onItemUpdated,
+  isBusy: isProcessingAny, onItemUpdated,
 } = useItemTools()
 
-const consoleDisplayMessage = computed(() => {
-  if (progressStage.value) return formatProgressStage(progressStage.value)
-  if (generatingSound.value) return 'SYNTHESIZING AUDIO...'
-  if (remakingSketch.value) return 'INFERRING SKETCH...'
-  if (remakingModulus.value) return 'SOLVING ACOUSTICS...'
-  if (remakingLRM.value) return 'RECONSTRUCTING 3D...'
-  return 'PROCESSING...'
-})
 
 // A pod finished a tool on an item: refresh the list and keep it selected.
 const stopItemUpdates = onItemUpdated((item) => { if (props.modelValue) load(item.basename) })
@@ -416,11 +402,6 @@ onUnmounted(() => {
 .summary-text { font-size: 10px; line-height: 1.4; color: #888; }
 
 
-.process-footer { flex: 0 0 auto; padding: 6px 15px; background: #050505; border-top: 1px solid #111; }
-.terminal-line { font-size: 9px; color: #fff; letter-spacing: 0.05em; font-weight: 700; }
-.blink { animation: term-blink 1s infinite; }
-@keyframes term-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-.reason-txt { display: block; color: #555; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 @media (max-width: 768px) {
   .gallery-dock { left: 0; right: 0; width: auto; border-right: none; }
