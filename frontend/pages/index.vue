@@ -270,27 +270,6 @@
                   >
                     {{ loading || remakingSketch ? '…' : 'REGEN SKETCH' }}
                   </button>
-                  <template v-if="pane.view === 'sound' && itemTarget">
-                    <button
-                      v-for="(sample, sampleIdx) in soundSamples"
-                      :key="sampleIdx"
-                      class="pane-action sample-btn"
-                      :class="{ playing: playingIdx === sampleIdx }"
-                      :title="`Play sample ${sampleIdx + 1}`"
-                      @click="toggleAudio(sample, sampleIdx)"
-                    >
-                      {{ playingIdx === sampleIdx ? '❚❚' : '▶' }}{{ sampleIdx + 1 }}
-                    </button>
-                    <span v-if="playingIdx !== null" class="pane-timer">{{ formatAudioTime(currentTime) }}/{{ formatAudioTime(duration) }}</span>
-                    <button
-                      class="pane-action"
-                      title="Generate sound samples for this item"
-                      :disabled="generatingSound"
-                      @click="openSoundGenerator(itemTarget)"
-                    >
-                      {{ generatingSound ? '…' : '+ SOUND' }}
-                    </button>
-                  </template>
                   <button
                     v-if="pane.view === 'acoustic' && itemTarget"
                     class="pane-action"
@@ -383,6 +362,28 @@
                 </template>
 
                 <template v-else-if="pane.view === 'sound'">
+                  <div class="sound-pane">
+                    <div v-if="!itemTarget" class="panel-placeholder">Sound samples belong to a gallery item. Render or load one first.</div>
+                    <template v-else>
+                      <div v-if="soundSamples.length" class="sound-list">
+                        <div v-for="(sample, sampleIdx) in soundSamples" :key="sampleIdx" class="sound-row" :class="{ playing: playingIdx === sampleIdx }">
+                          <button class="pane-action sample-btn" :title="`Play sample ${sampleIdx + 1}`" @click="toggleAudio(sample, sampleIdx)">
+                            {{ playingIdx === sampleIdx ? '❚❚' : '▶' }}{{ sampleIdx + 1 }}
+                          </button>
+                          <span class="sound-row__prompt" :title="sample.prompt">{{ sample.prompt || 'no prompt stored' }}</span>
+                          <span v-if="playingIdx === sampleIdx" class="pane-timer">{{ formatAudioTime(currentTime) }}/{{ formatAudioTime(duration) }}</span>
+                          <a class="pane-action" :href="assetHref(sample.url)" download title="Download WAV">WAV</a>
+                        </div>
+                      </div>
+                      <div v-else class="panel-placeholder">No sound samples yet for this item.</div>
+                      <button class="pane-action sound-pane__generate" :disabled="generatingSound" @click="openSoundGenerator(itemTarget)">
+                        {{ generatingSound ? 'SYNTHESIZING…' : '+ SOUND' }}
+                      </button>
+                    </template>
+                  </div>
+                </template>
+
+                <template v-else-if="pane.view === 'summary'">
                   <div class="sound-pane">
                     <div v-if="soundPaneFacts.length" class="modulus-readout sound-pane__facts">
                       <span v-for="fact in soundPaneFacts" :key="fact">{{ fact }}</span>
@@ -888,17 +889,8 @@
         />
       </div>
     </Transition>
+    <ProcessDock v-if="uiVisible" :inset="railExpanded ? 210 : 44" :bottom="17" />
     <div v-if="uiVisible" class="footer">
-      <div v-if="loading" class="loading">
-        <div class="loading-status">{{ loadingStatus }}</div>
-        <div class="loading-bar" role="progressbar" :aria-valuenow="Math.round(progress)" aria-valuemin="0" aria-valuemax="100">
-          <div class="loading-bar__fill" :style="{ width: `${progress}%` }"></div>
-        </div>
-        <div v-if="progressStage" class="progress-stage">{{ formatProgressStage(progressStage) }}</div>
-        <div v-if="reasoningPreview" class="reasoning-preview" :title="progressStage || 'reasoning'">
-          {{ reasoningPreview }}
-        </div>
-      </div>
       <button 
         v-if="isMobileOrTablet" 
         @click="handleMobileEvaluate"
@@ -982,6 +974,8 @@ import { useAcousticSonification } from '~/composables/useAcousticSonification';
 import { useApi } from '~/composables/useApi';
 import { useWorkspace } from '~/composables/useWorkspace';
 import { useItemTools } from '~/composables/useItemTools';
+import { useProcesses } from '~/composables/useProcesses';
+import { shortLabel } from '~/composables/processMath';
 import { buildServerFacts, buildStageRows } from '~/composables/sessionTelemetry';
 import { useSoogAuth } from '~/composables/useSoogAuth';
 import { runAcousticSimulation } from '~/utils/acousticSimulation';
@@ -1044,8 +1038,9 @@ const {
   remakingSketch, remakingLRM, remakingModulus, generatingSound,
   soundModalOpen, soundPrompt, openSoundGenerator, closeSoundGenerator, runSoundGenerator,
   playingIdx, currentTime, duration, toggleAudio, toolError,
-  remakeSketch: remakeItemSketch, buildMesh, calcAcoustics, onItemUpdated,
+  remakeSketch: remakeItemSketch, buildMesh, calcAcoustics, onItemUpdated, assetHref,
 } = useItemTools();
+const { startProcess, finishProcess } = useProcesses();
 const loading = ref(false);
 const progress = ref(0);
 const elapsedMs = ref(0);
@@ -1159,16 +1154,6 @@ const typicalResponse = computed(() => {
 });
 const averageResponseMs = computed(() => typicalResponse.value.ms);
 
-const loadingStatus = computed(() => {
-  const pct = Math.round(progress.value);
-  const elapsedSec = (elapsedMs.value / 1000).toFixed(1);
-  const avgSec = (averageResponseMs.value / 1000).toFixed(1);
-  const etaMs = Math.max(0, averageResponseMs.value - elapsedMs.value);
-  const etaSec = (etaMs / 1000).toFixed(1);
-  const prefix = isReversioning.value ? '[reversion] ' : '';
-  const eta = elapsedMs.value > averageResponseMs.value ? 'over typical' : `ETA ${etaSec}s`;
-  return `${prefix}Processing... ${pct}% | ${elapsedSec}s elapsed | typical ${avgSec}s (${typicalResponse.value.basis}) | ${eta}`;
-});
 
 const shortModelLabel = computed(() => {
   const model = currentModel.value || 'model?';
@@ -1849,7 +1834,7 @@ function pickPreferredWorkspaceView() {
   if (activeModulusData.value) return 'acoustic';
   if (stlUrl.value) return 'geometry';
   if (sketchImage.value) return 'sketch';
-  if (summary.value || materialsText.value) return 'sound';
+  if (summary.value || materialsText.value) return 'summary';
   return 'organogram';
 }
 
@@ -2422,6 +2407,10 @@ async function remakeSketch() {
   if (loading.value || !hasResults.value) return
   loading.value = true
   progressStage.value = 'regenerating sketch'
+  const sketchProcessId = createRequestId()
+  startProcess({ id: sketchProcessId, kind: 'sketch', label: 'sketch (unsaved render)', cancellable: false })
+  let sketchOutcome = 'completed'
+  let sketchError = ''
   try {
     const prompt = editorRef.value?.aceEditor()?.getValue() || ''
     const summaryText = summary.value || ''
@@ -2450,7 +2439,10 @@ async function remakeSketch() {
     sketchModel.value = data.sketch_model || ''
   } catch (e) {
     error.value = `Sketch remake failed: ${e.message}`
+    sketchOutcome = 'error'
+    sketchError = e.message
   } finally {
+    finishProcess(sketchProcessId, sketchOutcome, sketchError)
     loading.value = false
     progressStage.value = ''
   }
@@ -2788,6 +2780,16 @@ const handleEvaluate = async (selectedText) => {
   startProgress();
   startProcessing();
   startReasoningPolling();
+  const processId = generationRequestId.value;
+  let processOutcome = 'completed';
+  let processError = '';
+  startProcess({
+    id: processId,
+    kind: 'render',
+    label: isReversioning.value ? `reversion ${shortLabel(selectedText, 30)}` : shortLabel(selectedText),
+    model: currentModel.value,
+    estimateMs: averageResponseMs.value,
+  });
 
     async function pollGenerateResult(requestId) {
       const limitMs = Math.max(getGenerateFetchTimeoutMs(), 45 * 60 * 1000);
@@ -2850,6 +2852,11 @@ const handleEvaluate = async (selectedText) => {
           errorData = JSON.parse(text);
         } catch {
           errorData = {};
+        }
+        if (response.status === 499) {
+          const cancelled = new Error('Cancelled');
+          cancelled.cancelled = true;
+          throw cancelled;
         }
         if (response.status === 401) {
           pendingRenderPrompt.value = selectedText.trim();
@@ -3036,9 +3043,16 @@ const handleEvaluate = async (selectedText) => {
       editorRef.value.addToEditor(codeBundle, 'code');
     }
   } catch (err) {
-    console.error(err);
-    error.value = err.message;
+    if (err?.cancelled) {
+      processOutcome = 'cancelled';
+    } else {
+      console.error(err);
+      error.value = err.message;
+      processOutcome = 'error';
+      processError = err.message;
+    }
   } finally {
+    finishProcess(processId, processOutcome, processError);
     await fetchReasoningProgress();
     stopReasoningPolling();
     generationRequestId.value = '';
@@ -3450,48 +3464,11 @@ watch(
   z-index: 1000;
 }
 
-.loading {
-  margin-right: auto;
-}
 
-.loading-status {
-  color: rgba(255, 255, 255, 0.9);
-}
 
-.loading-bar {
-  margin-top: 5px;
-  width: min(62vw, 420px);
-  height: 3px;
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-}
 
-.loading-bar__fill {
-  height: 100%;
-  background: rgba(150, 150, 150, 0.55);
-  transition: width 0.25s linear;
-}
 
-.progress-stage {
-  margin-top: 3px;
-  color: rgba(255, 255, 255, 0.46);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
 
-.reasoning-preview {
-  margin-top: 4px;
-  max-width: min(62vw, 860px);
-  color: rgba(255, 255, 255, 0.3);
-  font-size: 11px;
-  line-height: 1.3;
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
 
 .mobile-evaluate-btn {
   background: #4CAF50;
@@ -3946,6 +3923,38 @@ watch(
 
 .sound-pane__facts {
   margin-bottom: 2px;
+}
+
+.sound-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sound-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid #111;
+}
+
+.sound-row.playing .sound-row__prompt {
+  color: #fff;
+}
+
+.sound-row__prompt {
+  flex: 1;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sound-pane__generate {
+  align-self: flex-start;
 }
 
 .workspace-pane__body .plot-image {

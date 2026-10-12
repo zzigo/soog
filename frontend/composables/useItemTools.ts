@@ -1,5 +1,7 @@
 import { computed, ref } from 'vue';
 import { useApi } from '~/composables/useApi';
+import { useProcesses } from '~/composables/useProcesses';
+import type { ProcessKind } from '~/composables/processMath';
 
 // Per-item tools (regenerate sketch, build 3D, acoustics, sound samples) shared by the gallery
 // dock and the workspace pods. Each tool works on a gallery basename, so it applies to whatever
@@ -21,6 +23,12 @@ async function readJsonSafe(res: Response) {
   }
 }
 
+class CancelledError extends Error {
+  constructor() {
+    super('Cancelled');
+  }
+}
+
 function createItemTools() {
   const { apiBase } = useApi();
   const { authHeaders } = useSoogAuth();
@@ -29,9 +37,8 @@ function createItemTools() {
   const generatingSound = ref(false);
   const remakingModulus = ref(false);
   const remakingLRM = ref(false);
-  const progressStage = ref('');
-  const reasoningPreview = ref('');
   const toolError = ref('');
+  const { startProcess, finishProcess } = useProcesses();
 
   const soundModalOpen = ref(false);
   const soundPrompt = ref('');
@@ -43,9 +50,6 @@ function createItemTools() {
   let audioObj: HTMLAudioElement | null = null;
 
   const listeners = new Set<ItemListener>();
-  let requestId = '';
-  let pollTimer: ReturnType<typeof setInterval> | null = null;
-
   const isBusy = computed(() => (
     generatingSound.value || remakingSketch.value || remakingModulus.value || remakingLRM.value
   ));
@@ -65,36 +69,6 @@ function createItemTools() {
     return base + url;
   }
 
-  function stopPolling() {
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = null;
-  }
-
-  async function pollOnce() {
-    if (!requestId) return;
-    try {
-      const response = await fetch(`${apiBase.value}/generate/progress/${requestId}`, { headers: { Accept: 'application/json' } });
-      if (!response.ok) return;
-      const payload = await response.json();
-      if (!payload?.ok) return;
-      reasoningPreview.value = String(payload.reasoning_preview || '').trim();
-      progressStage.value = String(payload.stage || '').trim();
-      if (payload.status === 'completed' || payload.status === 'error') stopPolling();
-    } catch {
-      reasoningPreview.value = 'CONNECTION LOST...';
-    }
-  }
-
-  function startPolling() {
-    stopPolling();
-    requestId = `gallery-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    reasoningPreview.value = '';
-    progressStage.value = '';
-    toolError.value = '';
-    pollTimer = setInterval(pollOnce, 800);
-    return requestId;
-  }
-
   // Reload the item from the gallery list and tell every listener (the pods, the dock).
   async function refreshItem(basename: string) {
     const res = await fetch(`${apiBase.value}/gallery/list`);
@@ -104,18 +78,30 @@ function createItemTools() {
     return item || null;
   }
 
-  async function runTool(flag: { value: boolean }, item: ToolItem | null, job: (id: string) => Promise<void>) {
+  const newRequestId = () => `gallery-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+  interface ToolMeta { kind: ProcessKind; model: string; what: string }
+
+  async function runTool(flag: { value: boolean }, item: ToolItem | null, meta: ToolMeta, job: (id: string) => Promise<void>) {
     if (!item?.basename || flag.value) return;
     flag.value = true;
-    const id = startPolling();
+    toolError.value = '';
+    const id = newRequestId();
+    startProcess({ id, kind: meta.kind, label: `${meta.what} ${item.basename}`, model: meta.model });
     try {
       await job(id);
+      finishProcess(id, 'completed');
       await refreshItem(item.basename);
     } catch (error) {
-      toolError.value = error instanceof Error ? error.message : String(error);
+      if (error instanceof CancelledError) {
+        finishProcess(id, 'cancelled');
+      } else {
+        const message = error instanceof Error ? error.message : String(error);
+        toolError.value = message;
+        finishProcess(id, 'error', message);
+      }
     } finally {
       flag.value = false;
-      stopPolling();
     }
   }
 
@@ -125,25 +111,28 @@ function createItemTools() {
     body: JSON.stringify(body),
   });
 
-  const remakeSketch = (item: ToolItem | null) => runTool(remakingSketch, item, async (id) => {
+  const remakeSketch = (item: ToolItem | null) => runTool(remakingSketch, item, { kind: 'sketch', model: '', what: 'sketch' }, async (id) => {
     const res = await post(`/gallery/item/${item!.basename}/remake_sketch`, { request_id: id });
+    if (res.status === 499) throw new CancelledError();
     if (!res.ok) throw new Error('Failed to remake sketch');
   });
 
-  const buildMesh = (item: ToolItem | null) => runTool(remakingLRM, item, async (id) => {
+  const buildMesh = (item: ToolItem | null) => runTool(remakingLRM, item, { kind: 'mesh', model: 'TripoSR', what: '3D' }, async (id) => {
     const res = await post(`/gallery/item/${item!.basename}/generate_lrm`, { request_id: id });
+    if (res.status === 499) throw new CancelledError();
     if (!res.ok) {
       const payload = await readJsonSafe(res);
       throw new Error(payload.error || 'Failed to generate high-res mesh');
     }
   });
 
-  const calcAcoustics = (item: ToolItem | null) => runTool(remakingModulus, item, async (id) => {
+  const calcAcoustics = (item: ToolItem | null) => runTool(remakingModulus, item, { kind: 'acoustics', model: 'SOT-A solver', what: 'acoustics' }, async (id) => {
     const res = await post('/generate', {
       prompt: `[MODULUS] ${item!.prompt || ''}`,
       request_id: id,
       gallery_update: item!.basename,
     });
+    if (res.status === 499) throw new CancelledError();
     if (!res.ok) throw new Error('Failed to run simulation');
   });
 
@@ -156,8 +145,10 @@ function createItemTools() {
         if (!res.ok) continue;
         const payload = await readJsonSafe(res);
         if (payload?.status === 'completed') return;
+        if (payload?.status === 'cancelled') throw new CancelledError();
         if (payload?.status === 'error') throw new Error(payload.reasoning_preview || 'Sound generation failed');
       } catch (error) {
+        if (error instanceof CancelledError) throw error;
         if (error instanceof Error && error.message && !/fetch|network|Failed/i.test(error.message)) throw error;
       }
     }
@@ -178,7 +169,7 @@ function createItemTools() {
   async function runSoundGenerator() {
     const item = soundTarget;
     soundModalOpen.value = false;
-    await runTool(generatingSound, item, async (id) => {
+    await runTool(generatingSound, item, { kind: 'sound', model: '', what: 'sound' }, async (id) => {
       const res = await post(`/gallery/item/${item!.basename}/generate_sound`, { request_id: id, prompt: soundPrompt.value });
       const payload = await readJsonSafe(res);
       if (!res.ok) throw new Error(payload.error || 'Failed to generate sound');
@@ -208,7 +199,7 @@ function createItemTools() {
 
   return {
     remakingSketch, generatingSound, remakingModulus, remakingLRM, isBusy,
-    progressStage, reasoningPreview, toolError,
+    toolError,
     soundModalOpen, soundPrompt, openSoundGenerator, closeSoundGenerator, runSoundGenerator,
     playingIdx, currentTime, duration, toggleAudio, stopAudio,
     remakeSketch, buildMesh, calcAcoustics, onItemUpdated, assetHref,

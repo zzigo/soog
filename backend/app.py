@@ -13,6 +13,7 @@ from matplotlib.patches import Arc, Circle, Ellipse, FancyArrowPatch, Polygon, R
 import numpy as np
 from io import BytesIO
 import base64
+import functools
 import os
 import logging
 import re
@@ -94,6 +95,15 @@ SOUND_PIPELINE = None
 SOUND_PIPELINE_MODEL = None
 GENERATION_PROGRESS = {}
 GENERATION_PROGRESS_LOCK = threading.Lock()
+TERMINAL_STATUSES = ('completed', 'error', 'cancelled')
+
+
+class GenerationCancelled(BaseException):
+    """Raised inside a running job once its owner asked to cancel it.
+
+    A BaseException on purpose: the pipeline wraps many calls in ``except Exception`` with
+    fallbacks, and a cancelled job must not fall back to something else.
+    """
 app = Flask(__name__)
 app.url_map.strict_slashes = False
 CORS(app, resources={
@@ -210,6 +220,9 @@ def update_generation_progress(request_id: str, **fields):
     with GENERATION_PROGRESS_LOCK:
         _trim_generation_progress_locked(now_ts)
         current = dict(GENERATION_PROGRESS.get(request_id) or {})
+        if current.get('cancel_requested') and fields.get('status') not in TERMINAL_STATUSES:
+            # Cooperative cancellation: the job stops at its next progress update.
+            raise GenerationCancelled(request_id)
         started_at = current.setdefault('started_at', now_ts)
         events = list(current.get('events') or [])
         current.update(fields)
@@ -241,6 +254,36 @@ def get_generation_progress(request_id: str):
         if not current:
             return None
         return dict(current)
+
+
+def request_generation_cancel(request_id: str):
+    """Flag a running request for cancellation. Returns its status, or None when unknown."""
+    if not request_id:
+        return None
+    with GENERATION_PROGRESS_LOCK:
+        current = GENERATION_PROGRESS.get(request_id)
+        if not current:
+            return None
+        if current.get('status') in TERMINAL_STATUSES:
+            return current.get('status')
+        current['cancel_requested'] = True
+        current['reasoning_preview'] = 'Cancelling: the job stops at its next step.'
+        current['updated_at'] = time.time()
+        GENERATION_PROGRESS[request_id] = current
+        return 'cancelling'
+
+
+def cancellable(view):
+    """Turn GenerationCancelled raised inside a view into a 499 response."""
+    @functools.wraps(view)
+    def wrapped(*args, **kwargs):
+        try:
+            return view(*args, **kwargs)
+        except GenerationCancelled as cancelled:
+            request_id = str(cancelled.args[0]) if cancelled.args else ''
+            update_generation_progress(request_id, stage='cancelled', status='cancelled', reasoning_preview='Cancelled.')
+            return jsonify({'error': 'Cancelled', 'cancelled': True}), 499
+    return wrapped
 
 
 def _env_int(name: str, default: int, min_value: int = None, max_value: int = None) -> int:
@@ -2951,6 +2994,16 @@ def generate_progress(request_id):
     return jsonify(payload)
 
 
+@app.route('/api/generate/cancel/<string:request_id>', methods=['POST'])
+@require_auth()
+def generate_cancel(request_id):
+    """Ask a running job to stop. It stops at its next progress update, not mid-inference."""
+    state = request_generation_cancel(request_id)
+    if state is None:
+        return jsonify({'ok': False, 'status': 'missing'}), 404
+    return jsonify({'ok': True, 'status': state})
+
+
 @app.route('/api/admin/server-metrics', methods=['GET'])
 @require_auth(admin=True)
 def admin_server_metrics():
@@ -3246,6 +3299,7 @@ def generate_result(request_id):
 @app.route('/api/generate', methods=['POST'])
 @log_activity('generate')
 @metered_action('organogram')
+@cancellable
 def generate():
     data = request.get_json(silent=True) or {}
     request_id = str((data or {}).get('request_id') or '').strip()
@@ -3624,6 +3678,7 @@ def generate_sketch():
 @app.route('/api/gallery/item/<basename>/remake_sketch', methods=['POST'])
 @log_activity('remake_sketch')
 @metered_action('remake_sketch', charged=False)
+@cancellable
 def remake_sketch(basename: str):
     """
     Regenerate the diffusion sketch for an existing gallery item.
@@ -3639,7 +3694,7 @@ def remake_sketch(basename: str):
         return jsonify({'error': 'Gallery item not found'}), 404
 
     try:
-        update_generation_progress(request_id, stage='loading_metadata', status='running')
+        update_generation_progress(request_id, stage='loading_metadata', status='running', model=get_sketch_config()['model_id'])
         with open(meta_path, 'r', encoding='utf-8') as f:
             meta = json.load(f)
 
@@ -3733,6 +3788,8 @@ def _run_sound_job(basename, meta_path, prompt, summary_text, materials_text, re
         with open(meta_path, 'w', encoding='utf-8') as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
         update_generation_progress(request_id, stage='completed', status='completed')
+    except GenerationCancelled:
+        update_generation_progress(request_id, stage='cancelled', status='cancelled', reasoning_preview='Cancelled.')
     except Exception as e:
         logging.error(f"Error generating sound for {basename}: {e}")
         update_generation_progress(request_id, stage='error', status='error', reasoning_preview=str(e)[:300])
@@ -3775,7 +3832,7 @@ def generate_sound(basename: str):
             return jsonify({'error': 'Sound generation is already running for this item'}), 409
         SOUND_JOBS[basename] = request_id or True
 
-    update_generation_progress(request_id, stage='sound_queued', status='running')
+    update_generation_progress(request_id, stage='sound_queued', status='running', model=get_audio_config()['model_id'])
     threading.Thread(
         target=_run_sound_job,
         args=(basename, meta_path, prompt, summary_text, materials_text, request_id),
@@ -4201,6 +4258,7 @@ def gallery_rename_group(group_id):
 @app.route('/api/gallery/item/<basename>/generate_lrm', methods=['POST'])
 @log_activity('generate_lrm')
 @metered_action('lrm', charged=False)
+@cancellable
 def generate_lrm(basename):
     """
     Triggers High-Fidelity 3D Reconstruction (LRM) using InstantMesh/TripoSR

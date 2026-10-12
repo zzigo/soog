@@ -43,6 +43,7 @@ const CORE_VIEWS: WorkspaceView[] = [
   { key: 'auto', label: 'Auto Route' },
   { key: 'organogram', label: 'Organogram' },
   { key: 'sound', label: 'Sound' },
+  { key: 'summary', label: 'Summary' },
   { key: 'geometry', label: '3D Object' },
   { key: 'acoustic', label: 'Acoustic' },
   { key: 'sketch', label: 'Sketch' },
