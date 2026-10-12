@@ -2511,6 +2511,23 @@ const handleEvaluate = async (selectedText) => {
   startProcessing();
   startReasoningPolling();
 
+    async function pollGenerateResult(requestId) {
+      const limitMs = Math.max(getGenerateFetchTimeoutMs(), 45 * 60 * 1000);
+      const started = Date.now();
+      while (Date.now() - started < limitMs) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        try {
+          const res = await fetch(`${apiBase.value}/generate/result/${requestId}`, {
+            headers: { 'Accept': 'application/json' }
+          });
+          if (res.status !== 202) return res;
+        } catch {
+          // transient network error: keep polling
+        }
+      }
+      throw new Error('Generation timed out while waiting for the result.');
+    }
+
     async function callOnce() {
       const timeoutMs = getGenerateFetchTimeoutMs();
       const controller = timeoutMs > 0 ? new AbortController() : null;
@@ -2518,7 +2535,7 @@ const handleEvaluate = async (selectedText) => {
       let response;
       try {
         const secureHeaders = await authHeaders();
-        response = await fetch(`${apiBase.value}/generate`, {
+        response = await fetch(`${apiBase.value}/generate/start`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -2539,7 +2556,13 @@ const handleEvaluate = async (selectedText) => {
       } finally {
         if (timeoutId) clearTimeout(timeoutId);
       }
-      
+
+      // The backend runs the generation as a background job (202); poll for the result so the
+      // proxy's 120 s read timeout (HTTP 524) never applies to a slow model.
+      if (response.status === 202) {
+        response = await pollGenerateResult(generationRequestId.value);
+      }
+
       // Read body only once as text
       const text = await response.text();
       

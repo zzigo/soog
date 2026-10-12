@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, make_response, copy_current_request_context
 from flask_cors import CORS
 from dotenv import load_dotenv
 from logger import log_activity, get_logs, format_logs_html
@@ -67,6 +67,7 @@ logging.basicConfig(
 load_dotenv()
 
 from auth_usage import (
+    AuthError,
     authenticate_request,
     get_identity_payload,
     init_usage_db,
@@ -3040,6 +3041,80 @@ def bench_generate():
         'llm_endpoint': (llm_meta or {}).get('endpoint'),
         'elapsed_ms': int((time.perf_counter() - started) * 1000),
     })
+
+
+GENERATE_JOBS = {}
+GENERATE_JOBS_LOCK = threading.Lock()
+GENERATE_JOB_TTL_SEC = 3600
+
+
+def _trim_generate_jobs_locked(now_ts):
+    for key in [k for k, v in GENERATE_JOBS.items() if v.get('finished_at') and now_ts - v['finished_at'] > GENERATE_JOB_TTL_SEC]:
+        GENERATE_JOBS.pop(key, None)
+
+
+@app.route('/api/generate/start', methods=['POST'])
+def generate_start():
+    """
+    Start /api/generate in the background and return 202 immediately.
+
+    CPU generations take minutes, longer than the 120 s proxy read timeout (HTTP 524).
+    The client polls /api/generate/result/<request_id>; quota, metering and logging run
+    in the job exactly as for the synchronous endpoint.
+    """
+    try:
+        authenticate_request()
+    except AuthError as error:
+        return jsonify({'error': str(error), 'code': error.code}), error.status
+
+    data = request.get_json(silent=True) or {}
+    request_id = str(data.get('request_id') or '').strip()
+    if not request_id:
+        return jsonify({'error': 'request_id is required'}), 400
+
+    with GENERATE_JOBS_LOCK:
+        now_ts = time.time()
+        _trim_generate_jobs_locked(now_ts)
+        if request_id in GENERATE_JOBS:
+            return jsonify({'error': 'request_id already in use'}), 409
+        GENERATE_JOBS[request_id] = {'started_at': now_ts, 'finished_at': None, 'response': None}
+
+    @copy_current_request_context
+    def run_job():
+        try:
+            response = make_response(generate())
+            result = {
+                'status': response.status_code,
+                'mimetype': response.mimetype,
+                'body': response.get_data(),
+            }
+        except Exception as error:
+            logging.error(f"Generation job {request_id} crashed: {error}")
+            result = {
+                'status': 500,
+                'mimetype': 'application/json',
+                'body': json.dumps({'error': str(error)}).encode('utf-8'),
+            }
+        with GENERATE_JOBS_LOCK:
+            job = GENERATE_JOBS.get(request_id)
+            if job is not None:
+                job['response'] = result
+                job['finished_at'] = time.time()
+
+    threading.Thread(target=run_job, daemon=True).start()
+    return jsonify({'ok': True, 'status': 'started', 'request_id': request_id}), 202
+
+
+@app.route('/api/generate/result/<string:request_id>', methods=['GET'])
+def generate_result(request_id):
+    with GENERATE_JOBS_LOCK:
+        job = GENERATE_JOBS.get(request_id)
+        if job is None:
+            return jsonify({'error': 'Unknown generation job', 'status': 'missing'}), 404
+        result = job.get('response')
+    if result is None:
+        return jsonify({'status': 'running'}), 202
+    return Response(result['body'], status=result['status'], mimetype=result['mimetype'])
 
 
 @app.route('/api/generate', methods=['POST'])
