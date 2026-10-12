@@ -1,5 +1,5 @@
 <template>
-  <div class="concert-container" :class="{ 'fullscreen-cursor': isFullscreen }" @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd">
+  <div class="concert-container" :class="{ 'fullscreen-cursor': isFullscreen, 'concert-container--embedded': embedded }" @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd">
     <div ref="canvasContainer" class="canvas-container"></div>
 
     <!-- HUD (Right Sidebar) -->
@@ -57,10 +57,10 @@
         </div>
 
         <div class="hud-footer">
-          <p v-if="!isMobileOrTablet">[H] Toggle HUD</p>
-          <p v-if="!isMobileOrTablet">[F] Fullscreen</p>
-          <p v-if="!isMobileOrTablet">[ESC] Exit Fullscreen</p>
-          <NuxtLink to="/" class="exit-btn">EXIT CONCERT</NuxtLink>
+          <p v-if="!isMobileOrTablet && !embedded">[H] Toggle HUD</p>
+          <p v-if="!isMobileOrTablet && !embedded">[F] Fullscreen</p>
+          <p v-if="!isMobileOrTablet && !embedded">[ESC] Exit Fullscreen</p>
+          <NuxtLink v-if="!embedded" to="/" class="exit-btn">EXIT CONCERT</NuxtLink>
         </div>
       </div>
     </Transition>
@@ -82,7 +82,21 @@
 import { ref, onMounted, onUnmounted, reactive, watch } from 'vue'
 import { useApi } from '~/composables/useApi'
 
+const props = defineProps({
+  // Embedded in a workspace pane: sizes from its container, no global key bindings, no exit link.
+  embedded: { type: Boolean, default: false },
+})
+
 const { apiBase } = useApi()
+let resizeObserver = null
+
+function viewportSize() {
+  const el = canvasContainer.value
+  if (props.embedded && el && el.clientWidth > 0 && el.clientHeight > 0) {
+    return { width: el.clientWidth, height: el.clientHeight }
+  }
+  return { width: window.innerWidth, height: window.innerHeight }
+}
 const canvasContainer = ref(null)
 const showHUD = ref(true)
 const isFullscreen = ref(false)
@@ -141,11 +155,12 @@ async function initThree() {
   scene.background = new THREE.Color(0x020202)
   scene.fog = new THREE.FogExp2(0x020202, 0.001)
 
-  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000)
+  const initialSize = viewportSize()
+  camera = new THREE.PerspectiveCamera(60, initialSize.width / initialSize.height, 0.1, 5000)
   camera.position.set(400, 300, 400)
 
   renderer = new THREE.WebGLRenderer({ antialias: true })
-  renderer.setSize(window.innerWidth, window.innerHeight)
+  renderer.setSize(initialSize.width, initialSize.height)
   renderer.setPixelRatio(window.devicePixelRatio)
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.0
@@ -386,9 +401,10 @@ function animate() {
 
 function handleResize() {
   if (!camera || !renderer) return
-  camera.aspect = window.innerWidth / window.innerHeight
+  const { width, height } = viewportSize()
+  camera.aspect = width / height
   camera.updateProjectionMatrix()
-  renderer.setSize(window.innerWidth, window.innerHeight)
+  renderer.setSize(width, height)
 }
 
 function handleKeyDown(e) {
@@ -412,12 +428,17 @@ function toggleFullscreen() {
 onMounted(() => {
   initThree()
   window.addEventListener('resize', handleResize)
-  window.addEventListener('keydown', handleKeyDown)
+  if (!props.embedded) window.addEventListener('keydown', handleKeyDown)
+  if (props.embedded && typeof ResizeObserver !== 'undefined' && canvasContainer.value) {
+    resizeObserver = new ResizeObserver(() => handleResize())
+    resizeObserver.observe(canvasContainer.value)
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('keydown', handleKeyDown)
+  if (resizeObserver) resizeObserver.disconnect()
   if (animId) cancelAnimationFrame(animId)
   instruments.value.forEach(inst => {
     if (inst.sound.isPlaying) inst.sound.stop()
@@ -436,6 +457,11 @@ onUnmounted(() => {
   position: relative;
   overflow: hidden;
   background: #000;
+}
+
+.concert-container--embedded {
+  width: 100%;
+  height: 100%;
 }
 
 .canvas-container {

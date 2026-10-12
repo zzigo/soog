@@ -116,7 +116,7 @@
           </svg>
           <span class="rail-label">Somap</span>
         </button>
-        <button class="rail-item" title="3D Concert Hall (Alt+3)" @click="$router.push('/concert')">
+        <button class="rail-item" title="Stage 3D pane (Alt+3 opens the full page)" :class="{ active: workspacePaneShows('stage') }" @click="openWorkspaceView('stage')">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12,3L2,12H5V20H19V12H22L12,3M11.5,18V14H12.5V18H11.5M9,18V16H10V18H9M14,18V16H15V18H14M11.5,13V12H12.5V13H11.5M9,15V14H10V15H9M14,15V14H15V15H14Z" /></svg>
           <span class="rail-label">Concert hall</span>
         </button>
@@ -187,7 +187,7 @@
       class="help-fab"
       :class="{ active: workspaceSidebarOpen }"
       :aria-expanded="String(workspaceSidebarOpen)"
-      aria-label="Help, session and SOT-A"
+      aria-label="Help and session"
       title="Help (⌘/Ctrl + Shift + \)"
       @click="toggleWorkspaceSidebar"
     >?</button>
@@ -296,6 +296,32 @@
                       </button>
                     </div>
                   </template>
+                  <button
+                    v-if="pane.view === 'stage'"
+                    class="pane-action"
+                    title="Toggle stage fullscreen (browser)"
+                    @click="toggleStageBrowserFullscreen"
+                  >
+                    FULL
+                  </button>
+                  <button
+                    v-if="workspacePreset !== 'fullscreen'"
+                    class="pane-action"
+                    title="Show this pane alone"
+                    aria-label="Maximize pane"
+                    @click="maximizeWorkspacePane(pane.index)"
+                  >
+                    ⤢
+                  </button>
+                  <button
+                    v-else-if="canRestoreWorkspace"
+                    class="pane-action"
+                    title="Back to the previous layout"
+                    aria-label="Restore layout"
+                    @click="restoreWorkspacePanes"
+                  >
+                    ⤡
+                  </button>
                   <select
                     class="workspace-pane__select"
                     :value="pane.assigned"
@@ -431,6 +457,229 @@
                   <div v-else class="panel-placeholder">No acoustical simulation data for this response.</div>
                 </template>
 
+                <template v-else-if="pane.view === 'sota'">
+                  <div class="sota-pane">
+              <div class="acoustic-summary">
+                <h4>Live Command</h4>
+                <p>{{ acousticCommandSummary }}</p>
+              </div>
+              <div v-if="!liveAcousticCommand" class="acoustic-summary">
+                <h4>First Primitive</h4>
+                <p>Use <code>@acoustic mode=2d primitive=circle freq=440 source=-0.55,0 probe=0.55,0 obstacle=0.15,0</code> or <code>@acoustic mode=3d primitive=sphere freq=440 source=-0.45,0,-0.28 probe=0.42,0.08,0.32 obstacle=0.08,0.12,0</code>.</p>
+                <button class="sidebar-action" @click="insertStarterAcousticCommand">Insert starter command</button>
+              </div>
+              <template v-else>
+                <div class="acoustic-actions">
+                  <button class="sidebar-action" @click="evaluateCurrentAcousticCommand">Evaluate SOT-A</button>
+                  <div v-if="acousticViewUsesPlane && activeAcousticPlaneData" class="modulus-mode-toggle">
+                    <button
+                      class="modulus-mode-btn"
+                      :class="{ active: modulusRenderMode === '2d' }"
+                      @click="modulusRenderMode = '2d'"
+                    >
+                      MAP
+                    </button>
+                    <button
+                      class="modulus-mode-btn"
+                      :class="{ active: modulusRenderMode === '3d' }"
+                      @click="modulusRenderMode = '3d'"
+                    >
+                      SURF
+                    </button>
+                  </div>
+                </div>
+                <div class="acoustic-view-toggle acoustic-view-toggle--sidebar">
+                  <button
+                    v-for="option in acousticViewModeOptions"
+                    :key="option.key"
+                    class="acoustic-view-btn"
+                    :class="{ active: activeAcousticViewMode === option.key }"
+                    :title="option.detail"
+                    @click="setAcousticViewMode(option.key)"
+                  >
+                    {{ option.label }}
+                  </button>
+                </div>
+                <div class="acoustic-mode-row">
+                  <button
+                    class="primitive-chip"
+                    :class="{ active: acousticSliderState.mode === '2d' }"
+                    @click="setAcousticMode('2d')"
+                  >
+                    planar
+                  </button>
+                  <button
+                    class="primitive-chip"
+                    :class="{ active: acousticSliderState.mode === '3d' }"
+                    @click="setAcousticMode('3d')"
+                  >
+                    volumetric
+                  </button>
+                </div>
+                <div class="acoustic-primitive-row">
+                  <button
+                    v-for="primitive in acousticPrimitiveOptions"
+                    :key="primitive"
+                    class="primitive-chip"
+                    :class="{ active: acousticSliderState.primitive === primitive }"
+                    @click="updateAcousticCommandInEditor({ primitive })"
+                  >
+                    {{ primitive }}
+                  </button>
+                </div>
+                <div class="acoustic-slider-grid">
+                  <label class="slider-unit slider-unit--wide">
+                    <span>Frequency</span>
+                    <strong>{{ acousticSliderState.freq }} Hz</strong>
+                    <input
+                      type="range"
+                      min="40"
+                      max="2400"
+                      step="10"
+                      :value="acousticSliderState.freq"
+                      @input="updateAcousticCommandInEditor({ freq: Number($event.target.value) })"
+                    >
+                  </label>
+                  <label class="slider-unit">
+                    <span>Source X</span>
+                    <strong>{{ acousticSliderState.sourceX.toFixed(2) }}</strong>
+                    <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.sourceX" @input="updateAcousticSliderValue('source', 0, Number($event.target.value))">
+                  </label>
+                  <label class="slider-unit">
+                    <span>Source Y</span>
+                    <strong>{{ acousticSliderState.sourceY.toFixed(2) }}</strong>
+                    <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.sourceY" @input="updateAcousticSliderValue('source', 1, Number($event.target.value))">
+                  </label>
+                  <label v-if="acousticSliderState.mode === '3d'" class="slider-unit">
+                    <span>Source Z</span>
+                    <strong>{{ acousticSliderState.sourceZ.toFixed(2) }}</strong>
+                    <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.sourceZ" @input="updateAcousticSliderValue('source', 2, Number($event.target.value))">
+                  </label>
+                  <label class="slider-unit">
+                    <span>Probe X</span>
+                    <strong>{{ acousticSliderState.probeX.toFixed(2) }}</strong>
+                    <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.probeX" @input="updateAcousticSliderValue('probe', 0, Number($event.target.value))">
+                  </label>
+                  <label class="slider-unit">
+                    <span>Probe Y</span>
+                    <strong>{{ acousticSliderState.probeY.toFixed(2) }}</strong>
+                    <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.probeY" @input="updateAcousticSliderValue('probe', 1, Number($event.target.value))">
+                  </label>
+                  <label v-if="acousticSliderState.mode === '3d'" class="slider-unit">
+                    <span>Probe Z</span>
+                    <strong>{{ acousticSliderState.probeZ.toFixed(2) }}</strong>
+                    <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.probeZ" @input="updateAcousticSliderValue('probe', 2, Number($event.target.value))">
+                  </label>
+                  <label class="slider-unit">
+                    <span>Obstacle X</span>
+                    <strong>{{ acousticSliderState.obstacleX.toFixed(2) }}</strong>
+                    <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.obstacleX" @input="updateAcousticSliderValue('obstacle', 0, Number($event.target.value))">
+                  </label>
+                  <label class="slider-unit">
+                    <span>Obstacle Y</span>
+                    <strong>{{ acousticSliderState.obstacleY.toFixed(2) }}</strong>
+                    <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.obstacleY" @input="updateAcousticSliderValue('obstacle', 1, Number($event.target.value))">
+                  </label>
+                  <label v-if="acousticSliderState.mode === '3d'" class="slider-unit">
+                    <span>Obstacle Z</span>
+                    <strong>{{ acousticSliderState.obstacleZ.toFixed(2) }}</strong>
+                    <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.obstacleZ" @input="updateAcousticSliderValue('obstacle', 2, Number($event.target.value))">
+                  </label>
+                </div>
+                <div class="acoustic-temporal-bar acoustic-temporal-bar--sidebar">
+                  <div class="acoustic-temporal-group">
+                    <button class="modulus-mode-btn" @click="toggleAcousticTemporalPlayback">
+                      {{ acousticTemporalPlaying ? 'PAUSE' : 'PLAY' }}
+                    </button>
+                    <span class="acoustic-temporal-readout">{{ acousticTemporalPhaseLabel }}</span>
+                  </div>
+                  <label class="acoustic-temporal-slider">
+                    <span>Phase</span>
+                    <input
+                      type="range"
+                      min="0"
+                      :max="acousticTemporalMax"
+                      step="0.01"
+                      :value="acousticTemporalPhase"
+                      @input="acousticTemporalPhase = Number($event.target.value)"
+                    >
+                  </label>
+                  <label class="acoustic-temporal-slider acoustic-temporal-slider--speed">
+                    <span>Speed {{ acousticTemporalSpeedLabel }}</span>
+                    <input
+                      type="range"
+                      min="0.2"
+                      max="2.4"
+                      step="0.05"
+                      :value="acousticTemporalSpeed"
+                      @input="acousticTemporalSpeed = Number($event.target.value)"
+                    >
+                  </label>
+                </div>
+                <div class="acoustic-preview-shell">
+                  <ClientOnly v-if="activeAcousticViewMode === 'volume' && acousticHasVolume">
+                    <div class="acoustic-preview-surface acoustic-preview-volume">
+                      <AcousticVolumeViewer
+                        :volume="activeModulusData.results.pressure_volume"
+                        :markers="modulusMarkers"
+                        :primitive="activeModulusData.params?.primitive || 'sphere'"
+                        :phase="acousticTemporalPhase"
+                      />
+                    </div>
+                  </ClientOnly>
+                  <ClientOnly v-else-if="activeAcousticViewMode === 'iso' && acousticHasVolume">
+                    <div class="acoustic-preview-surface acoustic-preview-volume">
+                      <AcousticIsoSurfaceViewer
+                        :volume="activeModulusData.results.pressure_volume"
+                        :markers="modulusMarkers"
+                        :primitive="activeModulusData.params?.primitive || 'sphere'"
+                        :phase="acousticTemporalPhase"
+                      />
+                    </div>
+                  </ClientOnly>
+                  <ModulusHeatmap
+                    v-else-if="modulusRenderMode === '2d' && activeAcousticPlaneData"
+                    :data="activeAcousticPlaneData"
+                    :size="280"
+                    :markers="modulusMarkers"
+                    :plane="activeAcousticPlaneKey"
+                    :phase="acousticTemporalPhase"
+                  />
+                  <ClientOnly v-else-if="activeAcousticPlaneData">
+                    <div class="acoustic-preview-surface">
+                      <AcousticFieldSurface
+                        :data="activeAcousticPlaneData"
+                        :markers="modulusMarkers"
+                        :plane="activeAcousticPlaneKey"
+                        :phase="acousticTemporalPhase"
+                      />
+                    </div>
+                  </ClientOnly>
+                </div>
+              </template>
+              <div v-if="activeModulusData" class="session-facts">
+                <div class="session-fact">
+                  <span>Method</span>
+                  <strong>{{ activeModulusData.method || 'SOT-A' }}</strong>
+                </div>
+                <div class="session-fact">
+                  <span>Probe response</span>
+                  <strong>{{ acousticProbeResponseText }}</strong>
+                </div>
+                <div class="session-fact">
+                  <span>Peaks</span>
+                  <strong>{{ acousticPeakSummary }}</strong>
+                </div>
+              </div>
+                  </div>
+                </template>
+
+                <template v-else-if="pane.view === 'stage'">
+                  <ClientOnly>
+                    <ConcertSimulator embedded />
+                  </ClientOnly>
+                </template>
+
                 <template v-else-if="pane.view === 'sketch'">
                   <img
                     v-if="sketchImage"
@@ -493,13 +742,6 @@
         >
           SESSION
         </button>
-        <button
-          class="workspace-sidebar__tab"
-          :class="{ active: workspaceSidebarTab === 'acoustic' }"
-          @click="workspaceSidebarOpen = true; workspaceSidebarTab = 'acoustic'"
-        >
-          SOT-A
-        </button>
       </div>
 
       <div class="workspace-sidebar__panel">
@@ -537,220 +779,6 @@
           </div>
         </div>
 
-        <div v-else class="workspace-sidebar__body">
-          <div class="acoustic-summary">
-            <h4>Live Command</h4>
-            <p>{{ acousticCommandSummary }}</p>
-          </div>
-          <div v-if="!liveAcousticCommand" class="acoustic-summary">
-            <h4>First Primitive</h4>
-            <p>Use <code>@acoustic mode=2d primitive=circle freq=440 source=-0.55,0 probe=0.55,0 obstacle=0.15,0</code> or <code>@acoustic mode=3d primitive=sphere freq=440 source=-0.45,0,-0.28 probe=0.42,0.08,0.32 obstacle=0.08,0.12,0</code>.</p>
-            <button class="sidebar-action" @click="insertStarterAcousticCommand">Insert starter command</button>
-          </div>
-          <template v-else>
-            <div class="acoustic-actions">
-              <button class="sidebar-action" @click="evaluateCurrentAcousticCommand">Evaluate SOT-A</button>
-              <div v-if="acousticViewUsesPlane && activeAcousticPlaneData" class="modulus-mode-toggle">
-                <button
-                  class="modulus-mode-btn"
-                  :class="{ active: modulusRenderMode === '2d' }"
-                  @click="modulusRenderMode = '2d'"
-                >
-                  MAP
-                </button>
-                <button
-                  class="modulus-mode-btn"
-                  :class="{ active: modulusRenderMode === '3d' }"
-                  @click="modulusRenderMode = '3d'"
-                >
-                  SURF
-                </button>
-              </div>
-            </div>
-            <div class="acoustic-view-toggle acoustic-view-toggle--sidebar">
-              <button
-                v-for="option in acousticViewModeOptions"
-                :key="option.key"
-                class="acoustic-view-btn"
-                :class="{ active: activeAcousticViewMode === option.key }"
-                :title="option.detail"
-                @click="setAcousticViewMode(option.key)"
-              >
-                {{ option.label }}
-              </button>
-            </div>
-            <div class="acoustic-mode-row">
-              <button
-                class="primitive-chip"
-                :class="{ active: acousticSliderState.mode === '2d' }"
-                @click="setAcousticMode('2d')"
-              >
-                planar
-              </button>
-              <button
-                class="primitive-chip"
-                :class="{ active: acousticSliderState.mode === '3d' }"
-                @click="setAcousticMode('3d')"
-              >
-                volumetric
-              </button>
-            </div>
-            <div class="acoustic-primitive-row">
-              <button
-                v-for="primitive in acousticPrimitiveOptions"
-                :key="primitive"
-                class="primitive-chip"
-                :class="{ active: acousticSliderState.primitive === primitive }"
-                @click="updateAcousticCommandInEditor({ primitive })"
-              >
-                {{ primitive }}
-              </button>
-            </div>
-            <div class="acoustic-slider-grid">
-              <label class="slider-unit slider-unit--wide">
-                <span>Frequency</span>
-                <strong>{{ acousticSliderState.freq }} Hz</strong>
-                <input
-                  type="range"
-                  min="40"
-                  max="2400"
-                  step="10"
-                  :value="acousticSliderState.freq"
-                  @input="updateAcousticCommandInEditor({ freq: Number($event.target.value) })"
-                >
-              </label>
-              <label class="slider-unit">
-                <span>Source X</span>
-                <strong>{{ acousticSliderState.sourceX.toFixed(2) }}</strong>
-                <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.sourceX" @input="updateAcousticSliderValue('source', 0, Number($event.target.value))">
-              </label>
-              <label class="slider-unit">
-                <span>Source Y</span>
-                <strong>{{ acousticSliderState.sourceY.toFixed(2) }}</strong>
-                <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.sourceY" @input="updateAcousticSliderValue('source', 1, Number($event.target.value))">
-              </label>
-              <label v-if="acousticSliderState.mode === '3d'" class="slider-unit">
-                <span>Source Z</span>
-                <strong>{{ acousticSliderState.sourceZ.toFixed(2) }}</strong>
-                <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.sourceZ" @input="updateAcousticSliderValue('source', 2, Number($event.target.value))">
-              </label>
-              <label class="slider-unit">
-                <span>Probe X</span>
-                <strong>{{ acousticSliderState.probeX.toFixed(2) }}</strong>
-                <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.probeX" @input="updateAcousticSliderValue('probe', 0, Number($event.target.value))">
-              </label>
-              <label class="slider-unit">
-                <span>Probe Y</span>
-                <strong>{{ acousticSliderState.probeY.toFixed(2) }}</strong>
-                <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.probeY" @input="updateAcousticSliderValue('probe', 1, Number($event.target.value))">
-              </label>
-              <label v-if="acousticSliderState.mode === '3d'" class="slider-unit">
-                <span>Probe Z</span>
-                <strong>{{ acousticSliderState.probeZ.toFixed(2) }}</strong>
-                <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.probeZ" @input="updateAcousticSliderValue('probe', 2, Number($event.target.value))">
-              </label>
-              <label class="slider-unit">
-                <span>Obstacle X</span>
-                <strong>{{ acousticSliderState.obstacleX.toFixed(2) }}</strong>
-                <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.obstacleX" @input="updateAcousticSliderValue('obstacle', 0, Number($event.target.value))">
-              </label>
-              <label class="slider-unit">
-                <span>Obstacle Y</span>
-                <strong>{{ acousticSliderState.obstacleY.toFixed(2) }}</strong>
-                <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.obstacleY" @input="updateAcousticSliderValue('obstacle', 1, Number($event.target.value))">
-              </label>
-              <label v-if="acousticSliderState.mode === '3d'" class="slider-unit">
-                <span>Obstacle Z</span>
-                <strong>{{ acousticSliderState.obstacleZ.toFixed(2) }}</strong>
-                <input type="range" min="-0.95" max="0.95" step="0.01" :value="acousticSliderState.obstacleZ" @input="updateAcousticSliderValue('obstacle', 2, Number($event.target.value))">
-              </label>
-            </div>
-            <div class="acoustic-temporal-bar acoustic-temporal-bar--sidebar">
-              <div class="acoustic-temporal-group">
-                <button class="modulus-mode-btn" @click="toggleAcousticTemporalPlayback">
-                  {{ acousticTemporalPlaying ? 'PAUSE' : 'PLAY' }}
-                </button>
-                <span class="acoustic-temporal-readout">{{ acousticTemporalPhaseLabel }}</span>
-              </div>
-              <label class="acoustic-temporal-slider">
-                <span>Phase</span>
-                <input
-                  type="range"
-                  min="0"
-                  :max="acousticTemporalMax"
-                  step="0.01"
-                  :value="acousticTemporalPhase"
-                  @input="acousticTemporalPhase = Number($event.target.value)"
-                >
-              </label>
-              <label class="acoustic-temporal-slider acoustic-temporal-slider--speed">
-                <span>Speed {{ acousticTemporalSpeedLabel }}</span>
-                <input
-                  type="range"
-                  min="0.2"
-                  max="2.4"
-                  step="0.05"
-                  :value="acousticTemporalSpeed"
-                  @input="acousticTemporalSpeed = Number($event.target.value)"
-                >
-              </label>
-            </div>
-            <div class="acoustic-preview-shell">
-              <ClientOnly v-if="activeAcousticViewMode === 'volume' && acousticHasVolume">
-                <div class="acoustic-preview-surface acoustic-preview-volume">
-                  <AcousticVolumeViewer
-                    :volume="activeModulusData.results.pressure_volume"
-                    :markers="modulusMarkers"
-                    :primitive="activeModulusData.params?.primitive || 'sphere'"
-                    :phase="acousticTemporalPhase"
-                  />
-                </div>
-              </ClientOnly>
-              <ClientOnly v-else-if="activeAcousticViewMode === 'iso' && acousticHasVolume">
-                <div class="acoustic-preview-surface acoustic-preview-volume">
-                  <AcousticIsoSurfaceViewer
-                    :volume="activeModulusData.results.pressure_volume"
-                    :markers="modulusMarkers"
-                    :primitive="activeModulusData.params?.primitive || 'sphere'"
-                    :phase="acousticTemporalPhase"
-                  />
-                </div>
-              </ClientOnly>
-              <ModulusHeatmap
-                v-else-if="modulusRenderMode === '2d' && activeAcousticPlaneData"
-                :data="activeAcousticPlaneData"
-                :size="280"
-                :markers="modulusMarkers"
-                :plane="activeAcousticPlaneKey"
-                :phase="acousticTemporalPhase"
-              />
-              <ClientOnly v-else-if="activeAcousticPlaneData">
-                <div class="acoustic-preview-surface">
-                  <AcousticFieldSurface
-                    :data="activeAcousticPlaneData"
-                    :markers="modulusMarkers"
-                    :plane="activeAcousticPlaneKey"
-                    :phase="acousticTemporalPhase"
-                  />
-                </div>
-              </ClientOnly>
-            </div>
-          </template>
-          <div v-if="activeModulusData" class="session-facts">
-            <div class="session-fact">
-              <span>Method</span>
-              <strong>{{ activeModulusData.method || 'SOT-A' }}</strong>
-            </div>
-            <div class="session-fact">
-              <span>Probe response</span>
-              <strong>{{ acousticProbeResponseText }}</strong>
-            </div>
-            <div class="session-fact">
-              <span>Peaks</span>
-              <strong>{{ acousticPeakSummary }}</strong>
-            </div>
-          </div>
-        </div>
       </div>
     </aside>
 
@@ -836,6 +864,7 @@ import AceEditor from '~/components/AceEditor.vue';
 import HelpModal from '~/components/HelpModal.vue';
 import GalleryDock from '~/components/GalleryDock.vue';
 import StlViewer from '~/components/StlViewer.vue';
+import ConcertSimulator from '~/components/ConcertSimulator.vue';
 import ModulusHeatmap from '~/components/ModulusHeatmap.vue';
 import AcousticFieldSurface from '~/components/AcousticFieldSurface.vue';
 import AcousticVolumeViewer from '~/components/AcousticVolumeViewer.vue';
@@ -899,6 +928,10 @@ const {
   toggleMenu: toggleWorkspacePresetMenu,
   setPreset: setWorkspacePreset,
   setPaneView: setWorkspacePaneView,
+  showView: showWorkspaceView,
+  maximizePane: maximizeWorkspacePane,
+  restorePanes: restoreWorkspacePanes,
+  canRestore: canRestoreWorkspace,
   startDrag: startPaneDrag,
 } = useWorkspace();
 const loading = ref(false);
@@ -941,7 +974,7 @@ const railRef = ref(null);
 const railExpanded = ref(false);
 const railFlyout = ref(''); // '' | 'model' | 'account'
 const RAIL_KEY = 'soog.rail.expanded';
-const workspaceSidebarTab = ref('help'); // 'help', 'session', 'acoustic'
+const workspaceSidebarTab = ref('help'); // 'help', 'session'
 const lastAcousticCommand = ref(null);
 const evaluatedAcousticSignature = ref('');
 const editorContent = ref('');
@@ -1191,7 +1224,8 @@ const commandDomains = [
     commands: [
       { syntax: 'Alt+Enter', detail: 'Evaluate current selection or the full editor buffer.' },
       { syntax: 'workspace menu', detail: 'Choose fullscreen, split vertical, split 3, or split 4 from the HUD preset icon.' },
-      { syntax: 'pane routing', detail: 'Each pane can point to auto, organogram, sound, 3D object, acoustic, or sketch.' },
+      { syntax: 'pane routing', detail: 'Each pane can point to auto, organogram, sound, 3D object, acoustic, sketch, SOT-A, or Stage 3D. ⤢ shows a pane alone, ⤡ returns.' },
+      { syntax: '/sot-a · /stage · /session · /help', detail: 'Open that pane or sidebar tab without calling the model.' },
       { syntax: 'Alt+1 · Alt+2 · Alt+3', detail: 'Jump between SOOG, SOMAP, and Concert Room.' }
     ]
   },
@@ -1205,7 +1239,7 @@ const commandDomains = [
       { syntax: 'solver=<fd|surrogate>', detail: 'Optional override when you want to force the backend phase 2 field or the lighter preview-style solver.' },
       { syntax: 'preview vs evaluate', detail: 'Sliders and edits keep a local surrogate preview; Evaluate swaps in the backend phase 2 finite-difference field when the command matches.' },
       { syntax: 'primitive=<circle|square|triangle|hexagon|sphere|cube|cylinder>', detail: 'Choose planar or volumetric primitive families for the current acoustic test.' },
-      { syntax: 'SOT-A sliders', detail: 'The right sidebar edits the @acoustic command directly, including XYZ when mode=3d.' },
+      { syntax: 'SOT-A sliders', detail: 'The SOT-A pane (rail icon, or the /sot-a command) edits the @acoustic command directly, including XYZ when mode=3d.' },
       { syntax: 'map / surf / vol / iso / xy-xz-yz', detail: 'Plane fields can switch between heatmap and relief surface; 3D studies can flip between cloud, iso-shell, and probe slices.' },
       { syntax: 'follow-up lines', detail: 'Any lines after the command are passed as contextual notes to the solver.' }
     ]
@@ -1665,6 +1699,50 @@ function syncEditorContent() {
 
 function toggleWorkspaceSidebar() {
   workspaceSidebarOpen.value = !workspaceSidebarOpen.value;
+}
+
+function workspacePaneShows(viewKey) {
+  return workspacePreset.value !== 'fullscreen' && activeWorkspacePanes.value.some((pane) => pane.view === viewKey);
+}
+
+// Make a registered view visible: leave fullscreen auto-routing for a split so the pane sits beside the rest.
+function openWorkspaceView(viewKey) {
+  if (workspacePreset.value === 'fullscreen') setWorkspacePreset('splitFour');
+  showWorkspaceView(viewKey);
+  syncWorkspaceLayoutFromPreset();
+}
+
+function toggleStageBrowserFullscreen() {
+  if (typeof document === 'undefined') return;
+  if (document.fullscreenElement) {
+    document.exitFullscreen?.();
+  } else {
+    document.documentElement.requestFullscreen?.();
+  }
+}
+
+// Commands that arrange the workspace and never reach the model.
+const WORKSPACE_COMMANDS = {
+  '/sot-a': { view: 'sota' },
+  '/sota': { view: 'sota' },
+  '/stage': { view: 'stage' },
+  '/session': { sidebar: 'session' },
+  '/help': { sidebar: 'help' },
+};
+
+function runWorkspaceCommand(text) {
+  // A command alone in the evaluated text; blank lines and # comments around it are ignored.
+  const meaningful = String(text || '').split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
+  if (meaningful.length !== 1) return false;
+  const command = WORKSPACE_COMMANDS[meaningful[0].toLowerCase()];
+  if (!command) return false;
+  if (command.view) {
+    openWorkspaceView(command.view);
+  } else if (command.sidebar) {
+    workspaceSidebarTab.value = command.sidebar;
+    workspaceSidebarOpen.value = true;
+  }
+  return true;
 }
 
 function toggleRail() {
@@ -2371,6 +2449,8 @@ const handleEvaluate = async (selectedText) => {
     error.value = 'Please select some text to evaluate.';
     return;
   }
+
+  if (runWorkspaceCommand(selectedText)) return;
 
   const acousticCommand = parseAcousticCommand(selectedText);
   const requestPrompt = acousticCommand?.normalizedPrompt || selectedText;
@@ -3398,6 +3478,31 @@ watch(
   font-size: 10px;
   letter-spacing: 0.06em;
   padding: 0 8px;
+}
+
+.pane-action {
+  height: 24px;
+  min-width: 24px;
+  padding: 0 7px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.72);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.pane-action:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.sota-pane {
+  height: 100%;
+  overflow: auto;
+  padding: 14px 16px 24px;
+  overscroll-behavior: contain;
 }
 
 .workspace-pane__select option {

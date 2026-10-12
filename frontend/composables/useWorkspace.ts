@@ -46,6 +46,8 @@ const CORE_VIEWS: WorkspaceView[] = [
   { key: 'geometry', label: '3D Object' },
   { key: 'acoustic', label: 'Acoustic' },
   { key: 'sketch', label: 'Sketch' },
+  { key: 'sota', label: 'SOT-A' },
+  { key: 'stage', label: 'Stage 3D' },
 ];
 
 export const PANE_SPLIT_MIN = 15;
@@ -66,6 +68,7 @@ export function createWorkspace() {
   const views = ref<WorkspaceView[]>([...CORE_VIEWS]);
   const stageRef = ref<HTMLElement | null>(null);
   const paneSplit = reactive({ x: 50, y: 50 });
+  const restoreState = ref<{ preset: string; paneViews: string[] } | null>(null);
 
   const presetOptions = computed(() => Object.entries(WORKSPACE_PRESETS).map(([key, value]) => ({
     key,
@@ -135,6 +138,26 @@ export function createWorkspace() {
     return true;
   }
 
+  /** Show one pane alone (fullscreen = a one-pane layout) and remember the layout to return to. */
+  function maximizePane(index: number) {
+    const pane = panes.value[index];
+    if (!pane) return;
+    if (preset.value !== 'fullscreen') {
+      restoreState.value = { preset: preset.value, paneViews: [...paneViews.value] };
+    }
+    setPreset('fullscreen');
+    paneViews.value = [pane.view];
+  }
+
+  function restorePanes() {
+    const saved = restoreState.value;
+    setPreset(saved?.preset || 'splitFour');
+    if (saved) paneViews.value = [...saved.paneViews];
+    restoreState.value = null;
+  }
+
+  const canRestore = computed(() => preset.value === 'fullscreen' && !!restoreState.value);
+
   function startDrag(axis: 'x' | 'y', event: PointerEvent) {
     const stage = stageRef.value;
     if (!stage) return;
@@ -163,6 +186,7 @@ export function createWorkspace() {
     preset, layout, presetMenuOpen, presetMenuRef, autoView, paneViews, stageRef, paneSplit,
     presetOptions, viewOptions, activePreset, modeLabel, panes, showHandleX, showHandleY, stageStyle,
     viewLabel, registerView, resetSplit, toggleMenu, setPreset, setPaneView, showView, startDrag,
+    maximizePane, restorePanes, canRestore,
   };
 }
 
