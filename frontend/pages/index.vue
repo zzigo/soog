@@ -845,6 +845,7 @@ import { useRandomPrompt } from '~/composables/useRandomPrompt';
 import { useFavicon } from '~/composables/useFavicon';
 import { useAcousticSonification } from '~/composables/useAcousticSonification';
 import { useApi } from '~/composables/useApi';
+import { useWorkspace } from '~/composables/useWorkspace';
 import { useSoogAuth } from '~/composables/useSoogAuth';
 import { runAcousticSimulation } from '~/utils/acousticSimulation';
 import { phaseTurnsLabel, wrapPhase } from '~/utils/acousticTemporal';
@@ -875,6 +876,29 @@ const leftWidth = ref(38);
 let dragging = false;
 let startX = 0;
 let startLeft = 50;
+const {
+  preset: workspacePreset,
+  layout: workspaceLayout,
+  presetMenuOpen: workspacePresetMenuOpen,
+  presetMenuRef: workspacePresetMenuRef,
+  autoView: workspaceAutoView,
+  paneViews: workspacePaneViews,
+  stageRef: workspaceStageRef,
+  paneSplit,
+  presetOptions: workspacePresetOptions,
+  viewOptions: workspaceViewOptions,
+  modeLabel: workspaceModeLabel,
+  panes: activeWorkspacePanes,
+  showHandleX: showPaneHandleX,
+  showHandleY: showPaneHandleY,
+  stageStyle: workspaceStageStyle,
+  viewLabel: workspaceViewLabel,
+  resetSplit: resetPaneSplit,
+  toggleMenu: toggleWorkspacePresetMenu,
+  setPreset: setWorkspacePreset,
+  setPaneView: setWorkspacePaneView,
+  startDrag: startPaneDrag,
+} = useWorkspace();
 const loading = ref(false);
 const progress = ref(0);
 const elapsedMs = ref(0);
@@ -910,12 +934,6 @@ const acousticViewMode = ref('auto');
 const acousticTemporalPlaying = ref(true);
 const acousticTemporalPhase = ref(0);
 const acousticTemporalSpeed = ref(1);
-const workspaceLayout = ref('background'); // 'split' or 'background'
-const workspacePreset = ref('fullscreen');
-const workspacePresetMenuOpen = ref(false);
-const workspacePresetMenuRef = ref(null);
-const workspaceAutoView = ref('organogram');
-const workspacePaneViews = ref(['auto', 'organogram', 'sound', 'acoustic']);
 const workspaceSidebarOpen = ref(false);
 const railRef = ref(null);
 const railExpanded = ref(false);
@@ -955,40 +973,6 @@ const DEFAULT_RESPONSE_MS = 180000;
 const MAX_RESPONSE_MS = 60 * 60 * 1000;
 const MAX_RESPONSE_SAMPLES = 20;
 const PENDING_RENDER_KEY = 'soog.pending-render.v1';
-const WORKSPACE_PRESET_CONFIG = {
-  fullscreen: {
-    label: 'Fullscreen',
-    summary: 'Single immersive viewport with routed render focus.',
-    areas: ['a'],
-    defaults: ['auto'],
-  },
-  splitVertical: {
-    label: 'Split Vertical',
-    summary: 'Two equal panes for paired visual inspection.',
-    areas: ['a', 'b'],
-    defaults: ['organogram', 'geometry'],
-  },
-  splitThree: {
-    label: 'Split 3',
-    summary: 'Main left viewport with two stacked analytical panes.',
-    areas: ['a', 'b', 'c'],
-    defaults: ['organogram', 'sound', 'acoustic'],
-  },
-  splitFour: {
-    label: 'Split 4',
-    summary: 'Four-way dock for organogram, text, object, and field.',
-    areas: ['a', 'b', 'c', 'd'],
-    defaults: ['organogram', 'sound', 'geometry', 'acoustic'],
-  },
-};
-const WORKSPACE_VIEW_CATALOG = [
-  { key: 'auto', label: 'Auto Route' },
-  { key: 'organogram', label: 'Organogram' },
-  { key: 'sound', label: 'Sound' },
-  { key: 'geometry', label: '3D Object' },
-  { key: 'acoustic', label: 'Acoustic' },
-  { key: 'sketch', label: 'Sketch' },
-];
 
 const userLabel = computed(() => {
   const value = profile.value?.name || profile.value?.email || profile.value?.subject || 'ACCOUNT';
@@ -1115,80 +1099,6 @@ const activeAcousticViewDetail = computed(() => {
 const acousticTemporalPhaseLabel = computed(() => phaseTurnsLabel(acousticTemporalPhase.value));
 const acousticTemporalSpeedLabel = computed(() => `${acousticTemporalSpeed.value.toFixed(2)}x`);
 const hasResults = computed(() => !!(plotImage.value || sketchImage.value || summary.value || materialsText.value || stlUrl.value || activeModulusData.value));
-const workspacePresetOptions = computed(() => Object.entries(WORKSPACE_PRESET_CONFIG).map(([key, value]) => ({
-  key,
-  label: value.label,
-  summary: value.summary,
-})));
-const workspaceViewOptions = computed(() => WORKSPACE_VIEW_CATALOG);
-const activeWorkspacePreset = computed(() => WORKSPACE_PRESET_CONFIG[workspacePreset.value] || WORKSPACE_PRESET_CONFIG.fullscreen);
-const workspaceModeLabel = computed(() => activeWorkspacePreset.value.label);
-const activeWorkspacePanes = computed(() => {
-  const preset = activeWorkspacePreset.value;
-  return preset.areas.map((area, index) => {
-    const assigned = workspacePaneViews.value[index] || preset.defaults[index] || 'auto';
-    const view = assigned === 'auto' ? workspaceAutoView.value : assigned;
-    return {
-      id: `${workspacePreset.value}-${area}-${index}`,
-      area,
-      index,
-      assigned,
-      view,
-    };
-  });
-});
-const leftColumnStyle = computed(() => {
-  if (sorganoidMode.value) {
-    return { width: '100%' };
-  }
-  if (workspaceLayout.value === 'background') {
-    const clamped = Math.max(34, Math.min(leftWidth.value, 62));
-    return { width: `min(${clamped}vw, 760px)` };
-  }
-  const dockWidth = Math.max(24, Math.min(leftWidth.value, 58));
-  return {
-    width: `min(${dockWidth}vw, 760px)`,
-    flex: `0 0 min(${dockWidth}vw, 760px)`,
-  };
-});
-const workspaceStageRef = ref(null);
-const paneSplit = reactive({ x: 50, y: 50 });
-const PANE_SPLIT_MIN = 15;
-const PANE_SPLIT_MAX = 85;
-const showPaneHandleX = computed(() => ['splitVertical', 'splitThree', 'splitFour'].includes(workspacePreset.value));
-const showPaneHandleY = computed(() => ['splitThree', 'splitFour'].includes(workspacePreset.value));
-const workspaceStageStyle = computed(() => (
-  workspacePreset.value === 'fullscreen'
-    ? {}
-    : { '--pane-x': `${paneSplit.x}%`, '--pane-y': `${paneSplit.y}%` }
-));
-function resetPaneSplit() {
-  paneSplit.x = 50;
-  paneSplit.y = 50;
-}
-function startPaneDrag(axis, event) {
-  const stage = workspaceStageRef.value;
-  if (!stage) return;
-  const handle = event.currentTarget;
-  handle.setPointerCapture?.(event.pointerId);
-  const move = (e) => {
-    const rect = stage.getBoundingClientRect();
-    if (axis === 'x') {
-      paneSplit.x = Math.min(PANE_SPLIT_MAX, Math.max(PANE_SPLIT_MIN, ((e.clientX - rect.left) / rect.width) * 100));
-    } else {
-      paneSplit.y = Math.min(PANE_SPLIT_MAX, Math.max(PANE_SPLIT_MIN, ((e.clientY - rect.top) / rect.height) * 100));
-    }
-  };
-  const end = (e) => {
-    handle.releasePointerCapture?.(e.pointerId);
-    handle.removeEventListener('pointermove', move);
-    handle.removeEventListener('pointerup', end);
-    handle.removeEventListener('pointercancel', end);
-  };
-  handle.addEventListener('pointermove', move);
-  handle.addEventListener('pointerup', end);
-  handle.addEventListener('pointercancel', end);
-}
 const rightColumnStyle = computed(() => (
   workspaceLayout.value === 'background'
     ? {}
@@ -1719,10 +1629,6 @@ function evaluateCurrentAcousticCommand() {
   handleEvaluate(content);
 }
 
-function workspaceViewLabel(key) {
-  return WORKSPACE_VIEW_CATALOG.find((item) => item.key === key)?.label || String(key || 'Pane');
-}
-
 function pickPreferredWorkspaceView() {
   if (plotImage.value) return 'organogram';
   if (activeModulusData.value) return 'acoustic';
@@ -1738,26 +1644,6 @@ function syncWorkspaceLayoutFromPreset() {
 
 function syncWorkspaceAutoView() {
   workspaceAutoView.value = pickPreferredWorkspaceView();
-}
-
-function toggleWorkspacePresetMenu() {
-  workspacePresetMenuOpen.value = !workspacePresetMenuOpen.value;
-}
-
-function setWorkspacePreset(presetKey) {
-  const preset = WORKSPACE_PRESET_CONFIG[presetKey];
-  if (!preset) return;
-  workspacePreset.value = presetKey;
-  resetPaneSplit();
-  workspacePaneViews.value = [...preset.defaults];
-  syncWorkspaceLayoutFromPreset();
-  workspacePresetMenuOpen.value = false;
-}
-
-function setWorkspacePaneView(index, viewKey) {
-  const next = [...workspacePaneViews.value];
-  next[index] = viewKey;
-  workspacePaneViews.value = next;
 }
 
 function syncEditorContent() {
