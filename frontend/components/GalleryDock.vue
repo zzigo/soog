@@ -1,188 +1,128 @@
 <template>
-  <div v-if="modelValue" class="modal-overlay" @click.self="close">
-    <div class="modal">
-      <header class="modal-header">
-        <div class="header-left">
-          <span class="gallery-label">GALLERY</span>
-          <div class="search-box">
-            <input 
-              type="text" 
-              v-model="searchQuery" 
-              placeholder="SEARCH..." 
-              class="search-input"
-            />
-          </div>
-        </div>
-        <div class="header-center">
-          <div v-if="current && !renaming" class="actions">
-            <button @click="loadCode">LOAD</button>
-            <button v-if="current.stl_url" @click="downloadCurrentStl">STL</button>
-            <button @click="toggleRename">RENAME</button>
-            <button @click="deleteItem" class="delete">DELETE</button>
-          </div>
-          <div v-if="current && renaming" class="rename-container">
-            <input type="text" v-model="newName" @keyup.enter="renameItem" placeholder="NEW NAME..." />
-            <button @click="renameItem">SAVE</button>
-            <button @click="renaming = false">ESC</button>
-          </div>
-        </div>
-        <div class="header-right">
-          <button class="close" @click="close">×</button>
-        </div>
-      </header>
+  <aside v-if="modelValue" class="gallery-dock" aria-label="Gallery">
+    <header class="dock-header">
+      <span class="gallery-label">GALLERY</span>
+      <input type="text" v-model="searchQuery" placeholder="SEARCH..." class="search-input" />
+      <button class="close" title="Close gallery" @click="close">×</button>
+    </header>
 
-      <section class="modal-body">
-        <div class="sidebar">
-          <div class="list-container" :key="galleryKey" ref="listContainer">
-            <div
-              v-for="group in groupedItems"
-              :key="group.groupId"
-              :id="'group-' + group.groupId"
-              class="group-item"
-              :class="{ active: currentGroupId === group.groupId }"
-              @click="selectGroup(group)"
-            >
-              <div class="group-row"><img v-if="group.latest.image_url" :src="imageSrc(group.latest)" class="nano-thumb" />
-                <input 
-                  type="checkbox" 
-                  :checked="group.latest.featured" 
-                  @click.stop="toggleFeatured(group.latest)"
-                  class="feat-check"
-                />
-                <div class="title">{{ group.title }}</div>
-                <div class="meta-info">
-                  <div class="badges">
-                    <span v-if="group.hasAnySound" class="b-icon">S</span>
-                    <span v-if="group.hasAnySketch" class="b-icon">K</span>
-                    <span v-if="group.hasAnyPinn" class="b-icon">P</span>
-                    <span v-if="group.hasAnyStl" class="b-icon">3D</span>
-                  </div>
-                </div>
-              </div>
-              <div class="version-list">
-                <span
-                  v-for="version in group.versions"
-                  :key="version.basename"
-                  class="v-tag"
-                  :class="{ active: current?.basename === version.basename }"
-                  @click.stop="selectVersion(version.basename)"
-                >
-                  V{{ version.displayVersion }}
-                </span>
-              </div>
-            </div>
-          </div>
+    <div v-if="current && !renaming" class="actions">
+      <button @click="loadCode">LOAD</button>
+      <button v-if="current.stl_url" @click="downloadCurrentStl">STL</button>
+      <button @click="toggleRename">RENAME</button>
+      <button @click="deleteItem" class="delete">DELETE</button>
+    </div>
+    <div v-if="current && renaming" class="rename-container">
+      <input type="text" v-model="newName" @keyup.enter="renameItem" placeholder="NEW NAME..." />
+      <button @click="renameItem">SAVE</button>
+      <button @click="renaming = false">ESC</button>
+    </div>
 
-          <div v-if="current" class="metadata">
-            <div class="meta-section">
-              <label>PROMPT</label>
-              <div class="raw-text">{{ current.prompt }}</div>
-            </div>
-            <div class="meta-section">
-              <label>SUMMARY</label>
-              <div class="summary-text markdown" v-html="currentSummaryHtml"></div>
+    <div class="list-container" :key="galleryKey" ref="listContainer">
+      <div
+        v-for="group in groupedItems"
+        :key="group.groupId"
+        :id="'group-' + group.groupId"
+        class="group-item"
+        :class="{ active: currentGroupId === group.groupId }"
+        @click="selectGroup(group)"
+      >
+        <div class="group-row"><img v-if="group.latest.image_url" :src="imageSrc(group.latest)" class="nano-thumb" />
+          <input 
+            type="checkbox" 
+            :checked="group.latest.featured" 
+            @click.stop="toggleFeatured(group.latest)"
+            class="feat-check"
+          />
+          <div class="title">{{ group.title }}</div>
+          <div class="meta-info">
+            <div class="badges">
+              <span v-if="group.hasAnySound" class="b-icon">S</span>
+              <span v-if="group.hasAnySketch" class="b-icon">K</span>
+              <span v-if="group.hasAnyPinn" class="b-icon">P</span>
+              <span v-if="group.hasAnyStl" class="b-icon">3D</span>
             </div>
           </div>
         </div>
-
-        <div class="main-content">
-          <div v-if="current" class="view-engine">
-            <div class="sound-strip">
-              <div class="sound-controls">
-                <button 
-                  v-for="(sample, idx) in current.sound_samples" 
-                  :key="idx"
-                  class="sound-node"
-                  @click="toggleAudio(sample, idx)"
-                  :class="{ playing: playingIdx === idx }"
-                >
-                  <svg v-if="playingIdx !== idx" viewBox="0 0 24 24"><path fill="currentColor" d="M8,5.14V19.14L19,12.14L8,5.14Z"/></svg><svg v-else viewBox="0 0 24 24"><path fill="currentColor" d="M14,19H18V5H14M6,19H10V5H6V19Z"/></svg><span class="s-idx">{{ idx + 1 }}</span>
-                </button>
-                <button class="add-node" @click="openSoundGenerator" :disabled="generatingSound">+</button>
-                <div v-if="playingIdx !== null" class="timer">
-                  {{ formatAudioTime(currentTime) }} / {{ formatAudioTime(duration) }}
-                </div>
-              </div>
-            </div>
-
-            <div class="render-grid">
-              <div class="pane">
-                <div class="pane-head">ORGANOGRAM</div>
-                <div class="pane-body">
-                  <img v-if="current?.image_url" :src="imageSrc(current)" class="fit-img" />
-                </div>
-              </div>
-              <div class="pane">
-                <div class="pane-head">
-                  SKETCH
-                  <button @click="remakeSketch" class="pane-action" :disabled="remakingSketch">REGEN</button>
-                </div>
-                <div class="pane-body">
-                  <img v-if="current?.sketch_url" :src="sketchSrc(current)" class="fit-img" />
-                </div>
-              </div>
-              <div class="pane">
-                <div class="pane-head">
-                  ACOUSTICS
-                  <button @click="generateModulus" class="pane-action" :disabled="remakingModulus">CALC</button>
-                </div>
-                <div class="pane-body center">
-                  <ModulusHeatmap 
-                    v-if="current?.modulus?.results?.pressure_map" 
-                    :data="current.modulus.results.pressure_map" 
-                    :size="250"
-                  />
-                </div>
-              </div>
-              <div class="pane">
-                <div class="pane-head">
-                  3D MESH
-                  <button @click="generateLRM" class="pane-action" :disabled="remakingLRM">BUILD</button>
-                </div>
-                <div class="pane-body">
-                  <ClientOnly>
-                    <StlViewer v-if="current?.stl_url" :url="fileHref(current.stl_url)" />
-                  </ClientOnly>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div v-else class="void">NO SELECTION</div>
+        <div class="version-list">
+          <span
+            v-for="version in group.versions"
+            :key="version.basename"
+            class="v-tag"
+            :class="{ active: current?.basename === version.basename }"
+            @click.stop="selectVersion(version.basename)"
+          >
+            V{{ version.displayVersion }}
+          </span>
         </div>
-      </section>
+      </div>
+    </div>
 
-      <!-- Sound Generation Sub-Modal -->
-      <div v-if="showSoundGenModal" class="sub-modal-overlay" @click.self="showSoundGenModal = false">
-        <div class="sub-modal">
-          <header class="sub-modal-header">
-            <h4>CUSTOM SOUND SYNTHESIS</h4>
-            <button @click="showSoundGenModal = false">×</button>
-          </header>
-          <div class="sub-modal-body">
-            <p class="sub-modal-desc">Generate new timbral samples using Stable Audio Open. Describe the sonic characteristics you want to synthesize.</p>
-            <textarea 
-              v-model="customSoundPrompt" 
-              placeholder="e.g. resonant wooden pipes, metallic harmonic overtones..." 
-              class="sub-modal-textarea"
-            ></textarea>
-            <div class="sub-modal-actions">
-              <button @click="showSoundGenModal = false" class="cancel-btn">Cancel</button>
-              <button @click="executeSoundGen" class="confirm-btn" :disabled="generatingSound">
-                {{ generatingSound ? 'GENERATING...' : 'GENERATE SAMPLES' }}
-              </button>
-            </div>
-          </div>
+
+    <div v-if="current" class="dock-tools">
+      <div class="sound-controls">
+        <button
+          v-for="(sample, idx) in current.sound_samples"
+          :key="idx"
+          class="sound-node"
+          @click="toggleAudio(sample, idx)"
+          :class="{ playing: playingIdx === idx }"
+        >
+          <svg v-if="playingIdx !== idx" viewBox="0 0 24 24"><path fill="currentColor" d="M8,5.14V19.14L19,12.14L8,5.14Z"/></svg><svg v-else viewBox="0 0 24 24"><path fill="currentColor" d="M14,19H18V5H14M6,19H10V5H6V19Z"/></svg><span class="s-idx">{{ idx + 1 }}</span>
+        </button>
+        <button class="add-node" title="Generate sound samples" @click="openSoundGenerator" :disabled="generatingSound">+</button>
+        <div v-if="playingIdx !== null" class="timer">
+          {{ formatAudioTime(currentTime) }} / {{ formatAudioTime(duration) }}
+        </div>
+      </div>
+      <div class="tool-row">
+        <button class="pane-action" @click="remakeSketch" :disabled="remakingSketch">REGEN SKETCH</button>
+        <button class="pane-action" @click="generateModulus" :disabled="remakingModulus">CALC ACOUSTICS</button>
+        <button class="pane-action" @click="generateLRM" :disabled="remakingLRM">BUILD 3D</button>
+      </div>
+    </div>
+      <div v-if="current" class="metadata">
+        <div class="meta-section">
+          <label>PROMPT</label>
+          <div class="raw-text">{{ current.prompt }}</div>
+        </div>
+        <div class="meta-section">
+          <label>SUMMARY</label>
+          <div class="summary-text markdown" v-html="currentSummaryHtml"></div>
         </div>
       </div>
 
-      <footer v-if="isProcessingAny" class="process-footer">
-        <div class="terminal-line">
-          <span class="blink">_</span> {{ consoleDisplayMessage }}
-          <span v-if="reasoningPreview" class="reason-txt">{{ reasoningPreview }}</span>
+    <!-- Sound Generation Sub-Modal -->
+    <div v-if="showSoundGenModal" class="sub-modal-overlay" @click.self="showSoundGenModal = false">
+      <div class="sub-modal">
+        <header class="sub-modal-header">
+          <h4>CUSTOM SOUND SYNTHESIS</h4>
+          <button @click="showSoundGenModal = false">×</button>
+        </header>
+        <div class="sub-modal-body">
+          <p class="sub-modal-desc">Generate new timbral samples using Stable Audio Open. Describe the sonic characteristics you want to synthesize.</p>
+          <textarea 
+            v-model="customSoundPrompt" 
+            placeholder="e.g. resonant wooden pipes, metallic harmonic overtones..." 
+            class="sub-modal-textarea"
+          ></textarea>
+          <div class="sub-modal-actions">
+            <button @click="showSoundGenModal = false" class="cancel-btn">Cancel</button>
+            <button @click="executeSoundGen" class="confirm-btn" :disabled="generatingSound">
+              {{ generatingSound ? 'GENERATING...' : 'GENERATE SAMPLES' }}
+            </button>
+          </div>
         </div>
-      </footer>
+      </div>
     </div>
-  </div>
+
+    <footer v-if="isProcessingAny" class="process-footer">
+      <div class="terminal-line">
+        <span class="blink">_</span> {{ consoleDisplayMessage }}
+        <span v-if="reasoningPreview" class="reason-txt">{{ reasoningPreview }}</span>
+      </div>
+    </footer>
+  </aside>
 </template>
 
 <script setup>
@@ -197,7 +137,7 @@ const props = defineProps({
   modelValue: { type: Boolean, default: false },
   initialBasename: { type: String, default: '' }
 })
-const emit = defineEmits(['update:modelValue', 'load-code'])
+const emit = defineEmits(['update:modelValue', 'load-code', 'preview'])
 
 const { apiBase } = useApi()
 const config = useRuntimeConfig()
@@ -289,6 +229,7 @@ async function executeSoundGen() {
     if (!res.ok) throw new Error(payload.error || 'Failed to generate sound')
     if (res.status === 202) await waitForSoundJob(generationRequestId.value)
     await load(current.value?.basename)
+    announce()
   } catch (e) { alert(e.message) }
   finally { generatingSound.value = false; stopReasoningPolling(); }
 }
@@ -309,6 +250,7 @@ async function generateLRM() {
       throw new Error(err.error || 'Failed to generate high-res mesh')
     }
     await load(current.value?.basename)
+    announce()
   } catch (e) { alert(e.message) }
   finally { remakingLRM.value = false; stopReasoningPolling(); }
 }
@@ -326,6 +268,7 @@ async function remakeSketch() {
     })
     if (!res.ok) throw new Error('Failed to remake sketch')
     await load(current.value?.basename)
+    announce()
   } catch (e) { alert(e.message) }
   finally { remakingSketch.value = false; stopReasoningPolling(); }
 }
@@ -348,6 +291,7 @@ async function generateModulus() {
     })
     if (!res.ok) throw new Error('Failed to run simulation')
     await load(current.value?.basename)
+    announce()
   } catch (e) { alert(e.message) }
   finally { remakingModulus.value = false; stopReasoningPolling(); }
 }
@@ -415,6 +359,9 @@ const currentSummaryHtml = computed(() => {
 })
 
 function close() { emit('update:modelValue', false) }
+
+// Tell the workspace which item the user is looking at so its panes can show it.
+function announce() { if (current.value) emit('preview', { ...current.value }) }
 
 function inferGroupId(item) { return (item?.group_id || item?.basename || '').trim() }
 
@@ -503,12 +450,12 @@ function formatProgressStage(stage) {
   return String(stage || '').replace(/[_-]+/g, ' ').trim().toUpperCase();
 }
 
-function selectVersion(basename) { selectedBasename.value = basename }
+function selectVersion(basename) { selectedBasename.value = basename; announce() }
 
 function selectGroup(group) {
   if (!group) return
   const latest = group.latest || group.versions[group.versions.length - 1]
-  if (latest?.basename) selectedBasename.value = latest.basename
+  if (latest?.basename) { selectedBasename.value = latest.basename; announce() }
 }
 
 function imageSrc(item) {
@@ -550,6 +497,7 @@ async function load(preferredBasename = '') {
   if (target && next.some((item) => item.basename === target)) {
     selectedBasename.value = target
     scrollToCurrent()
+    if (!preferredBasename) announce()
     return
   }
   selectedBasename.value = next[0]?.basename || ''
@@ -585,6 +533,7 @@ async function deleteItem() {
   try {
     await fetch(`${apiBase.value}/gallery/item/${current.value.basename}`, { method: 'DELETE' })
     await load()
+    announce()
   } catch (e) { alert(`Error: ${e.message}`) }
 }
 
@@ -633,42 +582,46 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.modal-overlay { position: fixed; inset: 0; background: #000; display: flex; align-items: stretch; justify-content: stretch; z-index: 3000; }
-.modal { width: 100vw; height: 100vh; background: #000; color: #eee; display: flex; flex-direction: column; overflow: hidden; font-family: 'IBM Plex Mono', monospace; }
+.gallery-dock {
+  position: fixed;
+  top: 0;
+  bottom: 17px; /* the fixed footer is 17px tall */
+  left: 44px; /* tools rail width */
+  width: 300px;
+  z-index: 125;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  color: #eee;
+  border-right: 1px solid rgba(255, 255, 255, 0.14);
+  font-family: 'IBM Plex Mono', monospace;
+  overflow: hidden;
+}
 
-/* Narrow Header */
-.modal-header { display: flex; justify-content: space-between; align-items: center; height: 40px; border-bottom: 1px solid #111; padding: 0 15px; }
-.header-left { display: flex; align-items: center; gap: 15px; flex: 1; }
+.dock-header { display: flex; align-items: center; gap: 10px; height: 40px; flex: 0 0 40px; border-bottom: 1px solid #111; padding: 0 10px 0 15px; }
 .gallery-label { font-weight: 800; font-size: 11px; letter-spacing: 0.2em; color: #444; }
-.search-input { background: #000; border: 1px solid #111; color: #fff; padding: 4px 8px; font-size: 10px; width: 180px; outline: none; }
+.search-input { background: #000; border: 1px solid #111; color: #fff; padding: 4px 8px; font-size: 10px; flex: 1; min-width: 0; outline: none; }
 .search-input:focus { border-color: #333; }
+.close { background: transparent; color: #444; border: none; font-size: 20px; cursor: pointer; transition: color 0.2s; }
+.close:hover { color: #fff; }
 
-.header-center { display: flex; justify-content: center; flex: 2; }
-.actions { display: flex; gap: 8px; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 15px; border-bottom: 1px solid #111; }
 .actions button { background: #000; border: 1px solid #111; color: #666; font-size: 9px; padding: 2px 8px; letter-spacing: 0.05em; cursor: pointer; transition: all 0.1s; }
 .actions button:hover { border-color: #444; color: #fff; }
 .actions button.delete:hover { border-color: #600; color: #f44; }
 
-.rename-container { display: flex; gap: 5px; }
-.rename-container input { background: #000; border: 1px solid #333; color: #fff; font-size: 10px; padding: 2px 5px; width: 150px; }
+.rename-container { display: flex; gap: 5px; padding: 8px 15px; border-bottom: 1px solid #111; }
+.rename-container input { background: #000; border: 1px solid #333; color: #fff; font-size: 10px; padding: 2px 5px; flex: 1; min-width: 0; }
+.rename-container button { background: #000; border: 1px solid #111; color: #666; font-size: 9px; padding: 2px 6px; cursor: pointer; }
 
-.header-right { display: flex; justify-content: flex-end; flex: 1; }
-.close { background: transparent; color: #444; border: none; font-size: 20px; cursor: pointer; transition: color 0.2s; }
-.close:hover { color: #fff; }
-
-/* Body Layout */
-.modal-body { display: flex; flex: 1; overflow: hidden; }
-
-/* Sidebar */
-.sidebar { width: 320px; border-right: 1px solid #111; display: flex; flex-direction: column; }
-.list-container { flex: 1; overflow-y: auto; scrollbar-width: thin; }
+.list-container { flex: 1; min-height: 80px; overflow-y: auto; scrollbar-width: thin; }
 .group-item { padding: 10px 15px; border-bottom: 1px solid #080808; cursor: pointer; }
 .group-item:hover { background: #050505; }
 .group-item.active { border-left: 2px solid #fff; background: #0a0a0a; }
 
 .group-row { display: flex; align-items: center; gap: 10px; }
 .nano-thumb { width: 24px; height: 24px; border: 1px solid #111; object-fit: contain; background: #000; flex-shrink: 0; }
-.feat-check { appearance: none; width: 10px; height: 10px; border: 1px solid #333; cursor: pointer; }
+.feat-check { appearance: none; width: 10px; height: 10px; border: 1px solid #333; cursor: pointer; flex-shrink: 0; }
 .feat-check:checked { background: #fff; border-color: #fff; }
 
 .title { font-size: 11px; font-weight: 700; color: #999; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0.05em; }
@@ -683,42 +636,28 @@ onUnmounted(() => {
 .v-tag { font-size: 8px; color: #444; border: 1px solid #080808; padding: 1px 4px; cursor: pointer; }
 .v-tag.active { color: #fff; border-color: #444; }
 
-.metadata { flex: 0 0 220px; border-top: 1px solid #111; overflow-y: auto; padding: 15px; background: #000; }
-.meta-section { margin-bottom: 15px; }
-.meta-section label { display: block; font-size: 8px; color: #333; letter-spacing: 0.2em; margin-bottom: 5px; }
-.raw-text { font-size: 9px; line-height: 1.4; color: #555; white-space: pre-wrap; word-break: break-word; }
+.dock-tools { flex: 0 0 auto; border-top: 1px solid #111; padding: 10px 15px; display: flex; flex-direction: column; gap: 8px; background: #020202; }
+.sound-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.sound-node { position: relative; background: #000; border: 1px solid #111; color: #ff9a2f; width: 32px; height: 32px; font-size: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.sound-node svg { width: 24px; height: 24px; }
+.s-idx { position: absolute; bottom: -2px; right: -2px; font-size: 7px; background: #000; color: #fff; width: 12px; height: 12px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.sound-node.playing { background: rgba(255, 255, 255, 0.6); color: #000; border-color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.2); }
+.add-node { background: transparent; border: 1px dashed #333; color: #555; width: 22px; height: 22px; cursor: pointer; }
+.timer { font-size: 9px; color: #555; letter-spacing: 0.1em; }
+.tool-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pane-action { background: transparent; border: 1px solid #1a1a1a; color: #555; font-size: 8px; padding: 3px 6px; letter-spacing: 0.05em; cursor: pointer; }
+.pane-action:hover:not(:disabled) { color: #fff; border-color: #333; }
+.pane-action:disabled { opacity: 0.4; cursor: default; }
+
+.metadata { flex: 0 1 200px; border-top: 1px solid #111; overflow-y: auto; padding: 12px 15px; background: #000; }
+.meta-section { margin-bottom: 12px; }
+.meta-section label { display: block; font-size: 8px; color: #444; letter-spacing: 0.2em; margin-bottom: 5px; }
+.raw-text { font-size: 9px; line-height: 1.4; color: #666; white-space: pre-wrap; word-break: break-word; }
 .summary-text { font-size: 10px; line-height: 1.4; color: #888; }
 
-/* Main Content Area */
-.main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.view-engine { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-
-/* Sound Strip */
-.sound-strip { height: 40px; border-bottom: 1px solid #111; padding: 0 15px; display: flex; align-items: center; background: #020202; }
-.sound-controls { display: flex; align-items: center; gap: 8px; }
-.sound-node { background: #000; border: 1px solid #111; color: #ff9a2f; width: 32px; height: 32px; font-size: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; position: relative; }
-.sound-node svg { width: 24px; height: 24px; }
-.s-idx { position: absolute; bottom: -2px; right: -2px; font-size: 7px; background: #000; color: #fff; width: 12px; height: 12px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid #222; font-weight: 700; }
-.sound-node.playing { background: rgba(255, 255, 255, 0.6); color: #000; border-color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.2); }
-.add-node { background: transparent; border: 1px dashed #111; color: #222; width: 22px; height: 22px; cursor: pointer; }
-.timer { font-size: 9px; color: #333; margin-left: 10px; letter-spacing: 0.1em; }
-
-/* Quadrant Grid */
-.render-grid { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 1px; background: #111; overflow: hidden; }
-.pane { background: #000; display: flex; flex-direction: column; overflow: hidden; position: relative; }
-.pane-head { height: 26px; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; font-size: 8px; color: #333; letter-spacing: 0.15em; border-bottom: 1px solid #050505; }
-.pane-action { background: transparent; border: 1px solid #111; color: #222; font-size: 7px; padding: 1px 4px; cursor: pointer; }
-.pane-action:hover { color: #fff; border-color: #333; }
-
-.pane-body { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; min-height: 0; }
-.pane-body.center { padding: 10px; }
-.fit-img { max-width: 90%; max-height: 90%; object-fit: contain; }
-
-.void { flex: 1; display: flex; align-items: center; justify-content: center; color: #111; font-size: 14px; letter-spacing: 0.5em; }
-
-/* Sub-modal Styles */
+/* Sound generation dialog (small, stays modal) */
 .sub-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 4000; }
-.sub-modal { width: 400px; background: #000; border: 1px solid #111; padding: 20px; }
+.sub-modal { width: min(400px, 92vw); background: #000; border: 1px solid #111; padding: 20px; }
 .sub-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .sub-modal-header h4 { font-size: 10px; letter-spacing: 0.2em; color: #fff; margin: 0; }
 .sub-modal-header button { background: transparent; border: none; color: #444; font-size: 18px; cursor: pointer; }
@@ -728,16 +667,13 @@ onUnmounted(() => {
 .cancel-btn { background: transparent; border: 1px solid #111; color: #444; font-size: 9px; padding: 4px 10px; cursor: pointer; }
 .confirm-btn { background: #fff; color: #000; border: 1px solid #fff; font-size: 9px; padding: 4px 15px; font-weight: 700; cursor: pointer; }
 
-/* Process Footer */
-.process-footer { position: absolute; bottom: 0; left: 0; right: 0; height: 32px; background: #050505; border-top: 1px solid #111; display: flex; align-items: center; padding: 0 15px; z-index: 5000; }
+.process-footer { flex: 0 0 auto; padding: 6px 15px; background: #050505; border-top: 1px solid #111; }
 .terminal-line { font-size: 9px; color: #fff; letter-spacing: 0.05em; font-weight: 700; }
 .blink { animation: term-blink 1s infinite; }
 @keyframes term-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-.reason-txt { color: #444; margin-left: 10px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60vw; }
+.reason-txt { display: block; color: #555; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 @media (max-width: 768px) {
-  .modal-body { flex-direction: column; }
-  .sidebar { width: 100%; height: 30vh; border-right: none; border-bottom: 1px solid #111; }
-  .render-grid { grid-template-columns: 1fr; grid-template-rows: repeat(4, 250px); overflow-y: auto; }
+  .gallery-dock { left: 0; right: 0; width: auto; border-right: none; }
 }
 </style>

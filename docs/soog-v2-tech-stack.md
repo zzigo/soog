@@ -14,7 +14,7 @@ To handle the transition between local development (`localhost`) and remote VPS 
     *   Reads a default `apiBase` from `runtimeConfig`.
     *   Detects if the current `window.location.hostname` is a remote IP/domain while the API is still pointing to `localhost`.
     *   Dynamically rewrites the `apiBase` to match the actual host.
-    *   Ensures consistent API access across all components (`HelpModal`, `GalleryModal`, `ConcertSimulator`, etc.) without redundant logic.
+    *   Ensures consistent API access across all components (`HelpModal`, `GalleryDock`, `ConcertSimulator`, etc.) without redundant logic.
 
 ## 2. 3D Pipeline: Neural-to-GLB Workflow
 

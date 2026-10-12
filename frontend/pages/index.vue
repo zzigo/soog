@@ -5,6 +5,7 @@
       'sorganoid-active': sorganoidMode,
       'ui-hidden': !uiVisible,
       'has-rail': !sorganoidMode && uiVisible,
+      'gallery-open': showGallery && !sorganoidMode && uiVisible,
       'workspace-background-mode': workspaceLayout === 'background',
       'workspace-split-mode': workspaceLayout === 'split'
     }"
@@ -797,10 +798,11 @@
       v-if="uiVisible" v-model="showHelp" 
       @select-featured="handleSelectFeatured"
     />
-    <GalleryModal
-      v-if="uiVisible" v-model="showGallery"
+    <GalleryDock
+      v-if="uiVisible && !sorganoidMode" v-model="showGallery"
       :initial-basename="targetBasename"
       @load-code="loadCodeFromGallery"
+      @preview="previewGalleryItem"
     />
     <AuthGateModal
       :model-value="showAuthGate"
@@ -832,7 +834,7 @@ import { useRuntimeConfig } from '#app';
 import { marked } from 'marked';
 import AceEditor from '~/components/AceEditor.vue';
 import HelpModal from '~/components/HelpModal.vue';
-import GalleryModal from '~/components/GalleryModal.vue';
+import GalleryDock from '~/components/GalleryDock.vue';
 import StlViewer from '~/components/StlViewer.vue';
 import ModulusHeatmap from '~/components/ModulusHeatmap.vue';
 import AcousticFieldSurface from '~/components/AcousticFieldSurface.vue';
@@ -2247,6 +2249,12 @@ async function loadCodeFromGallery(item) {
     editorRef.value.addToHistory(draft);
   }
 
+  applyGalleryItem(item);
+}
+
+// Show a gallery item in the workspace panes without touching the editor.
+function applyGalleryItem(item) {
+  targetBasename.value = item.basename || '';
   summary.value = item.summary || item.answer || null;
   materialsText.value = item.materials_text || '';
   organogramCode.value = (item.plot_code || item.code || '').trim();
@@ -2263,7 +2271,15 @@ async function loadCodeFromGallery(item) {
   modulusData.value = item.modulus || null;
   evaluatedAcousticSignature.value = acousticSignatureFromSimulation(item.modulus);
   syncWorkspaceAutoView();
-  showGallery.value = false;
+}
+
+function previewGalleryItem(item) {
+  if (!item) return;
+  applyGalleryItem(item);
+  if (workspacePreset.value === 'fullscreen') {
+    setWorkspacePreset('splitFour');
+    syncWorkspaceLayoutFromPreset();
+  }
 }
 
 async function fetchOllamaModels(refresh = false) {
@@ -3988,6 +4004,23 @@ watch(
 .app-container.has-rail {
   box-sizing: border-box;
   padding-left: 44px !important;
+}
+
+/* The gallery dock sits between the tools rail and the editor */
+.app-container.gallery-open {
+  padding-left: calc(44px + 300px) !important;
+}
+.app-container.gallery-open .right-column--background {
+  left: calc(44px + 300px);
+  width: auto !important;
+}
+@media (max-width: 768px) {
+  .app-container.gallery-open {
+    padding-left: 44px !important;
+  }
+  .app-container.gallery-open .right-column--background {
+    left: 0;
+  }
 }
 
 .rail {
