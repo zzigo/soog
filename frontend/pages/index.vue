@@ -228,21 +228,25 @@
             'results-panel--idle': !hasResults,
             'results-panel--background': workspaceLayout === 'background'
           }"
-          :key="workspacePreset"
+          :key="workspaceLayout"
         >
           <div
             ref="workspaceStageRef"
             class="workspace-stage"
-            :class="`workspace-stage--${workspacePreset}`"
-            :style="workspaceStageStyle"
+            :class="[`workspace-stage--${workspacePreset}`, { 'workspace-stage--dragging': workspaceDrag }]"
           >
             <section
               v-for="pane in activeWorkspacePanes"
               :key="pane.id"
               class="workspace-pane"
-              :class="`workspace-pane--${pane.area}`"
+              :class="{ 'workspace-pane--moving': workspaceDrag?.fromId === pane.id }"
+              :style="{ '--x': `${pane.x}%`, '--y': `${pane.y}%`, '--w': `${pane.w}%`, '--h': `${pane.h}%` }"
             >
-              <div class="workspace-pane__header">
+              <div
+                class="workspace-pane__header"
+                :class="{ 'workspace-pane__header--movable': activeWorkspacePanes.length > 1 }"
+                @pointerdown="onPaneHeaderDown(pane, $event)"
+              >
                 <span class="workspace-pane__title">{{ workspaceViewLabel(pane.view) }}</span>
                 <div class="workspace-pane__controls">
                   <button
@@ -346,6 +350,24 @@
                       {{ option.label }}
                     </option>
                   </select>
+                  <button
+                    v-if="activeWorkspacePanes.length < 8"
+                    class="pane-action"
+                    title="Split: new pod on the right (Shift: below)"
+                    aria-label="Split pod"
+                    @click="splitWorkspacePane(pane.index, $event.shiftKey ? 'col' : 'row')"
+                  >
+                    +
+                  </button>
+                  <button
+                    v-if="activeWorkspacePanes.length > 1"
+                    class="pane-action pane-close"
+                    title="Close this pod; the others fill the space"
+                    aria-label="Close pod"
+                    @click="closeWorkspacePane(pane.index)"
+                  >
+                    ×
+                  </button>
                 </div>
               </div>
 
@@ -734,26 +756,24 @@
               </div>
             </section>
             <div
-              v-if="showPaneHandleX"
-              class="pane-handle pane-handle--x"
-              :style="{ left: `${paneSplit.x}%` }"
+              v-for="handle in workspaceHandles"
+              :key="handle.id"
+              class="pane-handle"
+              :class="handle.dir === 'row' ? 'pane-handle--x' : 'pane-handle--y'"
+              :style="handleStyle(handle)"
               role="separator"
-              aria-orientation="vertical"
+              :aria-orientation="handle.dir === 'row' ? 'vertical' : 'horizontal'"
               title="Drag to resize (double-click to reset)"
-              @pointerdown.prevent="startPaneDrag('x', $event)"
-              @dblclick="resetPaneSplit"
+              @pointerdown.prevent="startHandleDrag(handle, $event)"
+              @dblclick="resetHandle(handle)"
             ></div>
             <div
-              v-if="showPaneHandleY"
-              class="pane-handle pane-handle--y"
-              :class="{ 'pane-handle--right': workspacePreset === 'splitThree' }"
-              :style="{ top: `${paneSplit.y}%` }"
-              role="separator"
-              aria-orientation="horizontal"
-              title="Drag to resize (double-click to reset)"
-              @pointerdown.prevent="startPaneDrag('y', $event)"
-              @dblclick="resetPaneSplit"
-            ></div>
+              v-if="workspaceDropPreview"
+              class="pane-drop"
+              :style="{ left: `${workspaceDropPreview.x}%`, top: `${workspaceDropPreview.y}%`, width: `${workspaceDropPreview.w}%`, height: `${workspaceDropPreview.h}%` }"
+            >
+              <span>{{ workspaceDropPreview.zone === 'center' ? 'SWAP' : `DOCK ${workspaceDropPreview.zone.toUpperCase()}` }}</span>
+            </div>
           </div>
         </div>
       </Transition>
@@ -1013,18 +1033,15 @@ const {
   presetMenuOpen: workspacePresetMenuOpen,
   presetMenuRef: workspacePresetMenuRef,
   autoView: workspaceAutoView,
-  paneViews: workspacePaneViews,
   stageRef: workspaceStageRef,
-  paneSplit,
+  drag: workspaceDrag,
+  dropPreview: workspaceDropPreview,
+  handles: workspaceHandles,
   presetOptions: workspacePresetOptions,
   viewOptions: workspaceViewOptions,
   modeLabel: workspaceModeLabel,
   panes: activeWorkspacePanes,
-  showHandleX: showPaneHandleX,
-  showHandleY: showPaneHandleY,
-  stageStyle: workspaceStageStyle,
   viewLabel: workspaceViewLabel,
-  resetSplit: resetPaneSplit,
   toggleMenu: toggleWorkspacePresetMenu,
   setPreset: setWorkspacePreset,
   setPaneView: setWorkspacePaneView,
@@ -1032,7 +1049,12 @@ const {
   maximizePane: maximizeWorkspacePane,
   restorePanes: restoreWorkspacePanes,
   canRestore: canRestoreWorkspace,
-  startDrag: startPaneDrag,
+  closePane: closeWorkspacePane,
+  splitPane: splitWorkspacePane,
+  startHandleDrag,
+  resetHandle,
+  startPaneMove,
+  restoreLayout: restoreWorkspaceLayout,
 } = useWorkspace();
 const {
   remakingSketch, remakingLRM, remakingModulus, generatingSound,
@@ -1325,7 +1347,8 @@ const commandDomains = [
     commands: [
       { syntax: 'Alt+Enter', detail: 'Evaluate current selection or the full editor buffer.', example: 'A glass harp bowed by two performers on a rotating table' },
       { syntax: 'workspace menu', detail: 'Choose fullscreen, split vertical, split 3, or split 4 from the HUD preset icon.' },
-      { syntax: 'pane routing', detail: 'Each pane can point to auto, organogram, sound, 3D object, acoustic, sketch, SOT-A, or Stage 3D. ⤢ shows a pane alone, ⤡ returns.' },
+      { syntax: 'pane routing', detail: 'Each pane can point to auto, organogram, sound, 3D object, acoustic, sketch, summary, SOT-A, or Stage 3D. ⤢ shows a pane alone, ⤡ returns.' },
+      { syntax: 'pane docking', detail: 'Drag a pane header onto another pane: an edge docks beside it, the centre swaps the two. + splits a pane (Shift: below), × closes it and the others fill the space, dividers resize (double-click resets). The arrangement is remembered; the layout menu resets it.' },
       { syntax: '/sot-a · /stage · /session · /help', detail: 'Open that pane or sidebar tab without calling the model. Select the line and press Alt+Enter.', example: '/sot-a' },
       { syntax: 'Alt+1 · Alt+2 · Alt+3', detail: 'Jump between SOOG, SOMAP, and Concert Room.' }
     ]
@@ -1908,6 +1931,18 @@ function openSidebarTab(tab) {
   workspaceSidebarOpen.value = true;
 }
 
+// Drag a pod by its header, but never from its buttons or the view selector.
+function onPaneHeaderDown(pane, event) {
+  if (event.target?.closest?.('button, select, a, input')) return;
+  startPaneMove(pane.id, event);
+}
+
+function handleStyle(handle) {
+  return handle.dir === 'row'
+    ? { left: `${handle.x}%`, top: `${handle.y}%`, height: `${handle.length}%` }
+    : { top: `${handle.y}%`, left: `${handle.x}%`, width: `${handle.length}%` };
+}
+
 function workspacePaneShows(viewKey) {
   return workspacePreset.value !== 'fullscreen' && activeWorkspacePanes.value.some((pane) => pane.view === viewKey);
 }
@@ -2011,6 +2046,7 @@ onMounted(() => {
   loadResponseTimeHistory();
   fetchOllamaModels();
   checkDevice();
+  restoreWorkspaceLayout();
   syncWorkspaceLayoutFromPreset();
   syncWorkspaceAutoView();
   startAcousticTemporalLoop();
@@ -3614,10 +3650,13 @@ watch(
   flex: 1;
   min-height: 0;
   min-width: 0;
-  display: grid;
-  gap: 1px;
-  background: rgba(255, 255, 255, 0.12);
+  background: transparent;
   overflow: hidden;
+}
+
+.workspace-stage--dragging {
+  user-select: none;
+  cursor: grabbing;
 }
 
 .results-panel--background .workspace-stage {
@@ -3628,34 +3667,6 @@ watch(
   display: none;
 }
 
-.workspace-stage--fullscreen {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  grid-template-areas: 'a';
-}
-
-.workspace-stage--splitVertical {
-  grid-template-columns: minmax(0, var(--pane-x, 50%)) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  grid-template-areas: 'a b';
-}
-
-.workspace-stage--splitThree {
-  grid-template-columns: minmax(0, var(--pane-x, 50%)) minmax(0, 1fr);
-  grid-template-rows: minmax(0, var(--pane-y, 50%)) minmax(0, 1fr);
-  grid-template-areas:
-    'a b'
-    'a c';
-}
-
-.workspace-stage--splitFour {
-  grid-template-columns: minmax(0, var(--pane-x, 50%)) minmax(0, 1fr);
-  grid-template-rows: minmax(0, var(--pane-y, 50%)) minmax(0, 1fr);
-  grid-template-areas:
-    'a b'
-    'c d';
-}
-
 .pane-handle {
   position: absolute;
   z-index: 6;
@@ -3663,24 +3674,17 @@ watch(
 }
 
 .pane-handle--x {
-  top: 0;
-  bottom: 0;
   width: 11px;
   margin-left: -5px;
   cursor: col-resize;
 }
 
 .pane-handle--y {
-  left: 0;
-  right: 0;
   height: 11px;
   margin-top: -5px;
   cursor: row-resize;
 }
 
-.pane-handle--y.pane-handle--right {
-  left: var(--pane-x, 50%);
-}
 
 .pane-handle::after {
   content: '';
@@ -3697,22 +3701,66 @@ watch(
 .pane-handle:active::after { background: rgba(120, 190, 255, 0.7); }
 
 .workspace-pane {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--w);
+  height: var(--h);
+  box-sizing: border-box;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: #000;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  container-type: inline-size;
+}
+
+/* Narrow pods drop the title: the view selector already names the pane. */
+@container (max-width: 470px) {
+  .workspace-pane__title {
+    display: none;
+  }
+  .workspace-pane__select {
+    min-width: 100px;
+  }
+}
+
+.workspace-stage--fullscreen .workspace-pane {
+  box-shadow: none;
+}
+
+.workspace-pane--moving {
+  opacity: 0.5;
+}
+
+.workspace-pane__header--movable {
+  cursor: grab;
+  touch-action: none;
+}
+
+.pane-drop {
+  position: absolute;
+  z-index: 8;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 1px solid rgba(120, 190, 255, 0.9);
+  background: rgba(120, 190, 255, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: #fff;
+  transition: left 0.08s ease, top 0.08s ease, width 0.08s ease, height 0.08s ease;
 }
 
 .results-panel--background .workspace-pane {
   background: transparent;
 }
 
-.workspace-pane--a { grid-area: a; }
-.workspace-pane--b { grid-area: b; }
-.workspace-pane--c { grid-area: c; }
-.workspace-pane--d { grid-area: d; }
 
 .workspace-pane__header {
   min-height: 34px;
@@ -3739,6 +3787,7 @@ watch(
 }
 
 .workspace-pane__controls {
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -5024,16 +5073,18 @@ watch(
   }
   .left-column { height: 50vh !important; }
   .right-column { height: 50vh !important; }
-  .workspace-stage--splitVertical,
-  .workspace-stage--splitThree,
-  .workspace-stage--splitFour {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: repeat(auto-fit, minmax(180px, 1fr));
-    grid-template-areas:
-      'a'
-      'b'
-      'c'
-      'd';
+  .workspace-stage {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .workspace-pane {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: auto;
+    height: auto;
+    flex: 1 0 220px;
   }
   .workspace-pane__header {
     padding: 0 10px;
