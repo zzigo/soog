@@ -78,6 +78,7 @@ from auth_usage import (
     update_user_quota,
     usage_dashboard,
 )
+from server_metrics import CPU_SAMPLER, read_server_metrics
 
 init_usage_db()
 
@@ -185,14 +186,47 @@ def _short_reasoning_preview(text: str, max_chars: int = 280) -> str:
     return normalized[-max_chars:].lstrip()
 
 
+STAGE_EVENT_LIMIT = 80
+OPERATOR_EVENT_FIELDS = ('cpu_pct',)
+
+
 def update_generation_progress(request_id: str, **fields):
+    """Merge fields into the request's progress; a change of stage appends an event.
+
+    An event is {stage, status, at, t_ms, cpu_pct}: when the stage began, how many
+    milliseconds after the request started, and the server CPU at that moment.
+    """
     if not request_id:
         return
     now_ts = time.time()
+    new_stage = fields.get('stage')
+    cpu_pct = None
+    if new_stage:
+        # Sampled outside the lock: the first sample blocks for a moment.
+        try:
+            cpu_pct = CPU_SAMPLER.sample()
+        except Exception:
+            cpu_pct = None
     with GENERATION_PROGRESS_LOCK:
         _trim_generation_progress_locked(now_ts)
         current = dict(GENERATION_PROGRESS.get(request_id) or {})
+        started_at = current.setdefault('started_at', now_ts)
+        events = list(current.get('events') or [])
         current.update(fields)
+        if new_stage and (not events or events[-1]['stage'] != new_stage):
+            event = {
+                'stage': new_stage,
+                'status': current.get('status', ''),
+                'at': now_ts,
+                't_ms': int((now_ts - started_at) * 1000),
+            }
+            if cpu_pct is not None:
+                event['cpu_pct'] = cpu_pct
+            events.append(event)
+            current['events'] = events[-STAGE_EVENT_LIMIT:]
+        elif events:
+            events[-1] = {**events[-1], 'status': current.get('status', events[-1].get('status', ''))}
+            current['events'] = events
         current['updated_at'] = now_ts
         GENERATION_PROGRESS[request_id] = current
 
@@ -2901,7 +2935,26 @@ def generate_progress(request_id):
     current = get_generation_progress(request_id)
     if not current:
         return jsonify({'ok': False, 'status': 'missing'}), 404
-    return jsonify({'ok': True, **current})
+    try:
+        is_operator = bool(authenticate_request().get('is_admin'))
+    except AuthError:
+        is_operator = False
+    if not is_operator:
+        # Server load is for operators only.
+        current['events'] = [
+            {key: value for key, value in event.items() if key not in OPERATOR_EVENT_FIELDS}
+            for event in current.get('events') or []
+        ]
+    payload = {'ok': True, **current}
+    if is_operator:
+        payload['server'] = read_server_metrics()
+    return jsonify(payload)
+
+
+@app.route('/api/admin/server-metrics', methods=['GET'])
+@require_auth(admin=True)
+def admin_server_metrics():
+    return jsonify({'ok': True, 'server': read_server_metrics()})
 
 @app.route('/api/roadmap', methods=['GET'])
 def get_roadmap():
