@@ -38,3 +38,26 @@ test('registry: registerView is idempotent and showView places a view in a pane'
   w.showView('gallery');
   assert.equal(w.panes.value[0].view, 'gallery');
 });
+
+test('core views include SOT-A and the 3D stage', () => {
+  const w = createWorkspace();
+  const keys = w.viewOptions.value.map((v) => v.key);
+  assert.ok(keys.includes('sota'));
+  assert.ok(keys.includes('stage'));
+  assert.equal(w.viewLabel('stage'), 'Stage 3D');
+});
+
+test('maximizePane shows one pane alone and restorePanes returns to the previous layout', () => {
+  const w = createWorkspace();
+  w.setPreset('splitFour');
+  w.setPaneView(1, 'sota');
+  w.maximizePane(1);
+  assert.equal(w.preset.value, 'fullscreen');
+  assert.equal(w.panes.value.length, 1);
+  assert.equal(w.panes.value[0].view, 'sota');
+  assert.equal(w.canRestore.value, true);
+  w.restorePanes();
+  assert.equal(w.preset.value, 'splitFour');
+  assert.deepEqual(w.panes.value.map((p) => p.view), ['organogram', 'sota', 'geometry', 'acoustic']);
+  assert.equal(w.canRestore.value, false);
+});
