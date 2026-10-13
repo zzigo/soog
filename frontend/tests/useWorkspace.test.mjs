@@ -132,3 +132,15 @@ test('a hand-made layout is saved and restored', async () => {
     delete globalThis.window;
   }
 });
+
+test('snapshotLayout and restoreSnapshot put a layout back by reference', () => {
+  const w = createWorkspace();
+  const before = w.snapshotLayout();
+  w.setPreset('splitFour');
+  const applied = w.tree.value;
+  assert.equal(w.panes.value.length, 4);
+  w.restoreSnapshot(before);
+  assert.equal(w.panes.value.length, 1);
+  assert.equal(w.preset.value, 'fullscreen');
+  assert.notEqual(w.tree.value, applied);
+});

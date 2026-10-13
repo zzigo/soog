@@ -208,6 +208,16 @@ export function createWorkspace() {
     restoreState.value = null;
   }
 
+  /** The layout as it is now, to put back later (the gallery borrows the stage while it is open). */
+  function snapshotLayout() {
+    return { preset: preset.value, tree: tree.value };
+  }
+
+  function restoreSnapshot(snapshot: { preset: string; tree: TreeNode }) {
+    tree.value = snapshot.tree;
+    preset.value = snapshot.preset;
+  }
+
   const canRestore = computed(() => panes.value.length === 1 && !!restoreState.value);
 
   function startHandleDrag(handle: HandleRect, event: PointerEvent) {
@@ -317,7 +327,7 @@ export function createWorkspace() {
     preset, layout, presetMenuOpen, presetMenuRef, autoView, paneViews, stageRef, tree, drag, dropPreview, handles,
     presetOptions, viewOptions, activePreset, modeLabel, panes,
     viewLabel, registerView, toggleMenu, setPreset, setPaneView, showView, closePane, splitPane, movePane,
-    maximizePane, restorePanes, canRestore, startHandleDrag, resetHandle, startPaneMove, restoreLayout,
+    maximizePane, restorePanes, canRestore, snapshotLayout, restoreSnapshot, startHandleDrag, resetHandle, startPaneMove, restoreLayout,
   };
 }
 

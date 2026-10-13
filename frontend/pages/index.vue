@@ -247,7 +247,11 @@
                 :class="{ 'workspace-pane__header--movable': activeWorkspacePanes.length > 1 }"
                 @pointerdown="onPaneHeaderDown(pane, $event)"
               >
-                <span class="workspace-pane__title">{{ workspaceViewLabel(pane.view) }}</span>
+                <PaneViewMenu
+                  :model-value="pane.assigned"
+                  :options="workspaceViewOptions"
+                  @update:model-value="setWorkspacePaneView(pane.index, $event)"
+                />
                 <div class="workspace-pane__controls">
                   <button
                     v-if="pane.view === 'geometry' && stlUrl"
@@ -324,49 +328,40 @@
                     FULL
                   </button>
                   <button
+                    v-if="activeWorkspacePanes.length < 8"
+                    class="pane-icon"
+                    title="Add a pod: split this one to the right (Shift: below)"
+                    aria-label="Split pod"
+                    @click="splitWorkspacePane(pane.index, $event.shiftKey ? 'col' : 'row')"
+                  >
+                    <svg class="pane-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+                  </button>
+                  <button
                     v-if="workspacePreset !== 'fullscreen'"
-                    class="pane-action"
-                    title="Show this pane alone"
+                    class="pane-icon"
+                    title="Show this pod alone"
                     aria-label="Maximize pane"
                     @click="maximizeWorkspacePane(pane.index)"
                   >
-                    ⤢
+                    <svg class="pane-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
                   </button>
                   <button
                     v-else-if="canRestoreWorkspace"
-                    class="pane-action"
+                    class="pane-icon"
                     title="Back to the previous layout"
                     aria-label="Restore layout"
                     @click="restoreWorkspacePanes"
                   >
-                    ⤡
-                  </button>
-                  <select
-                    class="workspace-pane__select"
-                    :value="pane.assigned"
-                    @change="setWorkspacePaneView(pane.index, $event.target.value)"
-                  >
-                    <option v-for="option in workspaceViewOptions" :key="option.key" :value="option.key">
-                      {{ option.label }}
-                    </option>
-                  </select>
-                  <button
-                    v-if="activeWorkspacePanes.length < 8"
-                    class="pane-action"
-                    title="Split: new pod on the right (Shift: below)"
-                    aria-label="Split pod"
-                    @click="splitWorkspacePane(pane.index, $event.shiftKey ? 'col' : 'row')"
-                  >
-                    +
+                    <svg class="pane-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
                   </button>
                   <button
                     v-if="activeWorkspacePanes.length > 1"
-                    class="pane-action pane-close"
+                    class="pane-icon pane-close"
                     title="Close this pod; the others fill the space"
                     aria-label="Close pod"
                     @click="closeWorkspacePane(pane.index)"
                   >
-                    ×
+                    <svg class="pane-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
                   </button>
                 </div>
               </div>
@@ -1055,6 +1050,9 @@ const {
   resetHandle,
   startPaneMove,
   restoreLayout: restoreWorkspaceLayout,
+  snapshotLayout: snapshotWorkspaceLayout,
+  restoreSnapshot: restoreWorkspaceSnapshot,
+  tree: workspaceTree,
 } = useWorkspace();
 const {
   remakingSketch, remakingLRM, remakingModulus, generatingSound,
@@ -2651,8 +2649,24 @@ function restoreGenerationState() {
   syncWorkspaceAutoView();
 }
 
+// The gallery takes the left of the stage: the editor steps aside and a single pod becomes the
+// four-pod item view. Closing the gallery puts the previous layout back unless it was rearranged meanwhile.
+let galleryLayout = null;
 watch(showGallery, (open) => {
-  if (!open) restoreGenerationState();
+  if (open) {
+    galleryLayout = null;
+    if (workspacePreset.value === 'fullscreen') {
+      const before = snapshotWorkspaceLayout();
+      setWorkspacePreset('splitFour');
+      galleryLayout = { before, applied: workspaceTree.value };
+    }
+    return;
+  }
+  restoreGenerationState();
+  if (galleryLayout && workspaceTree.value === galleryLayout.applied) restoreWorkspaceSnapshot(galleryLayout.before);
+  galleryLayout = null;
+  // The editor was hidden: let Ace measure itself again.
+  nextTick(() => window.dispatchEvent(new Event('resize')));
 });
 
 // A pod tool finished: show the refreshed item if it is still the one on screen.
@@ -3714,18 +3728,8 @@ watch(
   overflow: hidden;
   background: #000;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
-  container-type: inline-size;
 }
 
-/* Narrow pods drop the title: the view selector already names the pane. */
-@container (max-width: 470px) {
-  .workspace-pane__title {
-    display: none;
-  }
-  .workspace-pane__select {
-    min-width: 100px;
-  }
-}
 
 .workspace-stage--fullscreen .workspace-pane {
   box-shadow: none;
@@ -3763,12 +3767,12 @@ watch(
 
 
 .workspace-pane__header {
-  min-height: 34px;
+  min-height: 30px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 4px 12px;
+  gap: 6px;
+  padding: 2px 6px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(0, 0, 0, 0.78);
   flex: 0 0 auto;
@@ -3790,7 +3794,7 @@ watch(
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
   min-width: 0;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -4587,6 +4591,17 @@ watch(
 }
 .app-container.gallery-open .right-column--background {
   left: calc(44px + 300px);
+  width: auto !important;
+}
+
+/* With the gallery open the editor steps aside and the pods take the rest of the width. */
+.app-container.gallery-open .left-column,
+.app-container.gallery-open .divider {
+  display: none;
+}
+
+.app-container.gallery-open:not(.workspace-background-mode) .right-column {
+  flex: 1 1 auto;
   width: auto !important;
 }
 @media (max-width: 768px) {
